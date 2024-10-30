@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Entries</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        /* Specific styles for view_entries.html */
+        
+        .outer-container {
+            display: flex;
+            justify-content: center; /* Center the entire content horizontally */
+            padding: 2%; /* Space around the container */
+        }
+
+        .main-container {
+            display: flex;
+            justify-content: flex-start;
+            align-items: flex-start;
+            gap: 1.25%; /* Space between the grid and sidebar */
+            width: 100%; /* Full width inside the outer container */
+            max-width: 98%; /* Set a maximum width for larger screens */
+        }
+
+        .center-content {
+            text-align: left; /* Align text to the left */
+            flex: 4; /* Make this much wider */
+            padding: 1.25%;
+            background-color: #ffffff;
+            box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
+            max-width: 85%; /* Increased width */
+            width: 100%; /* Full width */
+        }
+
+        .entries-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 auto; /* Center the table horizontally */
+        }
+
+        .entries-table th, .entries-table td {
+            padding: 10px;
+            text-align: left;
+            vertical-align: top; /* Align text to the top */
+            border: 1px solid #ddd; /* Add a border to prevent text from leaking */
+            word-wrap: break-word; /* Ensure long text breaks properly */
+        }
+
+        .entries-table th {
+            background-color: #f4f4f4;
+        }
+
+        .right-sidebar {
+            width: 12%; /* Thinner sidebar width */
+            background-color: #ffffff;
+            padding: 1%; /* Increased padding for better spacing */
+            box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
+            text-align: center; /* Center the text */
+            border-radius: 15px; /* Curved corners */
+        }
+
+        .right-sidebar h2 {
+            color: #00796b; /* Dark teal color for headers */
+            margin: 0; /* Remove default margin */
+            padding-bottom: 1%; /* Add space below the header in percentage */
+            margin-bottom: 1%; /* Adjust the space above the header in percentage */
+        }
+
+        .right-sidebar p {
+            color: #333; /* Dark text color */
+            font-size: 1.125em;
+            margin-bottom: 0.5%;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/" class="nav-logo">
+            <img src="{{ url_for('static', filename='WhiteLogo.png') }}" alt="Debby Logo">
+        </a>
+        <ul class="navbar">
+            <li><a href="/">DebbyAI</a></li>
+            <li><a href="/parli-gpt">CaseGPT</a></li>
+            <li><a href="/flowbot">Flowbot</a></li>
+        </ul>
+    </nav>
+    <div class="outer-container">
+        <div class="main-container">
+            <div class="center-content">
+                <h1>Logged Entries</h1>
+                <table border="1" class="entries-table">
+                    <tr>
+                        <th>Date Time</th>
+                        <th>Topic</th>
+                        <th>Aff Speech</th>
+                        <th>Neg Speech</th>
+                        <th>Aff Two Speech</th>
+                        <th>Winner</th>
+                        <th>Speech Stats</th>
+                    </tr>
+                    {% for entry in entries %}
+                    <tr>
+                        <td><pre>{{ entry.date_time }}</pre></td>
+                        <td>{{ entry.topic }}</td>
+                        <td>{{ entry.aff_speech }}</td>
+                        <td>{{ entry.neg_speech }}</td>
+                        <td>{{ entry.aff_two_speech }}</td>
+                        <td>{{ entry.winner }}</td>
+                        <td><pre>{{ entry.average_wpm }}</pre></td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            <div class="right-sidebar">
+                <h2>Statistics</h2>
+                <p>Total Entries: {{ total_entries }}</p>
+                <p>Debby's Wins: {{ debby_wins }}</p>
+                <p>Your Wins: {{ user_wins }}</p>
+                <p>Your Win Percentage: 
+                    {% if total_entries > 0 %}
+                        {{ (user_wins / total_entries * 100) | round(2) }}%
+                    {% else %}
+                        0.0%
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

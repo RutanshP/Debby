@@ -1,0 +1,247 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    background-color: #e0f7fa; /* Light teal background */
+    min-height: 100vh;
+    box-sizing: border-box;
+    padding: 0;
+}
+
+nav {
+    background-color: #00796b; /* Dark teal background */
+    padding: 0; /* Remove padding */
+    display: flex;
+    align-items: center; /* Center items vertically */
+    justify-content: space-between; /* Space between logo and links */
+    height: 3em; /* Adjust height to fit the logo properly */
+}
+
+.nav-logo img {
+    height: 3em; /* Set a specific height for the logo */
+    width: auto; /* Maintain aspect ratio */
+}
+
+.navbar {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: row; /* Horizontal alignment */
+    gap: 0; /* No gap between links */
+    height: 100%; /* Ensure it takes up full height of navbar */
+    margin-left: auto; /* Push the navbar to the right */
+}
+
+.navbar li {
+    height: 100%; /* Ensure list items fill the height of the navbar */
+    display: flex; /* Use flexbox for alignment */
+    align-items: center; /* Center text vertically */
+}
+
+.navbar a {
+    color: #ffffff; /* White text */
+    text-decoration: none;
+    font-size: 1.25em; /* Larger text size */
+    padding: 0.5em 1em; /* Padding for spacing */
+    height: 100%; /* Full height of the navbar */
+    display: flex; /* Use flexbox for centering */
+    align-items: center; /* Center text vertically */
+    justify-content: center; /* Center text horizontally */
+    transition: background-color 0.3s ease;
+    box-sizing: border-box; /* Ensure padding is included in the width */
+}
+
+.navbar a:hover {
+    background-color: #004d40; /* Darker teal on hover */
+    border-radius: 0.3125em;
+}
+
+.main-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 1.25em;
+    padding: 1.25em;
+}
+
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25em;
+    width: 100%;
+    max-width: 18.75em;
+}
+
+.top-sidebar {
+    background-color: #ffffff;
+    padding: 1.25em;
+    border-radius: 0.5em;
+    box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
+}
+
+.bottom-sidebar {
+    background-color: #ffffff; /* Restore to white */
+    padding: 1.25em;
+    border-radius: 0.5em;
+    box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
+}
+
+.center-content {
+    text-align: center;
+    flex: 1;
+    padding: 1.25em;
+    background-color: #ffffff;
+    border-radius: 0.5em;
+    box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
+    max-width: 50em;
+}
+
+.header-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em; /* Reduced space between the logo and the button */
+}
+
+.header-logo {
+    height: 10em; /* Enlarged height */
+    margin: 0.2em 0; /* Reduced top and bottom margins */
+}
+
+h1 {
+    color: #00796b; /* Dark teal color for the header */
+    margin-bottom: 1.25em;
+}
+
+label {
+    font-size: 1.125em;
+    color: #00796b; /* Dark teal color for the label */
+    margin-bottom: 0.625em;
+    display: block;
+}
+
+select, input[type="text"] {
+    padding: 0.625em;
+    font-size: 1em;
+    border: 0.125em solid #00796b; /* Dark teal border */
+    border-radius: 0.3125em;
+    margin-bottom: 1.25em;
+    background-color: #e0f7fa; /* Light teal background */
+    color: #00796b; /* Dark teal text */
+    width: 90%;
+}
+
+.topic, .response, .winner {
+    margin-top: 1.25em;
+    padding: 1.25em;
+    border: 0.125em solid #00796b; /* Dark teal border */
+    background-color: #ffffff;
+    border-radius: 0.5em;
+    box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
+    width: 100%;
+    box-sizing: border-box;
+    color: #00796b; /* Dark teal text */
+    font-size: 1.125em;
+    min-height: 6.25em;
+}
+
+.placeholder {
+    color: #00796b; /* Light grey color for the placeholder */
+}
+
+button {
+    margin-top: 1.25em;
+    padding: 0.75em 1.5em;
+    font-size: 1.125em;
+    background-color: #00796b; /* Dark teal background */
+    color: #fff; /* White text */
+    border: none;
+    border-radius: 0.3125em;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+button:disabled {
+    background-color: #d4e5d3; /* Light green background for disabled buttons */
+    cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+    background-color: #004d40; /* Darker teal on hover */
+}
+
+/* Specific button styles */
+#refreshButton {
+    background-color: #00796b; /* Dark teal for the refresh button */
+}
+
+.buttons-container {
+    display: flex;
+    justify-content: center;
+    gap: 1.25em;
+    margin-top: 1.25em;
+    flex-wrap: wrap;
+}
+
+textarea.topic {
+    width: 100%;
+    box-sizing: border-box;
+    white-space: pre-wrap; /* Ensures the text wraps to a new line when it reaches the end of the textarea */
+    overflow-wrap: break-word; /* Ensures long words are broken to prevent overflow */
+    height: auto; /* Ensures the height adjusts based on content */
+    min-height: 200px; /* Sets a minimum height */
+    resize: none; /* Disables manual resizing */
+}
+
+/* New styles for the View Entries section */
+.box-container {
+    background-color: #ffffff; /* White background for consistency */
+    padding: 1.25em;
+    border-radius: 0.5em;
+    box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
+    margin-top: 1.25em; /* Space above the box */
+}
+
+.info-text {
+    color: #00796b; /* Dark teal text color for visibility */
+    margin-bottom: 1em; /* Spacing between text and button */
+    text-align: center;
+}
+.timer-display {
+    font-size: 2em;
+    color: #00796b; /* Matches the existing color scheme */
+    margin-bottom: 10px;
+    margin-top: 15px; /* Add some space between the timer and the buttons */
+    text-align: center; /* Center the text */
+}
+
+#viewEntriesButton {
+    background-color: #00796b; /* Dark teal background */
+    color: #ffffff; /* White text */
+    border: none;
+    border-radius: 0.3125em;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    padding: 0.75em 1.5em;
+    font-size: 1.125em;
+    width: 100%; /* Full width of the container */
+}
+
+#viewEntriesButton:hover {
+    background-color: #004d40; /* Darker teal on hover */
+}
+/* CSS for the button */
+#viewEntriesButton:disabled {
+    background-color: #d4e5d3; /* Light green when disabled */
+    cursor: not-allowed; /* "No sign" cursor when disabled */
+    opacity: 0.6; /* Optional: To give a faded effect */
+}
+
+/* Optional: Styling for enabled state */
+#viewEntriesButton {
+    background-color: #00796b; /* Green when enabled */
+    cursor: pointer; /* Pointer cursor when enabled */
+}

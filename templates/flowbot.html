@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowbot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .slider-container {
+            margin-top: 2%;
+            width: 100%;
+        }
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            width: 100%;
+        }
+        .slider-label span {
+            font-size: 0.875em; /* Smaller font size */
+        }
+        .slider-label .normal-label {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #speechSpeed {
+            width: 100%;
+        }
+        .speed-value {
+            text-align: center;
+            margin-top: 0.5%;
+            font-size: 0.875em; /* Smaller font size */
+            color: #333;
+        }
+        .main-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            width: 100%;
+            padding: 2%;
+            box-sizing: border-box;
+        }
+        .sidebar {
+            width: 25%; /* Increased width */
+            background-color: #f9f9f9;
+            padding: 1%;
+            box-sizing: border-box;
+            margin-left: 10%; /* Move the sidebar towards the center */
+            border-radius: 0.5em; /* Slightly curved corners */
+            box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1); /* Box shadow */
+            height: 100%; /* Ensure height is consistent with the topic container */
+        }
+        .center-content {
+            flex: 1;
+            padding: 2%;
+            text-align: center;
+            background-color: #ffffff;
+            border-radius: 0.5em; /* Slightly curved corners */
+            box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1); /* Box shadow */
+            max-width: 65%; /* Adjusted width */
+            margin-right: 10%; /* Increased right margin */
+            box-sizing: border-box;
+        }
+        .header-container {
+            margin-bottom: 2%;
+        }
+        .header-logo {
+            max-width: 20%; /* Adjusted logo size */
+            height: auto;
+        }
+        .topic {
+            font-size: 1.25em; /* Increased text size */
+            margin-top: 2%; /* Added top margin */
+            padding: 2%; /* Increased vertical padding */
+            box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1); /* Box shadow for consistency */
+            border-radius: 0.5em; /* Slightly curved corners */
+            height: 100%; /* Ensure height matches the sidebar */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/" class="nav-logo">
+            <img src="{{ url_for('static', filename='WhiteLogo.png') }}" alt="Debby Logo">
+        </a>
+        <ul class="navbar">
+            <li><a href="/">DebbyAI</a></li>
+            <li><a href="/parli-gpt">CaseGPT</a></li>
+            <li><a href="/flowbot">Flowbot</a></li>
+        </ul>
+    </nav>
+    <div class="main-container">
+        <div class="sidebar">
+            <!-- Debate Type Dropdown -->
+            <label for="debateType">Choose Debate Type:</label>
+            <select id="debateType" style="width: 100%;">
+                <option value="" selected>Select Format</option>
+                <option value="MSPDP">MSPDP</option>
+                <option value="Parli">Parli</option>
+            </select>
+
+            <!-- Speech Speed Slider -->
+            <div class="slider-container">
+                <label for="speechSpeed">Select Speech Speed:</label>
+                <input type="range" id="speechSpeed" name="speechSpeed" min="0" max="100" value="50">
+                <div class="slider-label">
+                    <span>0.25x</span>
+                    <span class="normal-label">Normal</span>
+                    <span>4x</span>
+                </div>
+                <div id="speedValue" class="speed-value">Speed: 1.00x</div>
+            </div>
+
+            <!-- Submit Button -->
+            <button id="submitTopic" style="width: 100%;" disabled>Submit</button>
+        </div>
+        <div class="center-content">
+            <div class="header-container">
+                <img src="{{ url_for('static', filename='TealLogo.png') }}" alt="Debby Logo" class="header-logo">
+            </div>
+            <div id="debateTopic" class="topic">Topic and Side</div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="{{ url_for('static', filename='flowbot.js') }}"></script>
+</body>
+</html>

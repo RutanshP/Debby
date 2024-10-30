@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParliGPT Case</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .topic {
+            width: 100%;
+            box-sizing: border-box;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            padding: 10px;
+            border: 1px solid #ccc;
+            min-height: 200px;
+            background-color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/" class="nav-logo">
+            <img src="{{ url_for('static', filename='WhiteLogo.png') }}" alt="Debby Logo">
+        </a>
+        <ul class="navbar">
+            <li><a href="/">DebbyAI</a></li>
+            <li><a href="/parli-gpt">CaseGPT</a></li>
+            <li><a href="/flowbot">Flowbot</a></li> <!-- Added Flowbot Tab -->
+        </ul>
+    </nav>
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="top-sidebar">
+                <label for="custom-topic">Enter Topic:</label>
+                <input type="text" id="custom-topic" placeholder="Enter topic">
+                <label for="side">Select Side:</label>
+                <select id="side">
+                    <option value="affirmative">Affirmative</option>
+                    <option value="negation">Negation</option>
+                </select>
+                <label for="format">Select Debate Format:</label>
+                <select id="format">
+                    <option value="">Select Debate Format</option>
+                    <option value="mspdp">MSPDP</option>
+                    <option value="parli">Parli</option>
+                </select>
+                <button id="submit-topic">Submit</button>
+            </div>
+        </div>
+        <div class="center-content">
+            <div id="case-output" class="topic">Debate Case</div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="{{ url_for('static', filename='parli.js') }}"></script>
+</body>
+</html>
