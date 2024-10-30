@@ -5,6 +5,6 @@ pymongo
 Flask
 mutagen
 textstat
-speech_recognition
+SpeechRecognition
 pydub
 matplotlib
