@@ -9,9 +9,7 @@ import textstat
 import speech_recognition as sr
 from pydub import AudioSegment
 import matplotlib.pyplot as plt
-import numpy as np
 import io
-import base64
 import logging
 
 app = Flask(__name__)
