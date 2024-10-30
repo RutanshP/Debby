@@ -11,6 +11,17 @@
         "src": "/(.*)",
         "dest": "main.py"
       }
+    ],
+    "ignore": [
+      "*.m4a",
+      "*.wav",
+      "*.csv",
+      "first_speech.m4a",
+      "second_speech.m4a",
+      "recording.m4a",
+      "temp_chunk.wav",
+      "msres.csv",
+      "parlires.csv"
     ]
   }
   
