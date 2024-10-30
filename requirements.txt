@@ -1,6 +1,5 @@
 assemblyai
 pandas
-random  # Optional; only if you use it
 openai
 pymongo
 Flask
