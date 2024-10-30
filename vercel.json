@@ -12,7 +12,7 @@
         "dest": "main.py"
       }
     ],
-    "ignore": [
+    "excludeFiles": [
       "*.m4a",
       "*.wav",
       "*.csv",
