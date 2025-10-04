@@ -1,4 +1,4 @@
-from debby import coin_toss, get_parli_topic, get_mspdp_topic, ai_speech, ai_response, transcribe, winner
+from debby import coin_toss, get_parli_topic, get_mspdp_topic, ai_speech, ai_response, transcribe, winner, load_topics
 from parligpt import make_case, make_mspdp_case, case_to_speech, say_case
 import os
 from flask import Flask, render_template, request, jsonify, send_file
@@ -23,14 +23,8 @@ client = MongoClient('mongodb://localhost:27017/')
 db = client.debate_db
 entries = db.entries
 
-    
-first_speech_transcription = None
-second_speech_transcription = None
-
-# File path variables for first and second speeches
-first_speech_file_path = 'path/to/save/first_speech.wav'
-second_speech_file_path = 'path/to/save/second_speech.wav'
-
+# Load topics at startup
+parli_topics, mspdp_topics = load_topics()
 
 @app.route('/log_entry', methods=['POST'])
 def log_entry():
@@ -38,18 +32,16 @@ def log_entry():
     user_name = data.get('user_name')
     date_time = datetime.strptime(data.get('date_time'), '%Y-%m-%d %H:%M:%S')
     topic = data.get('topic')
-    print('bob'+topic)
     aff_speech = data.get('aff_speech')
-    print(aff_speech)
     neg_speech = data.get('neg_speech')
     aff_two_speech = data.get('aff_two_speech')
-    print(aff_two_speech)
-    winner = data.get('winner')
+    winner_data = data.get('winner')
 
     try:
-        # Calculate average WPM and total speech time
-        average_wpm = (calculate_wpm('first_speech.m4a') + calculate_wpm('second_speech.m4a'))/2 # Adjust to your function name
-        total_speech_time = calculate_total_time('first_speech.m4a')+ calculate_total_time('second_speech.m4a')  # Adjust to your function name
+        # Since we are not saving the files, we can't calculate these stats anymore.
+        # We can pass the audio duration from the frontend if needed.
+        average_wpm = 0
+        total_speech_time = "0m0s"
 
         # Prepare the entry with additional statistics
         entry = {
@@ -59,7 +51,7 @@ def log_entry():
             'aff_speech': aff_speech,
             'neg_speech': neg_speech,
             'aff_two_speech': aff_two_speech,
-            'winner': winner,
+            'winner': winner_data,
             'average_wpm': average_wpm,
             'total_speech_time': total_speech_time
         }
@@ -72,20 +64,6 @@ def log_entry():
         logger.error(f'Error logging entry: {e}')
         return jsonify({'error': 'Error logging entry'}), 500
 
-# Define your helper functions outside the log_entry function
-def calculate_wpm(file_path): 
-    audio = AudioSegment.from_file(file_path)
-    length_in_seconds = len(audio) / 1000.0
-    global first_speech_transcription
-    word_count = textstat.lexicon_count(first_speech_transcription, removepunct=True)
-    length = float(length_in_seconds / 60)
-    return word_count / length if length > 0 else 0
-
-def calculate_total_time(file_path):
-    total_time = len(AudioSegment.from_file(file_path)) / 1000.0  # Total time in seconds
-    return str(int(total_time / 60)) + 'm' + str(int(total_time % 60)) + 's'
-
-
 @app.route('/get_last_five_entries', methods=['GET'])
 def get_last_five_entries():
     # Retrieve and sort the most recent 5 entries by date_time in descending order
@@ -97,77 +75,72 @@ def get_last_five_entries():
     
     return jsonify({'entry_list': entry_list})
 
-@app.route('/speech-statistics', methods=['GET'])
+@app.route('/speech-statistics', methods=['POST'])
 def speech_statistics():
-
-    def wpm(file_path):
-        audio = AudioSegment.from_file(file_path)
-        length_in_seconds = len(audio) / 1000.0  # pydub uses milliseconds
-        global first_speech_transcription
-        word_count = textstat.lexicon_count(first_speech_transcription, removepunct=True)
-        length = float(length_in_seconds / 60)
-        wpm = word_count / length
-        return wpm
-
-    def word_count():
-        global first_speech_transcription
-        word_count = textstat.lexicon_count(first_speech_transcription, removepunct=True)
-        return word_count
-
-    # Assume the file path is passed as a query parameter (or change it accordingly)
-    file_path = request.args.get('file_path', 'first_speech.m4a')
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file provided'}), 400
     
-    return jsonify({'average_wpm' : wpm(file_path), 'word_count' : word_count()})
+    audio_file = request.files['audio']
+    transcript_text = request.form.get('transcript')
 
-@app.route('/wpm-plot', methods=['GET'])
+    try:
+        audio = AudioSegment.from_file(audio_file)
+        length_in_seconds = len(audio) / 1000.0
+        word_count = textstat.lexicon_count(transcript_text, removepunct=True)
+        length_in_minutes = float(length_in_seconds / 60)
+        wpm = word_count / length_in_minutes if length_in_minutes > 0 else 0
+
+        return jsonify({'average_wpm': wpm, 'word_count': word_count})
+    except Exception as e:
+        logger.error(f"Error calculating speech statistics: {e}")
+        return jsonify({'error': 'Could not calculate speech statistics'}), 500
+
+@app.route('/wpm-plot', methods=['POST'])
 def wpm_plot():
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file provided'}), 400
+        
+    audio_file = request.files['audio']
     plt.switch_backend('Agg')
 
-    def transcribe_audio(file_path):
+    try:
         recognizer = sr.Recognizer()
-        audio = AudioSegment.from_file(file_path)
+        audio = AudioSegment.from_file(audio_file)
         chunk_length_ms = 5000
         chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
         
         transcripts = []
         for i, chunk in enumerate(chunks):
-            chunk.export("temp_chunk.wav", format="wav")
-            with sr.AudioFile("temp_chunk.wav") as source:
+            chunk_io = io.BytesIO()
+            chunk.export(chunk_io, format="wav")
+            chunk_io.seek(0)
+            with sr.AudioFile(chunk_io) as source:
                 audio_data = recognizer.record(source)
                 try:
                     text = recognizer.recognize_google(audio_data)
                     transcripts.append((i * 5, text))
                 except sr.UnknownValueError:
-                    transcripts.append((i * 5, ""))  # Store empty text for unrecognized segments
+                    transcripts.append((i * 5, ""))
         
-        return transcripts
-
-    def calculate_wpm(transcripts, interval=5):
-        wpm = []
+        wpm_data = []
         for time, text in transcripts:
             word_count = len(text.split())
-            words_per_minute = (word_count / interval) * 60  # Convert to WPM
-            wpm.append((time, words_per_minute))
-        
-        return wpm
+            words_per_minute = (word_count / 5) * 60
+            wpm_data.append((time, words_per_minute))
 
-    def plot_wpm(wpm_data):
         times = [time for time, wpm in wpm_data]
         wpms = [wpm for time, wpm in wpm_data]
 
-        # Create a new list to hold adjusted WPM values
         adjusted_wpms = []
-        
         for element in wpms:
             if element == 0:
-                # If the current WPM is 0, calculate the average of the adjusted wpms
-                if len(adjusted_wpms) > 0:  # Ensure there are values to calculate the average
+                if len(adjusted_wpms) > 0:
                     avg_wpm = sum(adjusted_wpms) / len(adjusted_wpms)
-                    adjusted_wpms.append(avg_wpm)  # Replace the 0 with the average
+                    adjusted_wpms.append(avg_wpm)
                 else:
-                    adjusted_wpms.append(0)  # If no previous values, just append 0
+                    adjusted_wpms.append(0)
             else:
-                adjusted_wpms.append(element)  # Otherwise, just append the current element
+                adjusted_wpms.append(element)
 
         plt.figure()
         plt.plot(times, adjusted_wpms, marker='o')
@@ -179,14 +152,11 @@ def wpm_plot():
         plt.savefig(img, format='png')
         img.seek(0)
         plt.close()
-        return img
+        return send_file(img, mimetype='image/png')
 
-
-    # Dynamic file path for WPM plot, assume it's passed as a query parameter
-    file_path = request.args.get('file_path', 'first_speech.m4a')
-    transcripts = transcribe_audio(file_path)
-    wpm_data = calculate_wpm(transcripts)
-    return send_file(plot_wpm(wpm_data=wpm_data), mimetype='image/png')
+    except Exception as e:
+        logger.error(f"Error generating WPM plot: {e}")
+        return jsonify({'error': 'Could not generate WPM plot'}), 500
 
 @app.route('/get_entry/<date_time_str>', methods=['GET'])
 def get_entry(date_time_str):
@@ -195,7 +165,7 @@ def get_entry(date_time_str):
         entry = entries.find_one({'date_time': date_time})
         
         if entry:
-            entry['_id'] = str(entry['_id'])  # Convert ObjectId to string for JSON serialization
+            entry['_id'] = str(entry['_id'])
             return jsonify(entry), 200
         else:
             return jsonify({"error": "Entry not found!"}), 404
@@ -223,79 +193,53 @@ def home():
 def process_recording():
     if 'audio' not in request.files:
         return jsonify({'error': 'No audio file provided'}), 400
-    audio = request.files['audio']
-    if audio.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-
-    # Determine which speech is being recorded (first or second)
-    speech_type = request.form.get('speech_type')  # 'first' or 'second'
     
-    if speech_type == 'first':
-        audio_path = 'first_speech.m4a'
-        audio.save(audio_path)
-        
-        try:
-            # Process and transcribe the first speech
-            global first_speech_transcription
-            first_speech_transcription = transcribe(audio_path)  # Transcribe and save the first speech
-            print("First speech transcription:", first_speech_transcription)  # For debugging
-            bob = first_speech_transcription
+    audio_file = request.files['audio']
+    topic = request.form.get('topic')
+    speech_type = request.form.get('speech_type')
+
+    if not topic:
+        return jsonify({'error': 'No topic provided'}), 400
+
+    try:
+        # Use an in-memory buffer instead of saving to disk
+        audio_buffer = io.BytesIO(audio_file.read())
+        audio_buffer.name = audio_file.filename or 'audio.m4a'
+
+        transcription = transcribe(audio_buffer)
+
+        if speech_type == 'first':
+            ai_speech_text = ai_response(topic, transcription)
+            return jsonify({
+                'first_speech_transcription': transcription,
+                'aiSpeech': ai_speech_text
+            })
+        elif speech_type == 'second':
+            first_speech_transcription = request.form.get('first_speech_transcription')
+            ai_speech_text = request.form.get('ai_speech')
             
-            print("Debate topic:", topic)  # Debugging log
+            if not first_speech_transcription or not ai_speech_text:
+                return jsonify({'error': 'Missing first speech or AI response'}), 400
 
-            # Get AI response (Debby's response)
-            global aiSpeech
-            aiSpeech = ai_response(topic, first_speech_transcription)
-            print("AI response (Debby's response):", aiSpeech)  # Debugging log
-
+            winner_text = winner(first_speech_transcription, ai_speech_text, transcription, topic)
             return jsonify({
-                'message': 'First speech recorded. AI has responded.',
-                'first_speech_transcription': first_speech_transcription,
-                'aiSpeech': aiSpeech,
-                'topic': topic
+                'second_speech_transcription': transcription,
+                'result': winner_text
             })
-        except Exception as e:
-            return jsonify({'error': f'Error processing first speech: {str(e)}'}), 500
-    
-    elif speech_type == 'second':
-        audio_path = 'second_speech.m4a'
-        audio.save(audio_path)
-        
-        try:
-            # Process and transcribe the second speech
-            global second_speech_transcription
-            second_speech_transcription = transcribe(audio_path)  # Transcribe and save the second speech
-            print("Second speech transcription:", second_speech_transcription)  # For debugging
+        else:
+            return jsonify({'error': 'Invalid speech type'}), 400
 
-            # Ensure the first speech and AI response are available before determining winner
-            if not first_speech_transcription or not aiSpeech:
-                return jsonify({'error': 'First speech or AI response is missing. Cannot determine the winner.'}), 400
-
-            # Determine the winner
-            result = winner(first_speech_transcription, aiSpeech, second_speech_transcription, topic,)
-            print("Winner result:", result)  # Debugging log
-
-            return jsonify({
-                'message': 'Second speech recorded. Winner has been determined.',
-                'second_speech_transcription': second_speech_transcription,
-                'result': result
-            })
-        except Exception as e:
-            return jsonify({'error': f'Error processing second speech: {str(e)}'}), 500
-    
-    else:
-        return jsonify({'error': 'Invalid speech type provided'}), 400
+    except Exception as e:
+        logger.error(f"Error processing recording: {e}")
+        return jsonify({'error': 'Failed to process recording'}), 500
 
 @app.route('/generate-case', methods=['GET'])
 def generate_case():
-    format = request.args.get('format')
-    side = request.args.get('side')
-    if side == "affirmative":
-        side = True
-    else:
-        side = False
+    format_type = request.args.get('format')
+    side = request.args.get('side') == "affirmative"
     topic = request.args.get('topic')
-    if format == 'mspdp':
+    
+    if format_type == 'mspdp':
         case = make_mspdp_case(topic=topic, side=side)
     else:
         case = make_case(topic=topic, side=side)
@@ -303,26 +247,21 @@ def generate_case():
 
 @app.route('/random-generate-case', methods=['GET'])
 def random_generate_case():
-    format = request.args.get('format')
+    format_type = request.args.get('format')
     speed = request.args.get('speed')
     topic = request.args.get('topic')
-    side = coin_toss
-    if side == 0:
-        side = 'affirmative'
-    else:
-        side = 'negation'
+    side = 'affirmative' if coin_toss() else 'negation'
     
-    if format == 'mspdp':
-        case = make_mspdp_case(topic=topic, side=side)
+    if format_type == 'mspdp':
+        case = make_mspdp_case(topic=topic, side=(side=='affirmative'))
     else:
-        case = make_case(topic=topic, side=side)
+        case = make_case(topic=topic, side=(side=='affirmative'))
     speech = case_to_speech(case)
     say_case(speech=speech, speed=speed)
     return jsonify({'case': case})
 
 @app.route('/get-topic', methods=['GET'])
 def fetch_topic():
-    global topic
     debate_type = request.args.get('debateType')
     tournament = request.args.get('tournament')
     custom_topic = request.args.get('customTopic')
@@ -330,94 +269,35 @@ def fetch_topic():
     if custom_topic:
         topic = custom_topic
     elif debate_type == "Parli":
-        topic = get_parli_topic(tournament=tournament)
+        topic = get_parli_topic(parli_topics, tournament=tournament)
     else:
-        topic = get_mspdp_topic()
+        topic = get_mspdp_topic(mspdp_topics)
 
     return jsonify({'topic': topic})
 
-@app.route('/get-ai-speech', methods=['GET'])
-def get_ai_speech():
-    global aiSpeech
-    # Get the file path dynamically from the request or use a default value
-    file_path = request.args.get('file_path', 'first_speech.m4a')
-    
-    # Transcribe the provided recording file
-    first_speech_transcription = transcribe(file_path)
-    
-    # Generate AI's response using the transcription
-    aiSpeech = ai_response(topic, first_speech_transcription)
-    
-    # Return the transcription and AI response as JSON
-    return jsonify({'first_speech_transcription': first_speech_transcription, 'aiSpeech': aiSpeech })
-
-@app.route('/get-winner', methods=['GET'])
-def get_winner():
-    file2path = request.args.get('file2path', 'second_speech.m4a')
-    
-    # Transcribe the provided recording file
-    second_speech_transcription = transcribe(file2path)
-    # Check if both speeches and AI response are available
-    if not (first_speech_transcription and aiSpeech and second_speech_transcription):
-        error_message = 'Both speeches and AI response are required for winner determination!'
-        app.logger.error(error_message)  # Log the error message
-        return jsonify({'error': error_message}), 400
-    
-    # If everything is available, determine the winner
-    try:
-        win = winner(first_speech_transcription, aiSpeech, second_speech_transcription, topic)
-        return jsonify({'second_speech_transcription': second_speech_transcription, 'winner': win})
-    except Exception as e:
-        app.logger.error(f"Error determining winner: {e}")
-        return jsonify({'error': 'An error occurred while determining the winner.'}), 500
-
-def reset_speech_data():
-    global second_speech_transcription
-    global first_speech_transcription
-    global aiSpeech
-    global topic
-
-    second_speech_transcription = None
-    first_speech_transcription = None
-    aiSpeech = None
-    topic = None
-
 @app.route('/view_entries', methods=['GET'])
 def view_entries():
-    # Retrieve and sort all entries by date_time in descending order
     all_entries = list(entries.find({}).sort('date_time', -1))
     
     user_wins = 0
     debby_wins = 0
 
     for entry in all_entries:
-        entry['_id'] = str(entry['_id'])  # Convert ObjectId to string for JSON serialization
-        entry['date_time'] = entry['date_time'].strftime('%Y-%m-%d %H:%M:%S')  # Format datetime for display
-        winner = entry.get('winner')  # Get the 'winner' field from the entry
+        entry['_id'] = str(entry['_id'])
+        entry['date_time'] = entry['date_time'].strftime('%Y-%m-%d %H:%M:%S')
+        winner_data = entry.get('winner')
 
-        if winner is None:
-            entry['winner'] = "Not available"  # Set to 'Not available' if winner is None
-        else:
-            # Split the winner string by spaces and normalize the first word
-            first_word = winner.split()[0].strip().lower()  # Get the first word and normalize it
-            print(first_word)
-
-            # Check who won based on the first word of the 'winner' field
+        if winner_data:
+            first_word = winner_data.split()[0].strip().lower()
             if first_word == 'for':
                 user_wins += 1
             elif first_word == 'against':
                 debby_wins += 1
+        else:
+            entry['winner'] = "Not available"
 
-    # After iterating over all entries, calculate the total
     total_entries = len(all_entries)
-
-    print(f"User Wins: {user_wins}")
-    print(f"Debby's Wins: {debby_wins}")
-
-    # Render the results in the view_entries.html template
     return render_template('view_entries.html', entries=all_entries, total_entries=total_entries, user_wins=user_wins, debby_wins=debby_wins)
-
-
 
 if __name__ == '__main__':
     app.run(port=8000, debug=True)
