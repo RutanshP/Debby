@@ -1,13 +1,17 @@
+import os
+from dotenv import load_dotenv
 import assemblyai as aai
-from api_key import ASSEMBLYAI_API_KEY, OPENAI_API_KEY
 import anthropic
 import pandas as pd
 import random
 from openai import OpenAI
 
-client = OpenAI(
-    api_key=OPENAI_API_KEY
-)
+load_dotenv()
+ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 
 # coin toss
 
