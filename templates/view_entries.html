@@ -83,6 +83,13 @@
             <li><a href="/">DebbyAI</a></li>
             <li><a href="/parli-gpt">CaseGPT</a></li>
             <li><a href="/flowbot">Flowbot</a></li>
+            {% if config.PASSWORD_PROTECTED %}
+            <li>
+                <form action="/logout" method="post" class="nav-form">
+                    <button type="submit" class="nav-logout">Sign Out</button>
+                </form>
+            </li>
+            {% endif %}
         </ul>
     </nav>
     <div class="outer-container">

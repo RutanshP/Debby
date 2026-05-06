@@ -58,6 +58,27 @@ nav {
     border-radius: 0.3125em;
 }
 
+.nav-form {
+    align-items: center;
+    display: flex;
+    height: 100%;
+    margin: 0;
+}
+
+.nav-logout {
+    background: transparent;
+    border-radius: 0;
+    color: #ffffff;
+    font-size: 1.25em;
+    height: 100%;
+    margin: 0;
+    padding: 0.5em 1em;
+}
+
+.nav-logout:hover {
+    background-color: #004d40;
+}
+
 .main-container {
     display: flex;
     justify-content: center;
@@ -244,4 +265,68 @@ textarea.topic {
 #viewEntriesButton {
     background-color: #00796b; /* Green when enabled */
     cursor: pointer; /* Pointer cursor when enabled */
+}
+
+.auth-page {
+    background: #e0f7fa;
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+}
+
+.auth-shell {
+    width: min(92vw, 28rem);
+}
+
+.auth-panel {
+    background: #ffffff;
+    border-radius: 0.5em;
+    box-shadow: 0 0.5em 1.5em rgba(0, 77, 64, 0.16);
+    padding: 2rem;
+    text-align: center;
+}
+
+.auth-logo {
+    height: 6rem;
+    margin-bottom: 0.75rem;
+}
+
+.auth-panel h1 {
+    margin: 0 0 0.5rem;
+}
+
+.auth-panel p {
+    color: #33665f;
+    margin: 0 0 1.5rem;
+}
+
+.auth-form {
+    text-align: left;
+}
+
+.auth-form input[type="password"] {
+    background-color: #e0f7fa;
+    border: 0.125em solid #00796b;
+    border-radius: 0.3125em;
+    box-sizing: border-box;
+    color: #00796b;
+    font-size: 1em;
+    margin-bottom: 1rem;
+    padding: 0.75em;
+    width: 100%;
+}
+
+.auth-form button {
+    margin-top: 0.5rem;
+    width: 100%;
+}
+
+.auth-error {
+    background: #fff1f0;
+    border: 1px solid #d93025;
+    border-radius: 0.3125em;
+    color: #9f1d15;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    text-align: center;
 }

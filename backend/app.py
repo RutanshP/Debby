@@ -1,12 +1,13 @@
 import os
 import json
+import secrets
 
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib_cache"))
 
 from dotenv import load_dotenv
 from .debby import coin_toss, get_parli_topic, get_mspdp_topic, ai_speech, ai_response, transcribe, winner
 from .parligpt import make_case, make_mspdp_case, case_to_speech, say_case
-from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask import Flask, render_template, request, jsonify, send_file, redirect, session, url_for
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from datetime import datetime
@@ -37,6 +38,8 @@ app = Flask(
     template_folder=os.path.join(BASE_DIR, 'templates'),
     static_folder=os.path.join(BASE_DIR, 'static'),
 )
+app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
+app.config['PASSWORD_PROTECTED'] = bool(os.getenv("APP_PASSWORD"))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,15 +63,16 @@ def require_app_password():
     if not APP_PASSWORD:
         return None
 
-    auth = request.authorization
-    if auth and auth.password == APP_PASSWORD:
+    if request.endpoint in {'login', 'static'}:
         return None
 
-    return Response(
-        "Authentication required",
-        401,
-        {"WWW-Authenticate": 'Basic realm="DebbyAI"'}
-    )
+    if session.get('authenticated'):
+        return None
+
+    if request.path.startswith('/api') or request.accept_mimetypes.best == 'application/json':
+        return jsonify({'error': 'Please sign in to use DebbyAI.'}), 401
+
+    return redirect(url_for('login', next=request.full_path))
 
     
 first_speech_transcription = None
@@ -320,6 +324,28 @@ def get_entry(date_time_str):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not APP_PASSWORD:
+        return redirect(url_for('index'))
+
+    error = None
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if secrets.compare_digest(password, APP_PASSWORD):
+            session['authenticated'] = True
+            next_url = request.args.get('next') or url_for('index')
+            return redirect(next_url)
+
+        error = 'That password did not work. Please try again.'
+
+    return render_template('login.html', error=error)
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route('/parli-gpt')
 def parli_gpt():
