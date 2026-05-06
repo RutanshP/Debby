@@ -170,7 +170,7 @@ def calculate_average_wpm(file_path, transcript):
     return round(transcript_word_count(transcript) / duration_minutes)
 
 
-def calculate_wpm_series(file_path, words, interval=5):
+def calculate_wpm_series(file_path, words, interval=2):
     audio = AudioSegment.from_file(file_path)
     duration_seconds = max(len(audio) / 1000.0, 1)
     bucket_count = max(math.ceil(duration_seconds / interval), 1)
@@ -271,6 +271,8 @@ def speech_statistics():
 @app.route('/wpm-plot', methods=['GET'])
 def wpm_plot():
     plt.switch_backend('Agg')
+    interval = request.args.get('interval', default=2, type=float)
+    interval = min(max(interval, 0.5), 10)
 
     def plot_wpm(first_series, second_series):
         plt.figure(figsize=(6, 3.6))
@@ -303,8 +305,8 @@ def wpm_plot():
         return img
 
 
-    first_series = calculate_wpm_series(first_speech_file_path, first_speech_words) if first_speech_words else []
-    second_series = calculate_wpm_series(second_speech_file_path, second_speech_words) if second_speech_words else []
+    first_series = calculate_wpm_series(first_speech_file_path, first_speech_words, interval=interval) if first_speech_words else []
+    second_series = calculate_wpm_series(second_speech_file_path, second_speech_words, interval=interval) if second_speech_words else []
     return send_file(plot_wpm(first_series, second_series), mimetype='image/png')
 
 @app.route('/get_entry/<date_time_str>', methods=['GET'])
