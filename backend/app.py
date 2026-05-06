@@ -3,6 +3,7 @@ import json
 
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib_cache"))
 
+from dotenv import load_dotenv
 from .debby import coin_toss, get_parli_topic, get_mspdp_topic, ai_speech, ai_response, transcribe, winner
 from .parligpt import make_case, make_mspdp_case, case_to_speech, say_case
 from flask import Flask, render_template, request, jsonify, send_file
@@ -22,6 +23,7 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 AUDIO_DIR = os.path.join(DATA_DIR, 'audio')
 
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
 app = Flask(
@@ -36,7 +38,7 @@ logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
 
 # MongoDB setup
 client = MongoClient(
-    'mongodb://localhost:27017/',
+    os.getenv("MONGO_URI", "mongodb://localhost:27017/"),
     serverSelectionTimeoutMS=2000,
     connectTimeoutMS=2000,
     socketTimeoutMS=2000,

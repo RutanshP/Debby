@@ -1,8 +1,10 @@
 assemblyai
-pandas
 openai
 pymongo
+dnspython
 Flask
+gunicorn
+python-dotenv
 mutagen
 textstat
 SpeechRecognition
