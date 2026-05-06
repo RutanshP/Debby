@@ -1,14 +1,16 @@
 import os
+import csv
+import re
 from dotenv import load_dotenv
 import assemblyai as aai
 import anthropic
-import pandas as pd
 import random
 from openai import OpenAI
+from pydub import AudioSegment
 
 load_dotenv()
-ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ASSEMBLYAI_API_KEY = (os.getenv("ASSEMBLYAI_API_KEY") or "").strip()
+OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip()
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -25,29 +27,45 @@ def coin_toss():
 # gets a random topic from npdl resolutions database given a tournament
 
 def get_parli_topic(tournament):
-    df = pd.read_csv('parlires.csv', encoding='UTF-16',
-                     on_bad_lines='skip', delimiter='\t')
-    resolutions = df['Resolution'].to_list()
-    if tournament == None:
-        return resolutions[random.randint(0, len(resolutions) - 1)]
-    else:
-        list_of_indices = []
-        ind = 0
-        for i in df['Tournament'].to_list():
-            new_string = i[:-8]
-            if tournament == new_string:
-                list_of_indices.append(ind)
-            ind += 1
-        res = resolutions[list_of_indices[random.randint(
-            0, len(list_of_indices)-1)]]
-        return res
+    matching_resolutions = []
+    all_resolutions = []
+
+    with open('parlires.csv', encoding='UTF-16', newline='') as file:
+        reader = csv.DictReader(file, delimiter='\t')
+        for row in reader:
+            resolution = (row.get('Resolution') or '').strip()
+            if not resolution:
+                continue
+
+            all_resolutions.append(resolution)
+
+            tournament_name = (row.get('Tournament') or '').strip()
+            tournament_name = re.sub(r'\s+\d{4}-\d{2}$', '', tournament_name)
+
+            if tournament and tournament_name == tournament:
+                matching_resolutions.append(resolution)
+
+    resolutions = matching_resolutions if tournament else all_resolutions
+    if not resolutions:
+        raise ValueError(f"No Parli topics found for tournament: {tournament}")
+
+    return random.choice(resolutions)
     
 # gets a random topic from mspdp database
 
 def get_mspdp_topic():
-    df = pd.read_csv('msres.csv', on_bad_lines='skip', delimiter='\t')
-    resolutions = df['Resolution'].to_list()
-    return resolutions[random.randint(0,len(resolutions) - 1)]
+    with open('msres.csv', newline='') as file:
+        reader = csv.DictReader(file, delimiter='\t')
+        resolutions = [
+            (row.get('Resolution') or '').strip()
+            for row in reader
+            if (row.get('Resolution') or '').strip()
+        ]
+
+    if not resolutions:
+        raise ValueError("No MSPDP topics found.")
+
+    return random.choice(resolutions)
 
 # gives a one minute ai generated speech about the topic
 
@@ -68,7 +86,7 @@ def ai_speech(topic):
 
 # transcribes the users audio
 
-def transcribe(path):
+def transcribe(path, include_words=False):
 
     """audio_file= open("recording.m4a", "rb")
     transcript = client.audio.transcriptions.create(
@@ -76,9 +94,41 @@ def transcribe(path):
     file=audio_file
     )"""
 
+    if not ASSEMBLYAI_API_KEY:
+        raise ValueError("ASSEMBLYAI_API_KEY is missing from .env")
+
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        raise ValueError(f"Audio file is missing or empty: {path}")
+
+    upload_path = path
+    if not path.lower().endswith('.wav'):
+        upload_path = 'transcription_upload.wav'
+        (
+            AudioSegment.from_file(path)
+            .set_channels(1)
+            .set_frame_rate(16000)
+            .set_sample_width(2)
+            .export(upload_path, format='wav')
+        )
+
     aai.settings.api_key = ASSEMBLYAI_API_KEY
+    config = aai.TranscriptionConfig(speech_models=["universal-2"])
     transcriber = aai.Transcriber()
-    transcript = transcriber.transcribe(path)
+    transcript = transcriber.transcribe(upload_path, config=config)
+
+    if transcript.status == aai.TranscriptStatus.error:
+        raise RuntimeError(f"AssemblyAI transcription failed: {transcript.error}")
+
+    if include_words:
+        words = [
+            {
+                'text': word.text,
+                'start': word.start,
+                'end': word.end
+            }
+            for word in (transcript.words or [])
+        ]
+        return transcript.text, words
 
     return transcript.text
 

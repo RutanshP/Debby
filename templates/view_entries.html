@@ -97,7 +97,9 @@
                         <th>Neg Speech</th>
                         <th>Aff Two Speech</th>
                         <th>Winner</th>
-                        <th>Speech Stats</th>
+                        <th>Avg WPM</th>
+                        <th>First WPM</th>
+                        <th>Second WPM</th>
                     </tr>
                     {% for entry in entries %}
                     <tr>
@@ -108,6 +110,8 @@
                         <td>{{ entry.aff_two_speech }}</td>
                         <td>{{ entry.winner }}</td>
                         <td><pre>{{ entry.average_wpm }}</pre></td>
+                        <td><pre>{{ entry.first_speech_wpm | default('') }}</pre></td>
+                        <td><pre>{{ entry.second_speech_wpm | default('') }}</pre></td>
                     </tr>
                     {% endfor %}
                 </table>

@@ -1,6 +1,10 @@
+import os
 from openai import OpenAI
-from api_key import OPENAI_API_KEY
+from dotenv import load_dotenv
 from pathlib import Path
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 def make_case(topic, side):
     

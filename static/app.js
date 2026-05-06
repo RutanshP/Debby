@@ -318,59 +318,57 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (recordingState === 1) {
             ai_loading();
-            await stopRecording();  // Wait for stopRecording to complete
+            const result = await stopRecording();  // Wait for stopRecording to complete
             console.log('Handling end of first speech recording.');
-            handleFirstSpeechEnd();  // Handle end of the first speech
+            handleFirstSpeechEnd(result);  // Handle end of the first speech
         } 
         else if (recordingState === 2) {
             winner_loading();
-            await stopRecording();  // Wait for stopRecording to complete
+            const result = await stopRecording();  // Wait for stopRecording to complete
             console.log('Handling end of second speech recording.');
-            handleSecondSpeechEnd();  // Handle end of the second speech
+            handleSecondSpeechEnd(result);  // Handle end of the second speech
         }
     });
     
     
-    function handleFirstSpeechEnd() {
+    function handleFirstSpeechEnd(result) {
         console.log('First speech recording ended.');
         stopRecordingButton.disabled = true;
         stopRecordingButton.style.backgroundColor = '#d4e5d3'; // Light green when disabled
         startRecordingButton.disabled = true; // Disable button while waiting for AI response
-        fetchAiResponse();
+        if (!result) {
+            hide_ai_loading();
+            return;
+        }
+        recordingState = 2;
+        hide_ai_loading();
+        firstTranscription = result.first_speech_transcription || '';
+        currentAiSpeech = result.aiSpeech || '';
+        clearPlaceholder(aiResponseDiv, `Debby’s Response: ${currentAiSpeech}`);
+        startRecordingButton.style.backgroundColor = '#00796b';
+        startRecordingButton.disabled = false;
+        startRecordingButton.innerText = "Rebuttal Speech";
         recordingState = 2; // Transition to waiting for second speech
     }
     
-    async function handleSecondSpeechEnd() {
+    async function handleSecondSpeechEnd(result) {
         console.log('Second speech recording ended.');
         
         stopRecordingButton.disabled = true;
         stopRecordingButton.style.backgroundColor = '#d4e5d3'; // Light green when disabled
-        
-        // Create a Blob from the audio chunks for the second speech
-        const audioBlob = new Blob(audioChunks, { type: 'audio/m4a' });
-        
-        // Transcribe the second speech and store the transcription
     
         recordingState = 0; // Reset to idle state
-       // const response = await fetch('/process-recording');
-       // const data = await response.json();
-       //secondTranscription = data.second_speech_transcription;
-        // Optional: Display loading or processing UI while waiting for winner determination
-        
-        // Log the second speech entry (transcription and metadata)
-        
-    
-        // Fetch the winner based on the speeches and AI response
-        await fetchWinner();
-        const response = await fetch('/get-winner');
-        const data = await response.json();
+        hide_winner_loading();
+        if (!result) {
+            enableAllControls();
+            return;
+        }
 
-        secondTranscription = data.second_speech_transcription;
-        currentWinner = data.winner;
-
-        
-        //console.log("Second transcription:", secondTranscription);
+        secondTranscription = result.second_speech_transcription || '';
+        currentWinner = result.winner || result.result || '';
         console.log("Current winner:", currentWinner);
+        const winnerElement = document.getElementById('winner');
+        winnerElement.textContent = `Winner: ${currentWinner}`;
         await logEntry();  // Check if it reaches this point
         enableAllControls();  // Re-enable controls
         
@@ -384,9 +382,11 @@ async function displaySpeechStatistics() {
     const statsResponse = await fetch('/speech-statistics');
     if (statsResponse.ok) {
         const stats = await statsResponse.json();
+        statsContainer.style.display = 'block';
         statsContainer.innerHTML = `
-            <p><strong>Average WPM:</strong> ${stats.average_wpm.toFixed(2)}</p>
-            <p><strong>Word Count:</strong> ${stats.word_count}</p>
+            <p><strong>First Speech:</strong> ${stats.first_speech_wpm} WPM (${stats.first_speech_word_count} words)</p>
+            <p><strong>Second Speech:</strong> ${stats.second_speech_wpm} WPM (${stats.second_speech_word_count} words)</p>
+            <p><strong>Average:</strong> ${stats.average_wpm} WPM</p>
         `;
     } else {
         console.error('Failed to fetch speech statistics.');
@@ -492,7 +492,10 @@ async function fetchWinner() {
         audioChunks = [];
         navigator.mediaDevices.getUserMedia({ audio: true })
             .then(stream => {
-                mediaRecorder = new MediaRecorder(stream);
+                const options = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? { mimeType: 'audio/webm;codecs=opus' }
+                    : {};
+                mediaRecorder = new MediaRecorder(stream, options);
                 mediaRecorder.ondataavailable = event => {
                     if (event.data.size > 0) {
                         audioChunks.push(event.data);
@@ -510,22 +513,17 @@ async function fetchWinner() {
     async function stopRecording() {
         return new Promise(async (resolve) => {
             if (mediaRecorder) {
-                mediaRecorder.stop();
-                
-                // Prevent multiple submissions by disabling the button during the process
-                startRecordingButton.disabled = true;
-    
                 mediaRecorder.onstop = async () => {
                     console.log('Media recorder stopped.');
     
-                    const recordedBlob = new Blob(audioChunks, { type: 'audio/m4a' });
+                    const recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
                     const formData = new FormData();
     
                     // Determine the speech type based on the recording state
                     let speechType = (recordingState === 1) ? 'first' : 'second';
     
                     // Append audio file and speech type to form data
-                    formData.append('audio', recordedBlob, `${speechType}_speech.m4a`);
+                    formData.append('audio', recordedBlob, `${speechType}_speech.webm`);
                     formData.append('speech_type', speechType);
     
                     try {
@@ -538,6 +536,7 @@ async function fetchWinner() {
     
                         if (response.ok) {
                             console.log(`${speechType} speech recording successfully sent to the server.`);
+                            const result = await response.json();
                             
                             // After successfully submitting the first speech, update the state for the second one
                             if (recordingState === 1) {
@@ -545,26 +544,28 @@ async function fetchWinner() {
                             }
                             
                             await displaySpeechStatistics(); // Update the UI after submission
+                            resolve(result);
                         } 
                         else {
                             console.error(`Failed to send ${speechType} speech. Status:`, response.status);
                             const errorText = await response.text();
                             console.error('Server error response:', errorText);
                             alert('There was an issue submitting your recording. Please try again.');
+                            resolve(null);
                         }
                     } catch (error) {
                         console.error(`Error submitting ${speechType} speech:`, error);
                         alert('An error occurred while submitting the recording. Please check your connection and try again.');
+                        resolve(null);
                     }
     
                     // Reset audio chunks for the next recording
                     audioChunks = [];
-    
-                    // Reset the UI state
-                    
-    
-                    resolve();
                 };
+                mediaRecorder.stop();
+                
+                // Prevent multiple submissions by disabling the button during the process
+                startRecordingButton.disabled = true;
             } else {
                 console.warn('No mediaRecorder instance found.');
                 resolve();
