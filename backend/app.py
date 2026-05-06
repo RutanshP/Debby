@@ -19,6 +19,12 @@ import io
 import math
 import logging
 
+try:
+    import imageio_ffmpeg
+    AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
+except ImportError:
+    pass
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 AUDIO_DIR = os.path.join(DATA_DIR, 'audio')

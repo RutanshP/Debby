@@ -3,10 +3,15 @@ import csv
 import re
 from dotenv import load_dotenv
 import assemblyai as aai
-import anthropic
 import random
 from openai import OpenAI
 from pydub import AudioSegment
+
+try:
+    import imageio_ffmpeg
+    AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
+except ImportError:
+    pass
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DATA_DIR = os.path.join(BASE_DIR, 'data')

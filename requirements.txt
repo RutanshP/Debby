@@ -5,6 +5,7 @@ dnspython
 Flask
 gunicorn
 python-dotenv
+imageio-ffmpeg
 mutagen
 textstat
 SpeechRecognition
