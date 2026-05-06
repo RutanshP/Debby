@@ -6,7 +6,7 @@ os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib_cac
 from dotenv import load_dotenv
 from .debby import coin_toss, get_parli_topic, get_mspdp_topic, ai_speech, ai_response, transcribe, winner
 from .parligpt import make_case, make_mspdp_case, case_to_speech, say_case
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, Response
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from datetime import datetime
@@ -41,6 +41,7 @@ app = Flask(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
+APP_PASSWORD = os.getenv("APP_PASSWORD")
 
 # MongoDB setup
 client = MongoClient(
@@ -52,6 +53,22 @@ client = MongoClient(
 db = client.debate_db
 entries = db.entries
 LOCAL_ENTRIES_FILE = os.path.join(DATA_DIR, 'debate_entries.json')
+
+
+@app.before_request
+def require_app_password():
+    if not APP_PASSWORD:
+        return None
+
+    auth = request.authorization
+    if auth and auth.password == APP_PASSWORD:
+        return None
+
+    return Response(
+        "Authentication required",
+        401,
+        {"WWW-Authenticate": 'Basic realm="DebbyAI"'}
+    )
 
     
 first_speech_transcription = None
