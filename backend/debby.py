@@ -8,7 +8,11 @@ import random
 from openai import OpenAI
 from pydub import AudioSegment
 
-load_dotenv()
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+AUDIO_DIR = os.path.join(DATA_DIR, 'audio')
+
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 ASSEMBLYAI_API_KEY = (os.getenv("ASSEMBLYAI_API_KEY") or "").strip()
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip()
 
@@ -30,7 +34,7 @@ def get_parli_topic(tournament):
     matching_resolutions = []
     all_resolutions = []
 
-    with open('parlires.csv', encoding='UTF-16', newline='') as file:
+    with open(os.path.join(DATA_DIR, 'parlires.csv'), encoding='UTF-16', newline='') as file:
         reader = csv.DictReader(file, delimiter='\t')
         for row in reader:
             resolution = (row.get('Resolution') or '').strip()
@@ -54,7 +58,7 @@ def get_parli_topic(tournament):
 # gets a random topic from mspdp database
 
 def get_mspdp_topic():
-    with open('msres.csv', newline='') as file:
+    with open(os.path.join(DATA_DIR, 'msres.csv'), newline='') as file:
         reader = csv.DictReader(file, delimiter='\t')
         resolutions = [
             (row.get('Resolution') or '').strip()
@@ -102,7 +106,8 @@ def transcribe(path, include_words=False):
 
     upload_path = path
     if not path.lower().endswith('.wav'):
-        upload_path = 'transcription_upload.wav'
+        os.makedirs(AUDIO_DIR, exist_ok=True)
+        upload_path = os.path.join(AUDIO_DIR, 'transcription_upload.wav')
         (
             AudioSegment.from_file(path)
             .set_channels(1)
