@@ -54,6 +54,15 @@ def _truncate_for_flow(text, limit=2500):
     return text[:limit].rsplit(' ', 1)[0] + " ..."
 
 
+def _winner_side_from_rfd(rfd):
+    first_word = ((rfd or '').strip().split() or ['unknown'])[0].lower()
+    if first_word == 'for':
+        return 'aff'
+    if first_word == 'against':
+        return 'neg'
+    return first_word
+
+
 def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
     fallback = {
         "chains": [
@@ -82,8 +91,8 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
         "dropped": [],
         "voters": [
             {
-                "tag": "Decision",
-                "winner": "unknown",
+                "tag": "Winning contention / impact",
+                "winner": _winner_side_from_rfd(rfd),
                 "reason": _truncate_for_flow(rfd, 160)
             }
         ],
@@ -104,6 +113,9 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
                     "chains: max 6. Each chain has root, responses, status, judge_note. "
                     "root/responses use side, tag, summary. tag <= 8 words. summary <= 18 words. "
                     "responses max 3 per chain. dropped max 4. voters max 3. judge_note <= 18 words. "
+                    "Each voter must identify the winning team's decisive contention or impact area, "
+                    "explain why it had the highest impact in the round, and briefly summarize the RFD. "
+                    "Voter tag <= 8 words; voter reason <= 35 words; voter winner must be aff or neg. "
                     "recommended_drills can only include: rebuttal, impact, contentions, speed. "
                     "Do not quote long text."
                 )
@@ -129,7 +141,7 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
     return {
         "chains": flow.get("chains", [])[:6],
         "dropped": flow.get("dropped", [])[:4],
-        "voters": flow.get("voters", [])[:3],
+        "voters": flow.get("voters", [])[:3] or fallback["voters"],
         "recommended_drills": flow.get("recommended_drills", [])[:4],
     }
 

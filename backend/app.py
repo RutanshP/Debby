@@ -167,6 +167,33 @@ def transcript_word_count(transcript):
     return textstat.lexicon_count(transcript or '', removepunct=True)
 
 
+def winner_side_from_rfd(rfd):
+    first_word = ((rfd or '').strip().split() or ['unknown'])[0].lower()
+    if first_word == 'for':
+        return 'aff'
+    if first_word == 'against':
+        return 'neg'
+    return first_word
+
+
+def summarize_rfd_for_voter(rfd, limit=260):
+    summary = re.sub(r'\s+', ' ', (rfd or '').strip())
+    if not summary:
+        return 'No RFD was saved for this round.'
+
+    if len(summary) <= limit:
+        return summary
+    return summary[:limit].rsplit(' ', 1)[0] + ' ...'
+
+
+def rfd_voter_for_entry(entry):
+    return {
+        'tag': 'Winning contention / impact',
+        'winner': winner_side_from_rfd(entry.get('winner')),
+        'reason': summarize_rfd_for_voter(entry.get('winner'))
+    }
+
+
 def calculate_average_wpm(file_path, transcript):
     audio = AudioSegment.from_file(file_path)
     duration_minutes = max((len(audio) / 1000.0) / 60, 1 / 60)
@@ -216,8 +243,6 @@ def calculate_reading_accuracy(reference_text, spoken_text):
 
 
 def fallback_flow_for_entry(entry):
-    winner_text = entry.get('winner') or ''
-    winner_side = winner_text.split()[0].lower() if winner_text else 'unknown'
     return {
         'chains': [
             {
@@ -244,14 +269,25 @@ def fallback_flow_for_entry(entry):
         ],
         'dropped': [],
         'voters': [
-            {
-                'tag': 'Decision',
-                'winner': winner_side,
-                'reason': winner_text[:160]
-            }
+            rfd_voter_for_entry(entry)
         ],
         'recommended_drills': []
     }
+
+
+def normalize_flow_for_entry(entry):
+    flow = entry.get('flow') or fallback_flow_for_entry(entry)
+    voters = flow.get('voters') or []
+    legacy_voters = not voters or all(
+        (voter.get('tag') or '').lower() in {'decision', 'winner'}
+        for voter in voters
+    )
+
+    if legacy_voters:
+        flow = dict(flow)
+        flow['voters'] = [rfd_voter_for_entry(entry)]
+
+    return flow
 
 
 def get_speech_stats():
@@ -682,7 +718,7 @@ def view_entries():
     debby_wins = 0
 
     for entry in all_entries:
-        entry['flow'] = entry.get('flow') or fallback_flow_for_entry(entry)
+        entry['flow'] = normalize_flow_for_entry(entry)
         winner = entry.get('winner')  # Get the 'winner' field from the entry
 
         if winner is None:
