@@ -420,6 +420,218 @@ textarea.topic {
     border: 1px solid #d9e7e4 !important;
 }
 
+.history-shell {
+    margin: 0 auto;
+    max-width: 78rem;
+    padding: 1.5rem;
+}
+
+.history-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.history-header h1 {
+    margin: 0 0 0.35rem;
+}
+
+.history-header p,
+.muted-text {
+    color: #66817d;
+}
+
+.history-stats {
+    background: #ffffff;
+    border: 1px solid #d9e7e4;
+    border-radius: 0.5rem;
+    display: grid;
+    gap: 0.35rem;
+    min-width: 14rem;
+    padding: 1rem;
+}
+
+.history-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.round-card {
+    background: #ffffff;
+    border: 1px solid #d9e7e4;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125em 0.35em rgba(23, 63, 57, 0.06);
+    padding: 1.25rem;
+}
+
+.round-summary {
+    align-items: flex-start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.round-summary h2 {
+    color: #173f39;
+    font-size: 1.2rem;
+    margin: 0.25rem 0 0;
+}
+
+.round-date {
+    color: #66817d;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.round-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.round-metrics span,
+.flow-note span,
+.mini-review span,
+.drill-chip {
+    background: #e0f2f1;
+    border-radius: 999px;
+    color: #004d40;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.35rem 0.65rem;
+    text-decoration: none;
+}
+
+.flow-section h3,
+.review-grid h3,
+.transcript-grid h3 {
+    color: #00796b;
+    margin-bottom: 0.6rem;
+}
+
+.flow-chain {
+    align-items: stretch;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-bottom: 0.75rem;
+}
+
+.flow-card {
+    border: 1px solid #d9e7e4;
+    border-radius: 0.5rem;
+    flex: 1 1 12rem;
+    padding: 0.85rem;
+}
+
+.flow-card.aff {
+    border-left: 4px solid #00796b;
+}
+
+.flow-card.neg {
+    border-left: 4px solid #33665f;
+}
+
+.flow-card span {
+    color: #66817d;
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.flow-card strong {
+    color: #173f39;
+    display: block;
+    margin: 0.25rem 0;
+}
+
+.flow-card p,
+.flow-note p,
+.mini-review p,
+.transcript-grid p {
+    line-height: 1.45;
+    margin: 0;
+}
+
+.flow-arrow {
+    align-self: center;
+    color: #66817d;
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.flow-note {
+    background: #f6faf9;
+    border: 1px solid #d9e7e4;
+    border-radius: 0.5rem;
+    flex: 1 1 12rem;
+    padding: 0.85rem;
+}
+
+.flow-note span {
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+
+.review-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 1rem;
+}
+
+.mini-review {
+    border: 1px solid #d9e7e4;
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0.75rem;
+}
+
+.mini-review strong {
+    display: block;
+    margin-bottom: 0.45rem;
+}
+
+.mini-review span {
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+
+.drill-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.transcript-details {
+    border-top: 1px solid #d9e7e4;
+    margin-top: 1rem;
+    padding-top: 1rem;
+}
+
+.transcript-details summary {
+    color: #00796b;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.transcript-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 1rem;
+}
+
+.transcript-grid section {
+    background: #f6faf9;
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
 @media (max-width: 980px) {
     .main-container {
         flex-direction: column;
@@ -434,6 +646,21 @@ textarea.topic {
 
     .practice-steps {
         grid-template-columns: 1fr;
+    }
+
+    .history-header,
+    .round-summary {
+        flex-direction: column;
+    }
+
+    .flow-chain,
+    .review-grid,
+    .transcript-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .flow-arrow {
+        transform: rotate(-90deg);
     }
 }
 

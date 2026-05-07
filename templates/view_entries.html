@@ -3,76 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View Entries</title>
+    <title>History</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <style>
-        /* Specific styles for view_entries.html */
-        
-        .outer-container {
-            display: flex;
-            justify-content: center; /* Center the entire content horizontally */
-            padding: 2%; /* Space around the container */
-        }
-
-        .main-container {
-            display: flex;
-            justify-content: flex-start;
-            align-items: flex-start;
-            gap: 1.25%; /* Space between the grid and sidebar */
-            width: 100%; /* Full width inside the outer container */
-            max-width: 98%; /* Set a maximum width for larger screens */
-        }
-
-        .center-content {
-            text-align: left; /* Align text to the left */
-            flex: 4; /* Make this much wider */
-            padding: 1.25%;
-            background-color: #ffffff;
-            box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
-            max-width: 85%; /* Increased width */
-            width: 100%; /* Full width */
-        }
-
-        .entries-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 0 auto; /* Center the table horizontally */
-        }
-
-        .entries-table th, .entries-table td {
-            padding: 10px;
-            text-align: left;
-            vertical-align: top; /* Align text to the top */
-            border: 1px solid #ddd; /* Add a border to prevent text from leaking */
-            word-wrap: break-word; /* Ensure long text breaks properly */
-        }
-
-        .entries-table th {
-            background-color: #f4f4f4;
-        }
-
-        .right-sidebar {
-            width: 12%; /* Thinner sidebar width */
-            background-color: #ffffff;
-            padding: 1%; /* Increased padding for better spacing */
-            box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
-            text-align: center; /* Center the text */
-            border-radius: 15px; /* Curved corners */
-        }
-
-        .right-sidebar h2 {
-            color: #00796b; /* Dark teal color for headers */
-            margin: 0; /* Remove default margin */
-            padding-bottom: 1%; /* Add space below the header in percentage */
-            margin-bottom: 1%; /* Adjust the space above the header in percentage */
-        }
-
-        .right-sidebar p {
-            color: #333; /* Dark text color */
-            font-size: 1.125em;
-            margin-bottom: 0.5%;
-        }
-    </style>
 </head>
 <body>
     <nav>
@@ -94,51 +26,144 @@
             {% endif %}
         </ul>
     </nav>
-    <div class="outer-container">
-        <div class="main-container">
-            <div class="center-content">
-                <h1>Logged Entries</h1>
-                <table border="1" class="entries-table">
-                    <tr>
-                        <th>Date Time</th>
-                        <th>Topic</th>
-                        <th>Aff Speech</th>
-                        <th>Neg Speech</th>
-                        <th>Aff Two Speech</th>
-                        <th>Winner</th>
-                        <th>Avg WPM</th>
-                        <th>First WPM</th>
-                        <th>Second WPM</th>
-                    </tr>
-                    {% for entry in entries %}
-                    <tr>
-                        <td><pre>{{ entry.date_time }}</pre></td>
-                        <td>{{ entry.topic }}</td>
-                        <td>{{ entry.aff_speech }}</td>
-                        <td>{{ entry.neg_speech }}</td>
-                        <td>{{ entry.aff_two_speech }}</td>
-                        <td>{{ entry.winner }}</td>
-                        <td><pre>{{ entry.average_wpm }}</pre></td>
-                        <td><pre>{{ entry.first_speech_wpm | default('') }}</pre></td>
-                        <td><pre>{{ entry.second_speech_wpm | default('') }}</pre></td>
-                    </tr>
-                    {% endfor %}
-                </table>
+
+    <main class="history-shell">
+        <section class="history-header">
+            <div>
+                <h1>Round History</h1>
+                <p>Flow-first review with transcripts tucked away.</p>
             </div>
-            <div class="right-sidebar">
-                <h2>Statistics</h2>
-                <p>Total Entries: {{ total_entries }}</p>
-                <p>Debby's Wins: {{ debby_wins }}</p>
-                <p>Your Wins: {{ user_wins }}</p>
-                <p>Your Win Percentage: 
+            <aside class="history-stats">
+                <span>Total: {{ total_entries }}</span>
+                <span>Your Wins: {{ user_wins }}</span>
+                <span>Debby Wins: {{ debby_wins }}</span>
+                <span>
+                    Win Rate:
                     {% if total_entries > 0 %}
-                        {{ (user_wins / total_entries * 100) | round(2) }}%
+                        {{ (user_wins / total_entries * 100) | round(1) }}%
                     {% else %}
-                        0.0%
+                        0%
                     {% endif %}
-                </p>
-            </div>
-        </div>
-    </div>
+                </span>
+            </aside>
+        </section>
+
+        <section class="history-list">
+            {% for entry in entries %}
+            <article class="round-card">
+                <div class="round-summary">
+                    <div>
+                        <div class="round-date">{{ entry.date_time }}</div>
+                        <h2>{{ entry.topic }}</h2>
+                    </div>
+                    <div class="round-metrics">
+                        <span>Winner: {{ entry.winner.split()[0] if entry.winner else 'N/A' }}</span>
+                        <span>Avg WPM: {{ entry.average_wpm | default(0) }}</span>
+                        <span>First: {{ entry.first_speech_wpm | default(0) }}</span>
+                        <span>Second: {{ entry.second_speech_wpm | default(0) }}</span>
+                    </div>
+                </div>
+
+                <div class="flow-section">
+                    <h3>Flow</h3>
+                    {% for chain in entry.flow.chains %}
+                    <div class="flow-chain">
+                        <div class="flow-card {{ chain.root.side | default('aff') }}">
+                            <span>{{ chain.root.side | default('aff') }}</span>
+                            <strong>{{ chain.root.tag }}</strong>
+                            <p>{{ chain.root.summary }}</p>
+                        </div>
+
+                        {% for response in chain.responses %}
+                        <div class="flow-arrow">←</div>
+                        <div class="flow-card {{ response.side | default('neg') }}">
+                            <span>{{ response.side | default('') }}</span>
+                            <strong>{{ response.tag }}</strong>
+                            <p>{{ response.summary }}</p>
+                        </div>
+                        {% endfor %}
+
+                        <div class="flow-note">
+                            <span>{{ chain.status | default('contested') }}</span>
+                            <p>{{ chain.judge_note }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="review-grid">
+                    <section>
+                        <h3>Voters</h3>
+                        {% if entry.flow.voters %}
+                            {% for voter in entry.flow.voters %}
+                            <div class="mini-review">
+                                <strong>{{ voter.tag }}</strong>
+                                <span>{{ voter.winner }}</span>
+                                <p>{{ voter.reason }}</p>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="muted-text">No voters generated.</p>
+                        {% endif %}
+                    </section>
+
+                    <section>
+                        <h3>Drops</h3>
+                        {% if entry.flow.dropped %}
+                            {% for drop in entry.flow.dropped %}
+                            <div class="mini-review">
+                                <strong>{{ drop.tag }}</strong>
+                                <span>{{ drop.side }}</span>
+                                <p>{{ drop.reason | default('No direct answer recorded.') }}</p>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="muted-text">No obvious drops marked.</p>
+                        {% endif %}
+                    </section>
+
+                    <section>
+                        <h3>Recommended Drills</h3>
+                        {% if entry.flow.recommended_drills %}
+                            <div class="drill-chip-row">
+                                {% for drill in entry.flow.recommended_drills %}
+                                <a href="/drills" class="drill-chip">{{ drill }}</a>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="muted-text">No drill recommendation available.</p>
+                        {% endif %}
+                    </section>
+                </div>
+
+                <details class="transcript-details">
+                    <summary>Show Full Transcripts</summary>
+                    <div class="transcript-grid">
+                        <section>
+                            <h3>Aff Constructive</h3>
+                            <p>{{ entry.aff_speech }}</p>
+                        </section>
+                        <section>
+                            <h3>Neg Speech</h3>
+                            <p>{{ entry.neg_speech }}</p>
+                        </section>
+                        <section>
+                            <h3>Aff Rebuttal</h3>
+                            <p>{{ entry.aff_two_speech }}</p>
+                        </section>
+                        <section>
+                            <h3>Judge RFD</h3>
+                            <p>{{ entry.winner }}</p>
+                        </section>
+                    </div>
+                </details>
+            </article>
+            {% else %}
+            <article class="round-card empty-state">
+                No rounds yet. Complete a practice round to generate a flow review.
+            </article>
+            {% endfor %}
+        </section>
+    </main>
 </body>
 </html>

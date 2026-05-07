@@ -7,7 +7,7 @@ from difflib import SequenceMatcher
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib_cache"))
 
 from dotenv import load_dotenv
-from .debby import coin_toss, get_parli_topic, get_mspdp_topic, ai_speech, ai_response, transcribe, winner, generate_drill, score_drill
+from .debby import coin_toss, get_parli_topic, get_mspdp_topic, ai_speech, ai_response, transcribe, winner, generate_drill, score_drill, generate_round_flow
 from .parligpt import make_case, make_mspdp_case, case_to_speech, say_case
 from flask import Flask, render_template, request, jsonify, send_file, redirect, session, url_for
 from pymongo import MongoClient
@@ -215,6 +215,45 @@ def calculate_reading_accuracy(reference_text, spoken_text):
     return round((matched_words / len(reference_words)) * 100)
 
 
+def fallback_flow_for_entry(entry):
+    winner_text = entry.get('winner') or ''
+    winner_side = winner_text.split()[0].lower() if winner_text else 'unknown'
+    return {
+        'chains': [
+            {
+                'root': {
+                    'side': 'aff',
+                    'tag': 'Aff case',
+                    'summary': 'Open transcripts to review the affirmative case.'
+                },
+                'responses': [
+                    {
+                        'side': 'neg',
+                        'tag': 'Neg response',
+                        'summary': 'Open transcripts to review the negative speech.'
+                    },
+                    {
+                        'side': 'aff',
+                        'tag': 'Aff rebuttal',
+                        'summary': 'Open transcripts to review the final rebuttal.'
+                    }
+                ],
+                'status': 'archived',
+                'judge_note': 'This older round has no generated flow.'
+            }
+        ],
+        'dropped': [],
+        'voters': [
+            {
+                'tag': 'Decision',
+                'winner': winner_side,
+                'reason': winner_text[:160]
+            }
+        ],
+        'recommended_drills': []
+    }
+
+
 def get_speech_stats():
     first_wpm = calculate_average_wpm(first_speech_file_path, first_speech_transcription) if first_speech_transcription else 0
     second_wpm = calculate_average_wpm(second_speech_file_path, second_speech_transcription) if second_speech_transcription else 0
@@ -249,6 +288,11 @@ def log_entry():
     try:
         stats = get_speech_stats()
         total_speech_time = calculate_total_time(first_speech_file_path)+ calculate_total_time(second_speech_file_path)
+        try:
+            flow = generate_round_flow(topic, aff_speech, neg_speech, aff_two_speech, winner)
+        except Exception as e:
+            logger.error(f'Error generating round flow: {e}')
+            flow = fallback_flow_for_entry({'winner': winner})
 
         # Prepare the entry with additional statistics
         entry = {
@@ -262,7 +306,8 @@ def log_entry():
             'first_speech_wpm': int(stats['first_speech_wpm']),
             'second_speech_wpm': int(stats['second_speech_wpm']),
             'average_wpm': int(stats['average_wpm']),
-            'total_speech_time': total_speech_time
+            'total_speech_time': total_speech_time,
+            'flow': flow
         }
 
         storage = insert_entry(entry)
@@ -637,6 +682,7 @@ def view_entries():
     debby_wins = 0
 
     for entry in all_entries:
+        entry['flow'] = entry.get('flow') or fallback_flow_for_entry(entry)
         winner = entry.get('winner')  # Get the 'winner' field from the entry
 
         if winner is None:

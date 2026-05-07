@@ -47,6 +47,93 @@ def _json_from_model(messages, fallback):
         return fallback
 
 
+def _truncate_for_flow(text, limit=2500):
+    text = (text or '').strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(' ', 1)[0] + " ..."
+
+
+def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
+    fallback = {
+        "chains": [
+            {
+                "root": {
+                    "side": "aff",
+                    "tag": "Aff case",
+                    "summary": "Review the transcript for the main affirmative argument."
+                },
+                "responses": [
+                    {
+                        "side": "neg",
+                        "tag": "Neg response",
+                        "summary": "Review the transcript for the main negative response."
+                    },
+                    {
+                        "side": "aff",
+                        "tag": "Aff defense",
+                        "summary": "Review the transcript for the main affirmative defense."
+                    }
+                ],
+                "status": "contested",
+                "judge_note": "Flow generation was unavailable."
+            }
+        ],
+        "dropped": [],
+        "voters": [
+            {
+                "tag": "Decision",
+                "winner": "unknown",
+                "reason": _truncate_for_flow(rfd, 160)
+            }
+        ],
+        "recommended_drills": ["rebuttal", "impact"]
+    }
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini-2024-07-18",
+        max_tokens=850,
+        temperature=0.2,
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You create compact debate flows as JSON. Flow by clash, not by speech. "
+                    "Return JSON only with keys: chains, dropped, voters, recommended_drills. "
+                    "chains: max 6. Each chain has root, responses, status, judge_note. "
+                    "root/responses use side, tag, summary. tag <= 8 words. summary <= 18 words. "
+                    "responses max 3 per chain. dropped max 4. voters max 3. judge_note <= 18 words. "
+                    "recommended_drills can only include: rebuttal, impact, contentions, speed. "
+                    "Do not quote long text."
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Topic: {_truncate_for_flow(topic, 300)}\n\n"
+                    f"AFF CONSTRUCTIVE:\n{_truncate_for_flow(aff_speech)}\n\n"
+                    f"NEG SPEECH:\n{_truncate_for_flow(neg_speech)}\n\n"
+                    f"AFF REBUTTAL:\n{_truncate_for_flow(aff_rebuttal)}\n\n"
+                    f"JUDGE RFD:\n{_truncate_for_flow(rfd, 1200)}"
+                )
+            }
+        ]
+    )
+
+    try:
+        flow = json.loads(response.choices[0].message.content)
+    except json.JSONDecodeError:
+        return fallback
+
+    return {
+        "chains": flow.get("chains", [])[:6],
+        "dropped": flow.get("dropped", [])[:4],
+        "voters": flow.get("voters", [])[:3],
+        "recommended_drills": flow.get("recommended_drills", [])[:4],
+    }
+
+
 def generate_drill(drill_type):
     if drill_type not in DRILL_TYPES:
         raise ValueError("Unknown drill type.")
