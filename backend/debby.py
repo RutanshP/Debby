@@ -31,6 +31,9 @@ DRILL_TYPES = {
     'contentions': 'Contention Storm',
 }
 
+SPEED_PASSAGES_FILE = os.path.join(DATA_DIR, 'speed_passages.json')
+SPEED_PASSAGE_REUSE_THRESHOLD = 20
+
 
 def _json_from_model(messages, fallback):
     response = client.chat.completions.create(
@@ -52,6 +55,82 @@ def _truncate_for_flow(text, limit=2500):
     if len(text) <= limit:
         return text
     return text[:limit].rsplit(' ', 1)[0] + " ..."
+
+
+def _looks_like_speed_passage(text):
+    text = (text or '').strip()
+    if not text:
+        return False
+
+    lower_text = text.lower()
+    instruction_starts = (
+        "discuss ",
+        "explain ",
+        "write ",
+        "describe ",
+        "argue ",
+        "respond ",
+        "list ",
+    )
+    if lower_text.startswith(instruction_starts):
+        return False
+
+    return len(re.findall(r"\b[\w']+\b", text)) >= 120
+
+
+def _load_speed_passages():
+    if not os.path.exists(SPEED_PASSAGES_FILE):
+        return []
+
+    try:
+        with open(SPEED_PASSAGES_FILE, encoding='utf-8') as file:
+            passages = json.load(file)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    return [
+        passage for passage in passages
+        if isinstance(passage, dict) and _looks_like_speed_passage(passage.get('prompt'))
+    ]
+
+
+def _save_speed_passage(drill):
+    if not _looks_like_speed_passage(drill.get('prompt')):
+        return
+
+    os.makedirs(DATA_DIR, exist_ok=True)
+    passages = _load_speed_passages()
+    normalized_prompt = re.sub(r'\s+', ' ', drill.get('prompt', '').strip()).lower()
+    existing_prompts = {
+        re.sub(r'\s+', ' ', passage.get('prompt', '').strip()).lower()
+        for passage in passages
+    }
+
+    if normalized_prompt in existing_prompts:
+        return
+
+    passages.append({
+        "title": DRILL_TYPES['speed'],
+        "topic": drill.get('topic') or "Speed Reading",
+        "prompt": drill.get('prompt', '').strip(),
+        "task": "Read the passage aloud, then submit your recording.",
+        "timer_seconds": 75,
+    })
+
+    with open(SPEED_PASSAGES_FILE, 'w', encoding='utf-8') as file:
+        json.dump(passages, file, indent=2)
+
+
+def _cached_speed_drill():
+    passages = _load_speed_passages()
+    if len(passages) < SPEED_PASSAGE_REUSE_THRESHOLD:
+        return None
+
+    drill = dict(random.choice(passages))
+    drill['title'] = DRILL_TYPES['speed']
+    drill['task'] = "Read the passage aloud, then submit your recording."
+    drill['timer_seconds'] = 75
+    return drill
 
 
 def _winner_side_from_rfd(rfd):
@@ -150,6 +229,11 @@ def generate_drill(drill_type):
     if drill_type not in DRILL_TYPES:
         raise ValueError("Unknown drill type.")
 
+    if drill_type == 'speed':
+        cached_drill = _cached_speed_drill()
+        if cached_drill:
+            return cached_drill
+
     drill_guidance = {
         'rebuttal': (
             "Create a compact debate argument for the user to rebut. Include a topic, side, "
@@ -158,7 +242,9 @@ def generate_drill(drill_type):
         'speed': (
             "Create a two-paragraph speed-reading passage about debate, sports, school, "
             "or technology. It should be 220-280 words total, readable aloud, and include "
-            "varied punctuation so the user can practice pacing."
+            "varied punctuation so the user can practice pacing. The prompt must be the exact "
+            "words the user should read aloud. The task must only tell the user to read the "
+            "passage aloud; do not ask them to discuss, explain, write, or answer anything."
         ),
         'impact': (
             "Create one underdeveloped debate argument. The user must impact it out fully "
@@ -183,7 +269,7 @@ def generate_drill(drill_type):
             "graduate with more confidence, protect themselves from debt traps, and help their families make "
             "more informed choices."
         ) if drill_type == 'speed' else "Schools should require financial literacy because students need practical skills for adulthood.",
-        "task": "Complete the drill, then submit your response for feedback.",
+        "task": "Read the passage aloud, then submit your recording.",
         "timer_seconds": 60 if drill_type != 'speed' else 75,
     }
 
@@ -198,20 +284,31 @@ def generate_drill(drill_type):
             "timer_seconds": 60,
         }
 
-    return _json_from_model(
+    drill = _json_from_model(
         [
             {
                 "role": "system",
                 "content": (
                     "You create concise high school debate practice drills. Return only JSON "
                     "with keys: title, topic, prompt, task, timer_seconds. Make prompts specific, "
-                    "clear, and useful for practice."
+                    "clear, and useful for practice. For Speed Reading, prompt must be a read-aloud "
+                    "passage, not an instruction or discussion question."
                 )
             },
             {"role": "user", "content": drill_guidance[drill_type]},
         ],
         fallback
     )
+
+    if drill_type == 'speed':
+        drill['title'] = DRILL_TYPES['speed']
+        drill['task'] = "Read the passage aloud, then submit your recording."
+        drill['timer_seconds'] = 75
+        if not _looks_like_speed_passage(drill.get('prompt')):
+            drill['prompt'] = fallback['prompt']
+        _save_speed_passage(drill)
+
+    return drill
 
 
 def score_drill(drill_type, drill, response_text):
