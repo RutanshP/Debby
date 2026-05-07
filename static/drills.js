@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDrillButton = document.getElementById('startDrillButton');
     const cancelDrillButton = document.getElementById('cancelDrillButton');
     const submitButton = document.getElementById('submitDrillButton');
-    const timerButton = document.getElementById('timerButton');
     const recordSpeedButton = document.getElementById('recordSpeedButton');
     const stopSpeedButton = document.getElementById('stopSpeedButton');
     const speedControls = document.getElementById('speedControls');
@@ -14,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskEl = document.getElementById('drillTask');
     const timerEl = document.getElementById('drillTimer');
     const timerInput = document.getElementById('drillTimerInput');
+    const liveTimerEl = document.getElementById('drillLiveTimer');
     const feedbackEl = document.getElementById('drillFeedback');
     const responseModeLabel = document.getElementById('responseModeLabel');
 
@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let remainingSeconds = 0;
     let mediaRecorder = null;
     let audioChunks = [];
+    let isSubmitting = false;
 
     function escapeHtml(value) {
         return String(value || '').replace(/[&<>"']/g, (char) => ({
@@ -65,9 +66,8 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(timerInterval);
         remainingSeconds = Number(seconds || 60);
         timerEl.textContent = formatTime(remainingSeconds);
+        liveTimerEl.textContent = formatTime(remainingSeconds);
         timerInput.disabled = Boolean(currentDrill);
-        timerButton.disabled = !currentDrill;
-        timerButton.textContent = 'Start Timer';
     }
 
     function setIdleState(message = 'Select a drill to start.') {
@@ -82,10 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
         timerEl.textContent = '--:--';
         timerInput.disabled = false;
         timerEl.textContent = timerInput.value || '01:00';
+        liveTimerEl.textContent = timerEl.textContent;
         responseBox.value = '';
         responseBox.disabled = true;
         submitButton.disabled = true;
-        timerButton.disabled = true;
         recordSpeedButton.disabled = true;
         stopSpeedButton.disabled = true;
         startDrillButton.disabled = !currentType;
@@ -100,16 +100,32 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        timerButton.textContent = 'Timer Running';
         timerInterval = setInterval(() => {
             remainingSeconds -= 1;
-            timerEl.textContent = formatTime(Math.max(remainingSeconds, 0));
+            const displayTime = formatTime(Math.max(remainingSeconds, 0));
+            timerEl.textContent = displayTime;
+            liveTimerEl.textContent = displayTime;
             if (remainingSeconds <= 0) {
                 clearInterval(timerInterval);
                 timerInterval = null;
-                timerButton.textContent = 'Restart Timer';
+                handleTimerFinished();
             }
         }, 1000);
+    }
+
+    function handleTimerFinished() {
+        if (currentType === 'speed') {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                stopSpeedRecording();
+            }
+            return;
+        }
+
+        if (currentDrill && !submitButton.disabled) {
+            submitTypedDrill();
+        } else if (currentDrill) {
+            showError('Time is up. Write a response before submitting.');
+        }
     }
 
     function setDrillType(type) {
@@ -223,6 +239,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentDrill) {
             return;
         }
+        if (isSubmitting) {
+            return;
+        }
 
         const response = responseBox.value.trim();
         if (!response) {
@@ -230,7 +249,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        isSubmitting = true;
         submitButton.disabled = true;
+        clearInterval(timerInterval);
+        timerInterval = null;
         setLoading('Scoring your response...');
 
         try {
@@ -248,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showError(error.message);
         } finally {
             submitButton.disabled = false;
+            isSubmitting = false;
         }
     }
 
@@ -279,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function stopSpeedRecording() {
-        if (!mediaRecorder) {
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
             return;
         }
 
@@ -307,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showError(error.message);
             } finally {
                 recordSpeedButton.disabled = false;
+                mediaRecorder = null;
                 audioChunks = [];
             }
         };
@@ -325,20 +349,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     cancelDrillButton.addEventListener('click', () => setIdleState('Press Start Drill when you are ready.'));
     submitButton.addEventListener('click', submitTypedDrill);
-    timerButton.addEventListener('click', () => {
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-            resetTimer(currentDrill?.timer_seconds || 60);
-        } else {
-            startTimer();
-        }
-    });
     recordSpeedButton.addEventListener('click', startSpeedRecording);
     stopSpeedButton.addEventListener('click', stopSpeedRecording);
     timerInput.addEventListener('input', () => {
         if (!currentDrill) {
-            timerEl.textContent = formatTime(parseTime(timerInput.value));
+            const displayTime = formatTime(parseTime(timerInput.value));
+            timerEl.textContent = displayTime;
+            liveTimerEl.textContent = displayTime;
         }
     });
 

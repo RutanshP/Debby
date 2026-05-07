@@ -434,7 +434,8 @@ textarea.topic {
     margin: 0;
 }
 
-.drill-timer {
+.drill-timer,
+.drill-live-timer {
     background: #004d40;
     border-radius: 0.375rem;
     color: #ffffff;
@@ -443,6 +444,11 @@ textarea.topic {
     min-width: 5rem;
     padding: 0.5rem 0.75rem;
     text-align: center;
+}
+
+.drill-live-timer {
+    font-size: 1.75rem;
+    min-width: 6rem;
 }
 
 .drill-timer-box {
