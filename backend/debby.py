@@ -66,7 +66,7 @@ def generate_drill(drill_type):
             "by explaining magnitude, probability, timeframe, and weighing."
         ),
         'contentions': (
-            "Create a debate resolution and one side. The user must brainstorm as many "
+            "Use the provided debate resolution and side. The user must brainstorm as many "
             "contention taglines as possible, not full arguments."
         ),
     }
@@ -87,6 +87,17 @@ def generate_drill(drill_type):
         "task": "Complete the drill, then submit your response for feedback.",
         "timer_seconds": 60 if drill_type != 'speed' else 75,
     }
+
+    if drill_type == 'contentions':
+        topic = random.choice([get_parli_topic(None), get_mspdp_topic()])
+        side = random.choice(['affirmative', 'negation'])
+        return {
+            "title": DRILL_TYPES[drill_type],
+            "topic": topic,
+            "prompt": f"Side: {side}\nResolution: {topic}",
+            "task": "List as many distinct contention taglines as you can. Do not write full warrants.",
+            "timer_seconds": 60,
+        }
 
     return _json_from_model(
         [

@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDrillButton = document.getElementById('startDrillButton');
     const cancelDrillButton = document.getElementById('cancelDrillButton');
     const submitButton = document.getElementById('submitDrillButton');
+    const tryAgainButton = document.getElementById('tryAgainButton');
     const recordSpeedButton = document.getElementById('recordSpeedButton');
     const stopSpeedButton = document.getElementById('stopSpeedButton');
     const speedControls = document.getElementById('speedControls');
@@ -86,6 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         responseBox.value = '';
         responseBox.disabled = true;
         submitButton.disabled = true;
+        tryAgainButton.disabled = true;
         recordSpeedButton.disabled = true;
         stopSpeedButton.disabled = true;
         startDrillButton.disabled = !currentType;
@@ -165,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startDrillButton.disabled = true;
         cancelDrillButton.disabled = false;
         submitButton.disabled = true;
+        tryAgainButton.disabled = true;
         recordSpeedButton.disabled = true;
         responseBox.disabled = true;
         responseBox.value = '';
@@ -189,9 +192,10 @@ document.addEventListener('DOMContentLoaded', () => {
             taskEl.textContent = currentDrill.task || '';
             resetTimer(parseTime(timerInput.value));
             submitButton.disabled = currentType === 'speed';
+            tryAgainButton.disabled = true;
             recordSpeedButton.disabled = currentType !== 'speed';
             responseBox.disabled = currentType === 'speed';
-            startDrillButton.disabled = false;
+            startDrillButton.disabled = true;
             cancelDrillButton.disabled = false;
             feedbackEl.classList.add('empty-state');
             feedbackEl.textContent = currentType === 'speed'
@@ -204,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showError(error.message);
             titleEl.textContent = 'Could not load drill';
             startDrillButton.disabled = false;
+            cancelDrillButton.disabled = true;
         }
     }
 
@@ -220,6 +225,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <ul>${improvements || '<li>Make the response more complete.</li>'}</ul>
             ${feedback.model_answer ? `<strong>Model answer</strong><p>${escapeHtml(feedback.model_answer)}</p>` : ''}
         `;
+        submitButton.disabled = true;
+        tryAgainButton.disabled = false;
+        cancelDrillButton.disabled = true;
+        startDrillButton.disabled = true;
+        responseBox.disabled = true;
     }
 
     function renderSpeedFeedback(feedback) {
@@ -233,6 +243,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <strong>Transcript</strong>
             <p>${escapeHtml(feedback.transcript)}</p>
         `;
+        tryAgainButton.disabled = false;
+        cancelDrillButton.disabled = true;
+        startDrillButton.disabled = true;
     }
 
     async function submitTypedDrill() {
@@ -269,7 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             showError(error.message);
         } finally {
-            submitButton.disabled = false;
             isSubmitting = false;
         }
     }
@@ -329,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 showError(error.message);
             } finally {
-                recordSpeedButton.disabled = false;
+                recordSpeedButton.disabled = true;
                 mediaRecorder = null;
                 audioChunks = [];
             }
@@ -349,6 +361,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     cancelDrillButton.addEventListener('click', () => setIdleState('Press Start Drill when you are ready.'));
     submitButton.addEventListener('click', submitTypedDrill);
+    tryAgainButton.addEventListener('click', () => {
+        if (currentType) {
+            generateDrill();
+        }
+    });
     recordSpeedButton.addEventListener('click', startSpeedRecording);
     stopSpeedButton.addEventListener('click', stopSpeedRecording);
     timerInput.addEventListener('input', () => {
