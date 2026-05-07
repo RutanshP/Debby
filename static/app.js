@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const wpmPlotImg = document.getElementById('wpmPlot');
     const tournamentLabel = document.getElementById('tournamentLabel');
     const customTopicInput = document.getElementById('customTopic');
+    const stepPills = Array.from(document.querySelectorAll('.practice-steps .step-pill'));
 
     let mediaRecorder;
     let audioChunks = [];
@@ -24,6 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let secondTranscription = '';
     let currentAiSpeech = '';
     let currentWinner = '';
+
+    function setActiveStep(stepName) {
+        stepPills.forEach(pill => {
+            pill.classList.toggle('active', pill.textContent.trim() === stepName);
+        });
+    }
 
     function setInitialPlaceholder(element, placeholder) {
         element.innerText = placeholder;
@@ -92,6 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearTopic();
         setInitialPlaceholder(aiResponseDiv, 'Debby\'s Response');
         setInitialPlaceholder(winnerDiv, 'Winner');
+        setActiveStep('Topic');
         clearCustomTopicInput();
         updateButtonsState();
         
@@ -189,6 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInitialPlaceholder(debateTopicDiv, 'Topic');
     setInitialPlaceholder(aiResponseDiv, 'Debby\'s Response');
     setInitialPlaceholder(winnerDiv, 'Winner');
+    setActiveStep('Topic');
 
     customTopicInput.addEventListener('input', () => {
         submitCustomTopicButton.disabled = customTopicInput.value.trim() === '';
@@ -229,6 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             currentTopic = data.topic;
             clearPlaceholder(debateTopicDiv, `Debate Topic: ${currentTopic}`);
+            setActiveStep('Topic');
         } catch (error) {
             if (error.name !== 'AbortError') {
                 console.error('Fetch error:', error);
@@ -254,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
                 currentTopic = data.topic;
                 clearPlaceholder(debateTopicDiv, `Debate Topic: ${currentTopic}`);
+                setActiveStep('Topic');
             } catch (error) {
                 if (error.name !== 'AbortError') {
                     console.error('Fetch error:', error);
@@ -279,6 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 disableAllControlsExceptStopRecording();
                 audioChunks = []; // Reset audio chunks for the first speech
                 await startRecording();
+                setActiveStep('Constructive');
                 setInitialPlaceholder(aiResponseDiv, 'Debby\'s Response');
                 setInitialPlaceholder(winnerDiv, 'Winner');
                 recordingState = 1; // Transition to first speech recording
@@ -294,6 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 disableAllControlsExceptStopRecording();
                 audioChunks = []; // Reset audio chunks for the second speech
                 startRecording();
+                setActiveStep('Rebuttal');
                 setInitialPlaceholder(winnerDiv, 'Winner');
                 recordingState = 2; // Transition to second speech recording
             }
@@ -317,12 +330,14 @@ document.addEventListener('DOMContentLoaded', () => {
         startRecordingButton.style.backgroundColor = '#d4e5d3';
 
         if (recordingState === 1) {
+            setActiveStep('Response');
             ai_loading();
             const result = await stopRecording();  // Wait for stopRecording to complete
             console.log('Handling end of first speech recording.');
             handleFirstSpeechEnd(result);  // Handle end of the first speech
         } 
         else if (recordingState === 2) {
+            setActiveStep('Decision');
             winner_loading();
             const result = await stopRecording();  // Wait for stopRecording to complete
             console.log('Handling end of second speech recording.');
@@ -345,6 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
         firstTranscription = result.first_speech_transcription || '';
         currentAiSpeech = result.aiSpeech || '';
         clearPlaceholder(aiResponseDiv, `Debby’s Response: ${currentAiSpeech}`);
+        setActiveStep('Rebuttal');
         startRecordingButton.style.backgroundColor = '#00796b';
         startRecordingButton.disabled = false;
         startRecordingButton.innerText = "Rebuttal Speech";
@@ -369,6 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Current winner:", currentWinner);
         const winnerElement = document.getElementById('winner');
         winnerElement.textContent = `Winner: ${currentWinner}`;
+        setActiveStep('Decision');
         await logEntry();  // Check if it reaches this point
         enableAllControls();  // Re-enable controls
         
@@ -419,6 +436,7 @@ async function fetchWinner() {
             hide_winner_loading();
             const winnerElement = document.getElementById('winner');
             winnerElement.textContent = `Winner: ${data.winner}`;
+            setActiveStep('Decision');
         }
     } catch (error) {
         console.error('Error fetching winner:', error);
@@ -446,6 +464,7 @@ async function fetchWinner() {
             hide_ai_loading();
             firstTranscription = data.first_speech_transcription;
             currentAiSpeech = data.aiSpeech;
+            setActiveStep('Rebuttal');
             clearPlaceholder(aiResponseDiv, `Debby’s Response: ${currentAiSpeech}`);
             startRecordingButton.style.backgroundColor = '#00796b'; // Dark blue when recording
             startRecordingButton.disabled = false;
