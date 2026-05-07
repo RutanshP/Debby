@@ -32,11 +32,14 @@
                 <h1>Drills</h1>
                 <p>Target one debate skill at a time, then get tight feedback.</p>
             </div>
-            <button id="newDrillButton">New Drill</button>
+            <div class="drills-toolbar-actions">
+                <button id="startDrillButton" disabled>Start Drill</button>
+                <button id="cancelDrillButton" class="secondary-button" disabled>Cancel</button>
+            </div>
         </section>
 
         <section class="drill-type-grid" aria-label="Drill types">
-            <button class="drill-type-card active" data-drill-type="rebuttal">
+            <button class="drill-type-card" data-drill-type="rebuttal">
                 <span>Rebuttal</span>
                 <small>Answer a short opposing argument.</small>
             </button>
@@ -62,10 +65,14 @@
             <article class="drill-panel">
                 <div class="drill-panel-header">
                     <div>
-                        <h2 id="drillTitle">Rebuttal Drill</h2>
-                        <p id="drillTopic">Generate a drill to begin.</p>
+                        <h2 id="drillTitle">Select a Drill</h2>
+                        <p id="drillTopic">Select a drill to start.</p>
                     </div>
-                    <div class="drill-timer" id="drillTimer">--:--</div>
+                    <div class="drill-timer-box">
+                        <label for="drillTimerInput">Timer</label>
+                        <input id="drillTimerInput" type="text" value="01:00" pattern="\d{1,2}:\d{2}">
+                        <div class="drill-timer" id="drillTimer">01:00</div>
+                    </div>
                 </div>
                 <div class="drill-prompt" id="drillPrompt"></div>
                 <div class="drill-task" id="drillTask"></div>

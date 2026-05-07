@@ -57,8 +57,9 @@ def generate_drill(drill_type):
             "and one paragraph argument with claim, warrant, and impact."
         ),
         'speed': (
-            "Create a 110-140 word passage about debate, sports, school, or technology. "
-            "It should be readable aloud and include punctuation."
+            "Create a two-paragraph speed-reading passage about debate, sports, school, "
+            "or technology. It should be 220-280 words total, readable aloud, and include "
+            "varied punctuation so the user can practice pacing."
         ),
         'impact': (
             "Create one underdeveloped debate argument. The user must impact it out fully "
@@ -73,9 +74,18 @@ def generate_drill(drill_type):
     fallback = {
         "title": DRILL_TYPES[drill_type],
         "topic": "Resolved: Schools should require financial literacy classes.",
-        "prompt": "Schools should require financial literacy because students need practical skills for adulthood.",
+        "prompt": (
+            "Schools should require financial literacy because students need practical skills for adulthood. "
+            "A student who understands budgets, interest, taxes, and savings can make better decisions before "
+            "they face real consequences. These classes would not replace academic subjects; they would connect "
+            "school to daily life and help students avoid common financial mistakes.\n\n"
+            "The strongest reason is prevention. Many young adults sign loans, open credit cards, or choose jobs "
+            "without understanding the long-term tradeoffs. If schools teach these skills early, students can "
+            "graduate with more confidence, protect themselves from debt traps, and help their families make "
+            "more informed choices."
+        ) if drill_type == 'speed' else "Schools should require financial literacy because students need practical skills for adulthood.",
         "task": "Complete the drill, then submit your response for feedback.",
-        "timer_seconds": 60 if drill_type != 'speed' else 30,
+        "timer_seconds": 60 if drill_type != 'speed' else 75,
     }
 
     return _json_from_model(
