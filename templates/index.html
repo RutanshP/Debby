@@ -89,10 +89,11 @@
             <img src="{{ url_for('static', filename='WhiteLogo.png') }}" alt="Debby Logo">
         </a>
         <ul class="navbar">
-            <li><a href="/">DebbyAI</a></li>
+            <li><a href="/">Practice</a></li>
             <li><a href="/drills">Drills</a></li>
-            <li><a href="/parli-gpt">CaseGPT</a></li>
-            <li><a href="/flowbot">Flowbot</a></li>
+            <li><a href="/parli-gpt">Case Builder</a></li>
+            <li><a href="/flowbot">Flow</a></li>
+            <li><a href="/view_entries">History</a></li>
             {% if config.PASSWORD_PROTECTED %}
             <li>
                 <form action="/logout" method="post" class="nav-form">
@@ -105,14 +106,15 @@
     <div class="main-container">
         <div class="sidebar">
             <div class="top-sidebar">
-                <label for="debateType">Choose Debate Type:</label>
+                <h2 class="panel-title">Setup</h2>
+                <label for="debateType">Format</label>
                 <select id="debateType">
                     <option value="" selected>Select Format</option>
                     <option value="MSPDP">MSPDP</option>
                     <option value="Parli">Parli</option>
                 </select>
 
-                <label for="tournament" id="tournamentLabel" style="display: none;">Choose a Tournament:</label>
+                <label for="tournament" id="tournamentLabel" style="display: none;">Tournament</label>
                 <select id="tournament" style="display: none;">
                     <option value="" selected>Select Tournament</option>
                     <option value="Bargain Belt">Bargain Belt</option>
@@ -163,19 +165,20 @@
                     <!-- More options... -->
                 </select>
 
-                <button id="fetchTopic" disabled>Fetch Debate Topic</button>
+                <button id="fetchTopic" disabled>Generate Topic</button>
             </div>
             <div class="bottom-sidebar">
-                <label for="customTopic">Custom Topic:</label>
+                <h2 class="panel-title">Custom Topic</h2>
+                <label for="customTopic">Topic</label>
                 <input type="text" id="customTopic" placeholder="Enter custom topic">
                 <button id="submitCustomTopic" disabled>Submit</button>
             </div>
             <div class="box-container">
                 <div class="info-text">
-                    You can view your past debates here!
+                    Review saved rounds and delivery stats.
                 </div>
                 <a href="/view_entries">
-                    <button id="viewEntriesButton">View Entries</button>
+                    <button id="viewEntriesButton">Open History</button>
                 </a>
             </div>
         </div>
@@ -183,8 +186,17 @@
             <div class="header-container">
                 <img src="{{ url_for('static', filename='TealLogo.png') }}" alt="Debby Logo" class="header-logo">
             </div>
+
+            <div class="practice-steps" aria-label="Round progress">
+                <span class="step-pill active">Topic</span>
+                <span class="step-pill">Constructive</span>
+                <span class="step-pill">Response</span>
+                <span class="step-pill">Rebuttal</span>
+                <span class="step-pill">Decision</span>
+            </div>
             
-            <div id="debateTopic" class="topic">Topic and Side</div>
+            <div class="section-label">Topic</div>
+            <div id="debateTopic" class="topic">Choose a format and generate a topic to begin.</div>
         
             <div class="buttons-container">
                 <button id="startRecording" disabled>Start Recording</button>
@@ -192,7 +204,9 @@
                 <button id="refreshButton">Reset</button>
             </div>
             
+            <div class="section-label">Debby Response</div>
             <div id="aiResponse" class="response"></div>
+            <div class="section-label">Judge Decision</div>
             <div id="winner" class="winner"></div>
             
 
@@ -203,10 +217,10 @@
             <!-- Timer Container -->
             <div class="timer-container">
                 <h3>Timer</h3>
-                <label for="customTime">Set Timer (MM:SS):</label>
+                <label for="customTime">Speech Timer</label>
                 <input type="text" id="customTime" value="02:00" pattern="\d{1,2}:\d{2}" placeholder="MM:SS">
                 <div id="timer" class="timer-display">02:00</div>
-                <div class="timer-warning">Speech Duration: <span id="maxTimeDisplay">2:00</span> Minutes Maximum</div>
+                <div class="timer-warning">Max: <span id="maxTimeDisplay">2:00</span></div>
             </div>
             
 

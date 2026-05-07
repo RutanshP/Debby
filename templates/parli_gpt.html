@@ -24,10 +24,11 @@
             <img src="{{ url_for('static', filename='WhiteLogo.png') }}" alt="Debby Logo">
         </a>
         <ul class="navbar">
-            <li><a href="/">DebbyAI</a></li>
+            <li><a href="/">Practice</a></li>
             <li><a href="/drills">Drills</a></li>
-            <li><a href="/parli-gpt">CaseGPT</a></li>
-            <li><a href="/flowbot">Flowbot</a></li> <!-- Added Flowbot Tab -->
+            <li><a href="/parli-gpt">Case Builder</a></li>
+            <li><a href="/flowbot">Flow</a></li>
+            <li><a href="/view_entries">History</a></li>
             {% if config.PASSWORD_PROTECTED %}
             <li>
                 <form action="/logout" method="post" class="nav-form">
