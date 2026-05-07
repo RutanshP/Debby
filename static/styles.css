@@ -877,6 +877,24 @@ textarea.topic {
     padding: 0.35rem 0.7rem;
 }
 
+.speed-chart-card {
+    background: #f6faf9;
+    border: 1px solid #d9e7e4;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+    padding: 0.85rem;
+}
+
+.speed-chart-card strong {
+    display: block;
+    margin-bottom: 0.55rem;
+}
+
+.speed-chart-card canvas {
+    display: block;
+    max-width: 100%;
+}
+
 .empty-state {
     color: #66817d;
 }

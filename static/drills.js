@@ -231,6 +231,76 @@ document.addEventListener('DOMContentLoaded', () => {
         responseBox.disabled = true;
     }
 
+    function drawWpmGraph(series) {
+        const canvas = document.getElementById('speedWpmChart');
+        if (!canvas || !Array.isArray(series) || series.length === 0) {
+            return;
+        }
+
+        const containerWidth = canvas.parentElement.clientWidth || 360;
+        const width = Math.max(containerWidth, 280);
+        const height = 190;
+        const scale = window.devicePixelRatio || 1;
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+
+        const context = canvas.getContext('2d');
+        context.scale(scale, scale);
+        context.clearRect(0, 0, width, height);
+
+        const padding = { top: 18, right: 16, bottom: 34, left: 42 };
+        const plotWidth = width - padding.left - padding.right;
+        const plotHeight = height - padding.top - padding.bottom;
+        const maxTime = Math.max(...series.map((point) => Number(point.time) || 0), 1);
+        const maxWpm = Math.max(...series.map((point) => Number(point.wpm) || 0), 60);
+        const yMax = Math.ceil(maxWpm / 50) * 50;
+
+        const xFor = (time) => padding.left + ((Number(time) || 0) / maxTime) * plotWidth;
+        const yFor = (wpm) => padding.top + plotHeight - ((Number(wpm) || 0) / yMax) * plotHeight;
+
+        context.font = '12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        context.lineWidth = 1;
+        context.strokeStyle = '#d9e7e4';
+        context.fillStyle = '#66817d';
+
+        for (let tick = 0; tick <= 4; tick += 1) {
+            const value = Math.round((yMax / 4) * tick);
+            const y = yFor(value);
+            context.beginPath();
+            context.moveTo(padding.left, y);
+            context.lineTo(width - padding.right, y);
+            context.stroke();
+            context.fillText(String(value), 8, y + 4);
+        }
+
+        context.strokeStyle = '#00796b';
+        context.lineWidth = 3;
+        context.beginPath();
+        series.forEach((point, index) => {
+            const x = xFor(point.time);
+            const y = yFor(point.wpm);
+            if (index === 0) {
+                context.moveTo(x, y);
+            } else {
+                context.lineTo(x, y);
+            }
+        });
+        context.stroke();
+
+        context.fillStyle = '#004d40';
+        series.forEach((point) => {
+            context.beginPath();
+            context.arc(xFor(point.time), yFor(point.wpm), 3, 0, Math.PI * 2);
+            context.fill();
+        });
+
+        context.fillStyle = '#66817d';
+        context.fillText('WPM', 8, 14);
+        context.fillText('Time (seconds)', Math.max(width / 2 - 42, padding.left), height - 8);
+    }
+
     function renderSpeedFeedback(feedback) {
         feedbackEl.classList.remove('empty-state');
         feedbackEl.innerHTML = `
@@ -239,9 +309,14 @@ document.addEventListener('DOMContentLoaded', () => {
             <p><strong>Accuracy:</strong> ${escapeHtml(feedback.accuracy)}%</p>
             <p><strong>Duration:</strong> ${escapeHtml(feedback.duration_seconds)}s</p>
             <p><strong>Recognized words:</strong> ${escapeHtml(feedback.word_count)}</p>
+            <div class="speed-chart-card">
+                <strong>WPM over time</strong>
+                <canvas id="speedWpmChart" aria-label="WPM over time graph"></canvas>
+            </div>
             <strong>Transcript</strong>
             <p>${escapeHtml(feedback.transcript)}</p>
         `;
+        drawWpmGraph(feedback.wpm_series || []);
         submitButton.hidden = false;
         submitButton.textContent = 'Try Again';
         submitButton.disabled = false;
