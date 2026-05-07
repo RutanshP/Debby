@@ -1,5 +1,6 @@
 import os
 import csv
+import json
 import re
 from dotenv import load_dotenv
 import assemblyai as aai
@@ -22,6 +23,118 @@ ASSEMBLYAI_API_KEY = (os.getenv("ASSEMBLYAI_API_KEY") or "").strip()
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip()
 
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+DRILL_TYPES = {
+    'rebuttal': 'Rebuttal Speech',
+    'speed': 'Speed Reading',
+    'impact': 'Impact Extension',
+    'contentions': 'Contention Storm',
+}
+
+
+def _json_from_model(messages, fallback):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini-2024-07-18",
+        max_tokens=700,
+        temperature=0.7,
+        response_format={"type": "json_object"},
+        messages=messages
+    )
+
+    try:
+        return json.loads(response.choices[0].message.content)
+    except json.JSONDecodeError:
+        return fallback
+
+
+def generate_drill(drill_type):
+    if drill_type not in DRILL_TYPES:
+        raise ValueError("Unknown drill type.")
+
+    drill_guidance = {
+        'rebuttal': (
+            "Create a compact debate argument for the user to rebut. Include a topic, side, "
+            "and one paragraph argument with claim, warrant, and impact."
+        ),
+        'speed': (
+            "Create a 110-140 word passage about debate, sports, school, or technology. "
+            "It should be readable aloud and include punctuation."
+        ),
+        'impact': (
+            "Create one underdeveloped debate argument. The user must impact it out fully "
+            "by explaining magnitude, probability, timeframe, and weighing."
+        ),
+        'contentions': (
+            "Create a debate resolution and one side. The user must brainstorm as many "
+            "contention taglines as possible, not full arguments."
+        ),
+    }
+
+    fallback = {
+        "title": DRILL_TYPES[drill_type],
+        "topic": "Resolved: Schools should require financial literacy classes.",
+        "prompt": "Schools should require financial literacy because students need practical skills for adulthood.",
+        "task": "Complete the drill, then submit your response for feedback.",
+        "timer_seconds": 60 if drill_type != 'speed' else 30,
+    }
+
+    return _json_from_model(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You create concise high school debate practice drills. Return only JSON "
+                    "with keys: title, topic, prompt, task, timer_seconds. Make prompts specific, "
+                    "clear, and useful for practice."
+                )
+            },
+            {"role": "user", "content": drill_guidance[drill_type]},
+        ],
+        fallback
+    )
+
+
+def score_drill(drill_type, drill, response_text):
+    if drill_type not in DRILL_TYPES:
+        raise ValueError("Unknown drill type.")
+
+    rubric = {
+        'rebuttal': "Judge whether the response directly answers the claim, warrant, and impact.",
+        'impact': "Judge magnitude, probability, timeframe, weighing, and whether the impact chain is complete.",
+        'contentions': "Judge number, diversity, strategic usefulness, and whether taglines are distinct.",
+        'speed': "Do not score speed reading here.",
+    }
+
+    fallback = {
+        "score": 0,
+        "headline": "Feedback unavailable",
+        "strengths": [],
+        "improvements": ["Try again with a fuller response."],
+        "model_answer": "",
+    }
+
+    return _json_from_model(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You are a debate coach scoring practice drills. Return only JSON with keys: "
+                    "score (0-10 integer), headline, strengths (array), improvements (array), "
+                    "model_answer. Keep feedback concrete and concise."
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Drill type: {DRILL_TYPES[drill_type]}\n"
+                    f"Rubric: {rubric[drill_type]}\n"
+                    f"Drill prompt: {json.dumps(drill)}\n"
+                    f"User response:\n{response_text}"
+                )
+            },
+        ],
+        fallback
+    )
 
 
 # coin toss

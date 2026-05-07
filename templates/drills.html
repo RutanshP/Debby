@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drills | DebbyAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <nav>
+        <a href="/" class="nav-logo">
+            <img src="{{ url_for('static', filename='WhiteLogo.png') }}" alt="Debby Logo">
+        </a>
+        <ul class="navbar">
+            <li><a href="/">DebbyAI</a></li>
+            <li><a href="/drills">Drills</a></li>
+            <li><a href="/parli-gpt">CaseGPT</a></li>
+            <li><a href="/flowbot">Flowbot</a></li>
+            {% if config.PASSWORD_PROTECTED %}
+            <li>
+                <form action="/logout" method="post" class="nav-form">
+                    <button type="submit" class="nav-logout">Sign Out</button>
+                </form>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <main class="drills-shell">
+        <section class="drills-toolbar">
+            <div>
+                <h1>Drills</h1>
+                <p>Target one debate skill at a time, then get tight feedback.</p>
+            </div>
+            <button id="newDrillButton">New Drill</button>
+        </section>
+
+        <section class="drill-type-grid" aria-label="Drill types">
+            <button class="drill-type-card active" data-drill-type="rebuttal">
+                <span>Rebuttal</span>
+                <small>Answer a short opposing argument.</small>
+            </button>
+            <button class="drill-type-card" data-drill-type="speed">
+                <span>Speed Reading</span>
+                <small>Read a passage as quickly and clearly as possible.</small>
+            </button>
+            <button class="drill-type-card" data-drill-type="impact">
+                <span>Impact Extension</span>
+                <small>Turn an argument into full weighing.</small>
+            </button>
+            <button class="drill-type-card" data-drill-type="contentions">
+                <span>Contention Storm</span>
+                <small>Generate as many taglines as possible.</small>
+            </button>
+            <button class="drill-type-card disabled" data-drill-type="stutter" disabled>
+                <span>No-Filler Speaking</span>
+                <small>Coming later when filler detection is reliable.</small>
+            </button>
+        </section>
+
+        <section class="drill-workspace">
+            <article class="drill-panel">
+                <div class="drill-panel-header">
+                    <div>
+                        <h2 id="drillTitle">Rebuttal Drill</h2>
+                        <p id="drillTopic">Generate a drill to begin.</p>
+                    </div>
+                    <div class="drill-timer" id="drillTimer">--:--</div>
+                </div>
+                <div class="drill-prompt" id="drillPrompt"></div>
+                <div class="drill-task" id="drillTask"></div>
+            </article>
+
+            <article class="drill-panel">
+                <div class="drill-panel-header">
+                    <div>
+                        <h2>Your Response</h2>
+                        <p id="responseModeLabel">Type your answer, then submit.</p>
+                    </div>
+                    <button id="timerButton" class="secondary-button" disabled>Start Timer</button>
+                </div>
+
+                <textarea id="drillResponse" class="drill-response" placeholder="Your response goes here..."></textarea>
+
+                <div id="speedControls" class="speed-controls" hidden>
+                    <button id="recordSpeedButton">Start Recording</button>
+                    <button id="stopSpeedButton" disabled>Stop and Score</button>
+                </div>
+
+                <div class="drill-actions">
+                    <button id="submitDrillButton" disabled>Submit Response</button>
+                </div>
+            </article>
+
+            <article class="drill-panel feedback-panel">
+                <h2>Feedback</h2>
+                <div id="drillFeedback" class="drill-feedback empty-state">Complete a drill to see feedback here.</div>
+            </article>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='drills.js') }}"></script>
+</body>
+</html>

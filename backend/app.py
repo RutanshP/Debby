@@ -1,11 +1,13 @@
 import os
 import json
 import secrets
+import re
+from difflib import SequenceMatcher
 
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib_cache"))
 
 from dotenv import load_dotenv
-from .debby import coin_toss, get_parli_topic, get_mspdp_topic, ai_speech, ai_response, transcribe, winner
+from .debby import coin_toss, get_parli_topic, get_mspdp_topic, ai_speech, ai_response, transcribe, winner, generate_drill, score_drill
 from .parligpt import make_case, make_mspdp_case, case_to_speech, say_case
 from flask import Flask, render_template, request, jsonify, send_file, redirect, session, url_for
 from pymongo import MongoClient
@@ -83,6 +85,7 @@ second_speech_words = []
 # File path variables for first and second speeches
 first_speech_file_path = os.path.join(AUDIO_DIR, 'first_speech.webm')
 second_speech_file_path = os.path.join(AUDIO_DIR, 'second_speech.webm')
+drill_audio_file_path = os.path.join(AUDIO_DIR, 'drill_speed.webm')
 
 
 def format_entry(entry):
@@ -195,6 +198,21 @@ def calculate_wpm_series(file_path, words, interval=2):
         })
 
     return series
+
+
+def normalize_words(text):
+    return re.findall(r"[a-z0-9']+", (text or '').lower())
+
+
+def calculate_reading_accuracy(reference_text, spoken_text):
+    reference_words = normalize_words(reference_text)
+    spoken_words = normalize_words(spoken_text)
+    if not reference_words:
+        return 0
+
+    matcher = SequenceMatcher(None, reference_words, spoken_words)
+    matched_words = sum(block.size for block in matcher.get_matching_blocks())
+    return round((matched_words / len(reference_words)) * 100)
 
 
 def get_speech_stats():
@@ -357,9 +375,85 @@ def parli_gpt():
 def flowbot():
     return render_template('flowbot.html')
 
+@app.route('/drills')
+def drills():
+    return render_template('drills.html')
+
 @app.route('/home', methods=['POST', 'GET'])
 def home():
     return render_template('index.html')
+
+@app.route('/api/generate-drill', methods=['POST'])
+def api_generate_drill():
+    data = request.get_json(silent=True) or {}
+    drill_type = data.get('drill_type', 'rebuttal')
+
+    try:
+        drill = generate_drill(drill_type)
+        drill['drill_type'] = drill_type
+        return jsonify({'drill': drill})
+    except Exception as e:
+        logger.error(f'Error generating drill: {e}')
+        return jsonify({'error': 'Could not generate a drill. Please try again.'}), 500
+
+@app.route('/api/score-drill', methods=['POST'])
+def api_score_drill():
+    data = request.get_json(silent=True) or {}
+    drill_type = data.get('drill_type')
+    drill = data.get('drill') or {}
+    response_text = (data.get('response') or '').strip()
+
+    if not drill_type or not response_text:
+        return jsonify({'error': 'A drill and response are required.'}), 400
+
+    try:
+        feedback = score_drill(drill_type, drill, response_text)
+        return jsonify({'feedback': feedback})
+    except Exception as e:
+        logger.error(f'Error scoring drill: {e}')
+        return jsonify({'error': 'Could not score this drill. Please try again.'}), 500
+
+@app.route('/api/score-speed-drill', methods=['POST'])
+def api_score_speed_drill():
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file provided.'}), 400
+
+    passage = (request.form.get('passage') or '').strip()
+    if not passage:
+        return jsonify({'error': 'No passage provided.'}), 400
+
+    audio = request.files['audio']
+    audio.save(drill_audio_file_path)
+
+    try:
+        transcript, words = transcribe(drill_audio_file_path, include_words=True)
+        audio = AudioSegment.from_file(drill_audio_file_path)
+        duration_seconds = max(len(audio) / 1000.0, 1)
+        word_count = transcript_word_count(transcript)
+        wpm = round((word_count / duration_seconds) * 60)
+        accuracy = calculate_reading_accuracy(passage, transcript)
+
+        if wpm >= 190 and accuracy >= 85:
+            headline = 'Fast and controlled'
+        elif wpm >= 160:
+            headline = 'Good pace, keep sharpening clarity'
+        else:
+            headline = 'Build speed gradually'
+
+        return jsonify({
+            'feedback': {
+                'headline': headline,
+                'wpm': wpm,
+                'accuracy': accuracy,
+                'duration_seconds': round(duration_seconds, 1),
+                'word_count': word_count,
+                'transcript': transcript,
+                'wpm_series': calculate_wpm_series(drill_audio_file_path, words, interval=1),
+            }
+        })
+    except Exception as e:
+        logger.error(f'Error scoring speed drill: {e}')
+        return jsonify({'error': 'Could not score the recording. Please try again.'}), 500
 
 @app.route('/process-recording', methods=['POST'])
 def process_recording():

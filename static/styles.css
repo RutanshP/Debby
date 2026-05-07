@@ -330,3 +330,201 @@ textarea.topic {
     padding: 0.75rem;
     text-align: center;
 }
+
+.drills-shell {
+    margin: 0 auto;
+    max-width: 76rem;
+    padding: 1.5rem;
+}
+
+.drills-toolbar {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.drills-toolbar h1 {
+    margin: 0 0 0.25rem;
+}
+
+.drills-toolbar p {
+    color: #33665f;
+    margin: 0;
+}
+
+.drill-type-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin-bottom: 1rem;
+}
+
+.drill-type-card {
+    background: #ffffff;
+    border: 2px solid transparent;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.08);
+    color: #004d40;
+    margin: 0;
+    min-height: 7rem;
+    padding: 1rem;
+    text-align: left;
+}
+
+.drill-type-card span {
+    display: block;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.drill-type-card small {
+    color: #33665f;
+    display: block;
+    line-height: 1.35;
+}
+
+.drill-type-card.active {
+    background: #e0f2f1;
+    border-color: #00796b;
+}
+
+.drill-type-card.disabled {
+    opacity: 0.55;
+}
+
+.drill-workspace {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+.drill-panel {
+    background: #ffffff;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125em 0.25em rgba(0, 0, 0, 0.1);
+    padding: 1.25rem;
+}
+
+.feedback-panel {
+    grid-column: 1 / -1;
+}
+
+.drill-panel-header {
+    align-items: flex-start;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.drill-panel h2 {
+    color: #00796b;
+    margin: 0 0 0.35rem;
+}
+
+.drill-panel p {
+    color: #33665f;
+    margin: 0;
+}
+
+.drill-timer {
+    background: #004d40;
+    border-radius: 0.375rem;
+    color: #ffffff;
+    font-size: 1.4rem;
+    font-weight: 700;
+    min-width: 5rem;
+    padding: 0.5rem 0.75rem;
+    text-align: center;
+}
+
+.drill-prompt {
+    border-left: 4px solid #00796b;
+    color: #173f39;
+    font-size: 1.05rem;
+    line-height: 1.55;
+    margin-top: 1.25rem;
+    min-height: 8rem;
+    padding-left: 1rem;
+    white-space: pre-wrap;
+}
+
+.drill-task {
+    background: #eef8f7;
+    border-radius: 0.375rem;
+    color: #004d40;
+    font-weight: 700;
+    margin-top: 1rem;
+    padding: 0.75rem;
+}
+
+.drill-response {
+    border: 2px solid #00796b;
+    border-radius: 0.5rem;
+    box-sizing: border-box;
+    color: #173f39;
+    font: inherit;
+    line-height: 1.5;
+    margin-top: 1rem;
+    min-height: 14rem;
+    padding: 1rem;
+    resize: vertical;
+    width: 100%;
+}
+
+.drill-actions,
+.speed-controls {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.secondary-button {
+    background: #33665f;
+    font-size: 0.95rem;
+    margin: 0;
+    padding: 0.65rem 0.9rem;
+}
+
+.drill-feedback {
+    color: #173f39;
+    line-height: 1.55;
+}
+
+.drill-feedback h3 {
+    color: #00796b;
+    margin: 0 0 0.5rem;
+}
+
+.drill-feedback ul {
+    margin-top: 0.35rem;
+}
+
+.feedback-score {
+    background: #e0f2f1;
+    border-radius: 999px;
+    color: #004d40;
+    display: inline-block;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    padding: 0.35rem 0.7rem;
+}
+
+.empty-state {
+    color: #66817d;
+}
+
+@media (max-width: 900px) {
+    .drill-type-grid,
+    .drill-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .drills-toolbar,
+    .drill-panel-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
