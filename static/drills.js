@@ -1,9 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const typeButtons = document.querySelectorAll('.drill-type-card:not(.disabled)');
     const startDrillButton = document.getElementById('startDrillButton');
-    const cancelDrillButton = document.getElementById('cancelDrillButton');
     const submitButton = document.getElementById('submitDrillButton');
-    const tryAgainButton = document.getElementById('tryAgainButton');
     const recordSpeedButton = document.getElementById('recordSpeedButton');
     const stopSpeedButton = document.getElementById('stopSpeedButton');
     const speedControls = document.getElementById('speedControls');
@@ -12,7 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const topicEl = document.getElementById('drillTopic');
     const promptEl = document.getElementById('drillPrompt');
     const taskEl = document.getElementById('drillTask');
-    const timerEl = document.getElementById('drillTimer');
     const timerInput = document.getElementById('drillTimerInput');
     const liveTimerEl = document.getElementById('drillLiveTimer');
     const feedbackEl = document.getElementById('drillFeedback');
@@ -25,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let mediaRecorder = null;
     let audioChunks = [];
     let isSubmitting = false;
+    let drillState = 'idle';
 
     function escapeHtml(value) {
         return String(value || '').replace(/[&<>"']/g, (char) => ({
@@ -66,13 +64,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetTimer(seconds) {
         clearInterval(timerInterval);
         remainingSeconds = Number(seconds || 60);
-        timerEl.textContent = formatTime(remainingSeconds);
         liveTimerEl.textContent = formatTime(remainingSeconds);
         timerInput.disabled = Boolean(currentDrill);
     }
 
     function setIdleState(message = 'Select a drill to start.') {
         currentDrill = null;
+        drillState = 'idle';
         clearInterval(timerInterval);
         timerInterval = null;
         remainingSeconds = 0;
@@ -80,18 +78,16 @@ document.addEventListener('DOMContentLoaded', () => {
         topicEl.textContent = message;
         promptEl.textContent = '';
         taskEl.textContent = '';
-        timerEl.textContent = '--:--';
         timerInput.disabled = false;
-        timerEl.textContent = timerInput.value || '01:00';
-        liveTimerEl.textContent = timerEl.textContent;
+        liveTimerEl.textContent = formatTime(parseTime(timerInput.value));
         responseBox.value = '';
         responseBox.disabled = true;
         submitButton.disabled = true;
-        tryAgainButton.disabled = true;
+        submitButton.textContent = 'Submit Response';
         recordSpeedButton.disabled = true;
         stopSpeedButton.disabled = true;
         startDrillButton.disabled = !currentType;
-        cancelDrillButton.disabled = true;
+        startDrillButton.textContent = 'Start Drill';
         feedbackEl.classList.add('empty-state');
         feedbackEl.textContent = 'Complete a drill to see feedback here.';
         renderMode();
@@ -105,7 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
         timerInterval = setInterval(() => {
             remainingSeconds -= 1;
             const displayTime = formatTime(Math.max(remainingSeconds, 0));
-            timerEl.textContent = displayTime;
             liveTimerEl.textContent = displayTime;
             if (remainingSeconds <= 0) {
                 clearInterval(timerInterval);
@@ -164,10 +159,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function generateDrill() {
         currentDrill = null;
+        drillState = 'loading';
         startDrillButton.disabled = true;
-        cancelDrillButton.disabled = false;
+        startDrillButton.textContent = 'Loading...';
         submitButton.disabled = true;
-        tryAgainButton.disabled = true;
+        submitButton.textContent = 'Submit Response';
         recordSpeedButton.disabled = true;
         responseBox.disabled = true;
         responseBox.value = '';
@@ -192,11 +188,11 @@ document.addEventListener('DOMContentLoaded', () => {
             taskEl.textContent = currentDrill.task || '';
             resetTimer(parseTime(timerInput.value));
             submitButton.disabled = currentType === 'speed';
-            tryAgainButton.disabled = true;
             recordSpeedButton.disabled = currentType !== 'speed';
             responseBox.disabled = currentType === 'speed';
-            startDrillButton.disabled = true;
-            cancelDrillButton.disabled = false;
+            drillState = 'active';
+            startDrillButton.disabled = false;
+            startDrillButton.textContent = 'Cancel';
             feedbackEl.classList.add('empty-state');
             feedbackEl.textContent = currentType === 'speed'
                 ? 'Start recording when you are ready. Speak fast, but keep it clear.'
@@ -208,7 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
             showError(error.message);
             titleEl.textContent = 'Could not load drill';
             startDrillButton.disabled = false;
-            cancelDrillButton.disabled = true;
+            startDrillButton.textContent = 'Start Drill';
+            drillState = 'idle';
         }
     }
 
@@ -226,9 +223,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ${feedback.model_answer ? `<strong>Model answer</strong><p>${escapeHtml(feedback.model_answer)}</p>` : ''}
         `;
         submitButton.disabled = true;
-        tryAgainButton.disabled = false;
-        cancelDrillButton.disabled = true;
+        submitButton.textContent = 'Try Again';
+        submitButton.disabled = false;
+        drillState = 'complete';
         startDrillButton.disabled = true;
+        startDrillButton.textContent = 'Start Drill';
         responseBox.disabled = true;
     }
 
@@ -243,9 +242,12 @@ document.addEventListener('DOMContentLoaded', () => {
             <strong>Transcript</strong>
             <p>${escapeHtml(feedback.transcript)}</p>
         `;
-        tryAgainButton.disabled = false;
-        cancelDrillButton.disabled = true;
+        submitButton.hidden = false;
+        submitButton.textContent = 'Try Again';
+        submitButton.disabled = false;
+        drillState = 'complete';
         startDrillButton.disabled = true;
+        startDrillButton.textContent = 'Start Drill';
     }
 
     async function submitTypedDrill() {
@@ -253,6 +255,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (isSubmitting) {
+            return;
+        }
+
+        if (drillState === 'complete') {
+            generateDrill();
             return;
         }
 
@@ -353,25 +360,23 @@ document.addEventListener('DOMContentLoaded', () => {
         button.addEventListener('click', () => setDrillType(button.dataset.drillType));
     });
     startDrillButton.addEventListener('click', () => {
+        if (drillState === 'active') {
+            setIdleState('Press Start Drill when you are ready.');
+            return;
+        }
+
         if (!currentType) {
             setIdleState();
             return;
         }
         generateDrill();
     });
-    cancelDrillButton.addEventListener('click', () => setIdleState('Press Start Drill when you are ready.'));
     submitButton.addEventListener('click', submitTypedDrill);
-    tryAgainButton.addEventListener('click', () => {
-        if (currentType) {
-            generateDrill();
-        }
-    });
     recordSpeedButton.addEventListener('click', startSpeedRecording);
     stopSpeedButton.addEventListener('click', stopSpeedRecording);
     timerInput.addEventListener('input', () => {
         if (!currentDrill) {
             const displayTime = formatTime(parseTime(timerInput.value));
-            timerEl.textContent = displayTime;
             liveTimerEl.textContent = displayTime;
         }
     });
