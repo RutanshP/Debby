@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tournamentLabel = document.getElementById('tournamentLabel');
     const customTopicInput = document.getElementById('customTopic');
     const stepPills = Array.from(document.querySelectorAll('.practice-steps .step-pill'));
+    const recordingWaveform = window.DebbyWaveform.create('practiceWaveform');
 
     let mediaRecorder;
     let audioChunks = [];
@@ -534,6 +535,9 @@ async function fetchWinner() {
                     }
                 };
                 mediaRecorder.start();
+                recordingWaveform.start(stream).catch(error => {
+                    console.error('Error starting waveform:', error);
+                });
                 startRecordingButton.innerText = 'Cancel Recording';
                 startRecordingButton.style.backgroundColor = '#00796b'; // Dark blue when recording
                 startRecordingButton.disabled = false;
@@ -547,6 +551,7 @@ async function fetchWinner() {
             if (mediaRecorder) {
                 mediaRecorder.onstop = async () => {
                     console.log('Media recorder stopped.');
+                    recordingWaveform.stop();
     
                     const recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
                     const formData = new FormData();
@@ -620,6 +625,7 @@ async function fetchWinner() {
         updateTimerDisplay(maxTime); // Update the timer display to match the maxTime
         updateMaxTimeDisplay(maxTime); // Update the max time display to match the maxTime
         // Stop the media recorder if it's active
+        recordingWaveform.stop();
         if (mediaRecorder && mediaRecorder.state !== "inactive") {
             mediaRecorder.stop();
             mediaRecorder.stream.getTracks().forEach(track => track.stop());

@@ -203,6 +203,10 @@
                 <button id="stopRecording" disabled>Stop and Submit Recording</button>
                 <button id="refreshButton">Reset</button>
             </div>
+
+            <div id="practiceWaveform" class="recording-waveform" hidden aria-hidden="true">
+                <canvas></canvas>
+            </div>
             
             <div class="section-label">Debby Response</div>
             <div id="aiResponse" class="response"></div>
@@ -232,6 +236,7 @@
         </div>
     </div>
 
+    <script src="{{ url_for('static', filename='audio-waveform.js') }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
     <script>
         let countdown;
@@ -305,15 +310,18 @@
         });
 
         // Cancel recording logic
-        document.getElementById('cancelButton').addEventListener('click', function() {
-            cancelRecording();
-            const defaultTime = "02:00";
-            document.getElementById('customTime').value = defaultTime; // Reset the dropdown value to 02:00
-            updateTimerDisplay(defaultTime); // Update the timer display to match the default value
-            updateMaxTimeDisplay(defaultTime); // Update the max time display to match the default value
+        const cancelButton = document.getElementById('cancelButton');
+        if (cancelButton) {
+            cancelButton.addEventListener('click', function() {
+                cancelRecording();
+                const defaultTime = "02:00";
+                document.getElementById('customTime').value = defaultTime; // Reset the dropdown value to 02:00
+                updateTimerDisplay(defaultTime); // Update the timer display to match the default value
+                updateMaxTimeDisplay(defaultTime); // Update the max time display to match the default value
 
-            console.log("Recording was canceled and dropdown reset to 02:00");
-        });
+                console.log("Recording was canceled and dropdown reset to 02:00");
+            });
+        }
 
     </script>
     

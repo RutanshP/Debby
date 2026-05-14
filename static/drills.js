@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const liveTimerEl = document.getElementById('drillLiveTimer');
     const feedbackEl = document.getElementById('drillFeedback');
     const responseModeLabel = document.getElementById('responseModeLabel');
+    const speedWaveform = window.DebbyWaveform.create('speedWaveform');
 
     let currentType = null;
     let currentDrill = null;
@@ -386,6 +387,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
             mediaRecorder.start();
+            speedWaveform.start(stream).catch(error => {
+                console.error('Error starting waveform:', error);
+            });
             recordSpeedButton.disabled = true;
             stopSpeedButton.disabled = false;
             setLoading('Recording...');
@@ -402,6 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         stopSpeedButton.disabled = true;
         mediaRecorder.onstop = async () => {
+            speedWaveform.stop();
             mediaRecorder.stream.getTracks().forEach((track) => track.stop());
             const recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
             const formData = new FormData();
@@ -424,6 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showError(error.message);
             } finally {
                 recordSpeedButton.disabled = true;
+                speedWaveform.stop();
                 mediaRecorder = null;
                 audioChunks = [];
             }
