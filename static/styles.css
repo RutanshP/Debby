@@ -538,24 +538,78 @@ textarea.topic {
 }
 
 .flow-section h3,
+.flow-section h4,
 .review-grid h3,
 .transcript-grid h3 {
     color: #00796b;
     margin-bottom: 0.6rem;
 }
 
-.flow-chain {
-    align-items: stretch;
+.flow-ballot {
+    align-items: center;
+    background: #f6faf9;
+    border: 1px solid #d9e7e4;
+    border-radius: 0.5rem;
     display: flex;
     flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    padding: 0.85rem;
+}
+
+.flow-ballot span,
+.flow-ballot strong {
+    background: #e0f2f1;
+    border-radius: 999px;
+    color: #004d40;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.35rem 0.65rem;
+}
+
+.flow-ballot p {
+    color: #33665f;
+    flex-basis: 100%;
+    line-height: 1.45;
+    margin: 0;
+}
+
+.flow-sheets {
+    display: grid;
+    gap: 1rem;
+}
+
+.flow-sheet {
+    border: 1px solid #d9e7e4;
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+.flow-sheet h4 {
+    margin: 0 0 0.75rem;
+}
+
+.flow-row,
+.flow-chain {
+    align-items: stretch;
+    display: grid;
     gap: 0.55rem;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) minmax(12rem, 0.8fr);
     margin-bottom: 0.75rem;
+}
+
+.neg-row {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(12rem, 0.8fr);
+}
+
+.flow-stack {
+    display: grid;
+    gap: 0.55rem;
 }
 
 .flow-card {
     border: 1px solid #d9e7e4;
     border-radius: 0.5rem;
-    flex: 1 1 12rem;
     padding: 0.85rem;
 }
 
@@ -565,6 +619,11 @@ textarea.topic {
 
 .flow-card.neg {
     border-left: 4px solid #33665f;
+}
+
+.flow-card.missing {
+    background: #fff8e8;
+    border-left: 4px solid #c78300;
 }
 
 .flow-card span {
@@ -600,7 +659,6 @@ textarea.topic {
     background: #f6faf9;
     border: 1px solid #d9e7e4;
     border-radius: 0.5rem;
-    flex: 1 1 12rem;
     padding: 0.85rem;
 }
 
@@ -685,6 +743,7 @@ textarea.topic {
         flex-direction: column;
     }
 
+    .flow-row,
     .flow-chain,
     .review-grid,
     .transcript-grid {
@@ -692,7 +751,8 @@ textarea.topic {
     }
 
     .flow-arrow {
-        transform: rotate(-90deg);
+        justify-self: center;
+        transform: rotate(90deg);
     }
 }
 
@@ -740,7 +800,25 @@ textarea.topic {
     margin: 0;
     min-height: 7rem;
     padding: 1rem;
+    position: relative;
     text-align: left;
+}
+
+.drill-mode-pill {
+    background: #e0f2f1;
+    border-radius: 999px;
+    color: #00796b;
+    display: inline-block;
+    font-size: 0.72rem;
+    letter-spacing: 0;
+    margin-bottom: 0.65rem;
+    padding: 0.24rem 0.55rem;
+    text-transform: uppercase;
+}
+
+.drill-mode-pill.typing {
+    background: #fff4d8;
+    color: #8a5a00;
 }
 
 .drill-type-card span {
@@ -759,6 +837,7 @@ textarea.topic {
 .drill-type-card.active {
     background: #e0f2f1;
     border-color: #00796b;
+    box-shadow: 0 0.35rem 1rem rgba(0, 121, 107, 0.16);
 }
 
 .drill-type-card.disabled {
@@ -871,11 +950,39 @@ textarea.topic {
     width: 100%;
 }
 
+.audio-response-card {
+    background: linear-gradient(135deg, #eef8f7 0%, #ffffff 100%);
+    border: 1px solid #c7ded9;
+    border-radius: 0.5rem;
+    margin-top: 1rem;
+    padding: 1rem;
+}
+
+.audio-response-card span {
+    color: #00796b;
+    display: block;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+}
+
+.audio-response-card p {
+    line-height: 1.45;
+}
+
 .drill-actions,
 .speed-controls {
     display: flex;
     gap: 0.75rem;
     justify-content: flex-end;
+}
+
+.speed-controls {
+    margin-top: 1rem;
+}
+
+.speed-controls[hidden],
+.audio-response-card[hidden] {
+    display: none;
 }
 
 .secondary-button {

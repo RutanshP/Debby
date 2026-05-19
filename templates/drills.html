@@ -40,18 +40,22 @@
 
         <section class="drill-type-grid" aria-label="Drill types">
             <button class="drill-type-card" data-drill-type="rebuttal">
+                <strong class="drill-mode-pill">Audio</strong>
                 <span>Rebuttal</span>
-                <small>Answer a short opposing argument.</small>
+                <small>Answer a short opposing argument out loud.</small>
             </button>
             <button class="drill-type-card" data-drill-type="speed">
+                <strong class="drill-mode-pill">Audio</strong>
                 <span>Speed Reading</span>
                 <small>Read a passage as quickly and clearly as possible.</small>
             </button>
             <button class="drill-type-card" data-drill-type="impact">
+                <strong class="drill-mode-pill">Audio</strong>
                 <span>Impact Extension</span>
-                <small>Turn an argument into full weighing.</small>
+                <small>Turn an argument into full weighing out loud.</small>
             </button>
             <button class="drill-type-card" data-drill-type="contentions">
+                <strong class="drill-mode-pill typing">Typing</strong>
                 <span>Contention Storm</span>
                 <small>Generate as many taglines as possible.</small>
             </button>
@@ -84,6 +88,11 @@
                         <p id="responseModeLabel">Type your answer, then submit.</p>
                     </div>
                     <div class="drill-live-timer" id="drillLiveTimer">01:00</div>
+                </div>
+
+                <div id="audioResponseCard" class="audio-response-card" hidden>
+                    <span>Audio response</span>
+                    <p>Record your answer when the drill starts. Debby will transcribe it and score the speech.</p>
                 </div>
 
                 <textarea id="drillResponse" class="drill-response" placeholder="Your response goes here..."></textarea>

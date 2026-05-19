@@ -14,7 +14,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const liveTimerEl = document.getElementById('drillLiveTimer');
     const feedbackEl = document.getElementById('drillFeedback');
     const responseModeLabel = document.getElementById('responseModeLabel');
+    const audioResponseCard = document.getElementById('audioResponseCard');
     const speedWaveform = window.DebbyWaveform.create('speedWaveform');
+    const typedDrillTypes = new Set(['contentions']);
 
     let currentType = null;
     let currentDrill = null;
@@ -24,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let audioChunks = [];
     let isSubmitting = false;
     let drillState = 'idle';
+
+    function isAudioDrill() {
+        return currentType && !typedDrillTypes.has(currentType);
+    }
 
     function escapeHtml(value) {
         return String(value || '').replace(/[&<>"']/g, (char) => ({
@@ -69,9 +75,25 @@ document.addEventListener('DOMContentLoaded', () => {
         timerInput.disabled = Boolean(currentDrill);
     }
 
+    function discardRecording() {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.onstop = null;
+            try {
+                mediaRecorder.stop();
+            } catch (error) {
+                console.error('Error discarding recording:', error);
+            }
+            mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+        }
+        speedWaveform.stop();
+        mediaRecorder = null;
+        audioChunks = [];
+    }
+
     function setIdleState(message = 'Select a drill to start.') {
         currentDrill = null;
         drillState = 'idle';
+        discardRecording();
         clearInterval(timerInterval);
         timerInterval = null;
         remainingSeconds = 0;
@@ -112,9 +134,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleTimerFinished() {
-        if (currentType === 'speed') {
+        if (isAudioDrill()) {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 stopSpeedRecording();
+            } else if (currentDrill) {
+                showError('Time is up. Start a new drill when you are ready.');
             }
             return;
         }
@@ -135,15 +159,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderMode() {
-        const isSpeed = currentType === 'speed';
-        speedControls.hidden = !isSpeed;
-        responseBox.hidden = isSpeed;
-        submitButton.hidden = isSpeed;
+        const audioMode = isAudioDrill();
+        speedControls.hidden = !audioMode;
+        responseBox.hidden = audioMode;
+        audioResponseCard.hidden = !audioMode;
+        submitButton.hidden = audioMode;
         if (!currentDrill) {
             responseBox.disabled = true;
         }
-        responseModeLabel.textContent = isSpeed
-            ? 'Record yourself reading the passage.'
+        responseModeLabel.textContent = audioMode
+            ? currentType === 'speed'
+                ? 'Record yourself reading the passage.'
+                : 'Record your answer out loud.'
             : currentType
                 ? 'Type your answer, then submit.'
                 : 'Choose a drill, then press Start Drill.';
@@ -186,19 +213,20 @@ document.addEventListener('DOMContentLoaded', () => {
             titleEl.textContent = currentDrill.title || 'Drill';
             topicEl.textContent = currentDrill.topic || '';
             promptEl.textContent = currentDrill.prompt || '';
-            taskEl.textContent = currentDrill.task || '';
+            taskEl.textContent = audioTaskText(currentDrill.task || '');
             resetTimer(parseTime(timerInput.value));
-            submitButton.disabled = currentType === 'speed';
-            recordSpeedButton.disabled = currentType !== 'speed';
-            responseBox.disabled = currentType === 'speed';
+            renderMode();
+            submitButton.disabled = isAudioDrill();
+            recordSpeedButton.disabled = !isAudioDrill();
+            responseBox.disabled = isAudioDrill();
             drillState = 'active';
             startDrillButton.disabled = false;
             startDrillButton.textContent = 'Cancel';
             feedbackEl.classList.add('empty-state');
-            feedbackEl.textContent = currentType === 'speed'
-                ? 'Start recording when you are ready. Speak fast, but keep it clear.'
+            feedbackEl.textContent = isAudioDrill()
+                ? 'Start recording when you are ready. Speak clearly and stay strategic.'
                 : 'Complete a drill to see feedback here.';
-            if (currentType !== 'speed') {
+            if (!isAudioDrill()) {
                 startTimer();
             }
         } catch (error) {
@@ -210,13 +238,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderTypedFeedback(feedback) {
+    function audioTaskText(task) {
+        if (!isAudioDrill()) {
+            return task;
+        }
+
+        if (currentType === 'speed') {
+            return 'Read the passage aloud, then submit your recording.';
+        }
+
+        return 'Give your response aloud, then submit your recording.';
+    }
+
+    function renderTypedFeedback(feedback, transcript = '') {
         const strengths = (feedback.strengths || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
         const improvements = (feedback.improvements || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
         feedbackEl.classList.remove('empty-state');
         feedbackEl.innerHTML = `
             <div class="feedback-score">Score: ${escapeHtml(feedback.score)}/10</div>
             <h3>${escapeHtml(feedback.headline)}</h3>
+            ${transcript ? `<strong>Transcript</strong><p>${escapeHtml(transcript)}</p>` : ''}
             <strong>What worked</strong>
             <ul>${strengths || '<li>Keep building specificity.</li>'}</ul>
             <strong>Next reps</strong>
@@ -230,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startDrillButton.disabled = true;
         startDrillButton.textContent = 'Start Drill';
         responseBox.disabled = true;
+        submitButton.hidden = false;
     }
 
     function drawWpmGraph(series) {
@@ -392,6 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             recordSpeedButton.disabled = true;
             stopSpeedButton.disabled = false;
+            stopSpeedButton.textContent = currentType === 'speed' ? 'Stop and Score' : 'Stop and Submit';
             setLoading('Recording...');
             startTimer();
         } catch (error) {
@@ -410,12 +453,17 @@ document.addEventListener('DOMContentLoaded', () => {
             mediaRecorder.stream.getTracks().forEach((track) => track.stop());
             const recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
             const formData = new FormData();
-            formData.append('audio', recordedBlob, 'drill_speed.webm');
-            formData.append('passage', currentDrill.prompt || '');
+            formData.append('audio', recordedBlob, 'drill_audio.webm');
+            if (currentType === 'speed') {
+                formData.append('passage', currentDrill.prompt || '');
+            } else {
+                formData.append('drill_type', currentType);
+                formData.append('drill', JSON.stringify(currentDrill));
+            }
             setLoading('Transcribing and scoring...');
 
             try {
-                const response = await fetch('/api/score-speed-drill', {
+                const response = await fetch(currentType === 'speed' ? '/api/score-speed-drill' : '/api/score-audio-drill', {
                     method: 'POST',
                     headers: { 'Accept': 'application/json' },
                     body: formData
@@ -424,7 +472,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!response.ok) {
                     throw new Error(data.error || 'Could not score the recording.');
                 }
-                renderSpeedFeedback(data.feedback);
+                if (currentType === 'speed') {
+                    renderSpeedFeedback(data.feedback);
+                } else {
+                    renderTypedFeedback(data.feedback, data.transcript || '');
+                }
             } catch (error) {
                 showError(error.message);
             } finally {

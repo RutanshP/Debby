@@ -144,21 +144,20 @@ def _winner_side_from_rfd(rfd):
 
 def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
     fallback = {
-        "chains": [
+        "aff_sheet": [
             {
-                "root": {
-                    "side": "aff",
+                "contention": {
                     "tag": "Aff case",
                     "summary": "Review the transcript for the main affirmative argument."
                 },
-                "responses": [
+                "neg_responses": [
                     {
-                        "side": "neg",
                         "tag": "Neg response",
                         "summary": "Review the transcript for the main negative response."
-                    },
+                    }
+                ],
+                "aff_defense": [
                     {
-                        "side": "aff",
                         "tag": "Aff defense",
                         "summary": "Review the transcript for the main affirmative defense."
                     }
@@ -167,6 +166,28 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
                 "judge_note": "Flow generation was unavailable."
             }
         ],
+        "neg_sheet": [
+            {
+                "contention": {
+                    "tag": "Neg case",
+                    "summary": "Review the transcript for the main negative contention."
+                },
+                "aff_rebuttals": [
+                    {
+                        "tag": "Aff rebuttal",
+                        "summary": "Review the transcript for the affirmative rebuttal."
+                    }
+                ],
+                "status": "contested",
+                "judge_note": "Flow generation was unavailable."
+            }
+        ],
+        "ballot": {
+            "aff_unrefuted": 0,
+            "neg_unrefuted": 0,
+            "winner": _winner_side_from_rfd(rfd),
+            "explanation": _truncate_for_flow(rfd, 180)
+        },
         "dropped": [],
         "voters": [
             {
@@ -187,14 +208,19 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
             {
                 "role": "system",
                 "content": (
-                    "You create compact debate flows as JSON. Flow by clash, not by speech. "
-                    "Return JSON only with keys: chains, dropped, voters, recommended_drills. "
-                    "chains: max 6. Each chain has root, responses, status, judge_note. "
-                    "root/responses use side, tag, summary. tag <= 8 words. summary <= 18 words. "
-                    "responses max 3 per chain. dropped max 4. voters max 3. judge_note <= 18 words. "
-                    "Each voter must identify the winning team's decisive contention or impact area, "
-                    "explain why it had the highest impact in the round, and briefly summarize the RFD. "
-                    "Voter tag <= 8 words; voter reason <= 35 words; voter winner must be aff or neg. "
+                    "You create compact parliamentary debate flow sheets as JSON. "
+                    "Return JSON only with keys: aff_sheet, neg_sheet, ballot, dropped, voters, recommended_drills. "
+                    "aff_sheet: max 4 rows. Each row has contention, neg_responses, aff_defense, status, judge_note. "
+                    "The aff sheet must flow AFF contention -> NEG responses -> AFF defense. "
+                    "neg_sheet: max 4 rows. Each row has contention, aff_rebuttals, status, judge_note. "
+                    "The neg sheet must flow NEG contention -> AFF rebuttals. "
+                    "contention/responses/rebuttals/defense objects use tag and summary only. "
+                    "tag <= 8 words. summary <= 18 words. status must be unrefuted, refuted, or contested. "
+                    "Mark a contention unrefuted only when the opposing side did not answer it. "
+                    "ballot has aff_unrefuted, neg_unrefuted, winner, explanation. "
+                    "Winner must be the side with more unrefuted contentions; if tied, use impact weighing from the RFD. "
+                    "ballot winner must be aff or neg; explanation <= 35 words. "
+                    "dropped max 4. voters max 3. Each voter winner must be aff or neg. "
                     "recommended_drills can only include: rebuttal, impact, contentions, speed. "
                     "Do not quote long text."
                 )
@@ -218,7 +244,9 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
         return fallback
 
     return {
-        "chains": flow.get("chains", [])[:6],
+        "aff_sheet": flow.get("aff_sheet", [])[:4] or fallback["aff_sheet"],
+        "neg_sheet": flow.get("neg_sheet", [])[:4] or fallback["neg_sheet"],
+        "ballot": flow.get("ballot") or fallback["ballot"],
         "dropped": flow.get("dropped", [])[:4],
         "voters": flow.get("voters", [])[:3] or fallback["voters"],
         "recommended_drills": flow.get("recommended_drills", [])[:4],
@@ -269,7 +297,7 @@ def generate_drill(drill_type):
             "graduate with more confidence, protect themselves from debt traps, and help their families make "
             "more informed choices."
         ) if drill_type == 'speed' else "Schools should require financial literacy because students need practical skills for adulthood.",
-        "task": "Read the passage aloud, then submit your recording.",
+        "task": "Read the passage aloud, then submit your recording." if drill_type == 'speed' else "Give your response aloud, then submit your recording.",
         "timer_seconds": 60 if drill_type != 'speed' else 75,
     }
 
@@ -307,6 +335,8 @@ def generate_drill(drill_type):
         if not _looks_like_speed_passage(drill.get('prompt')):
             drill['prompt'] = fallback['prompt']
         _save_speed_passage(drill)
+    elif drill_type in {'rebuttal', 'impact'}:
+        drill['task'] = "Give your response aloud, then submit your recording."
 
     return drill
 

@@ -66,6 +66,116 @@
 
                 <div class="flow-section">
                     <h3>Flow</h3>
+                    <div class="flow-ballot">
+                        <span>Aff unrefuted: {{ entry.flow.ballot.aff_unrefuted | default(0) }}</span>
+                        <span>Neg unrefuted: {{ entry.flow.ballot.neg_unrefuted | default(0) }}</span>
+                        <strong>Flow winner: {{ entry.flow.ballot.winner | default('N/A') }}</strong>
+                        <p>{{ entry.flow.ballot.explanation }}</p>
+                    </div>
+
+                    <div class="flow-sheets">
+                        <section class="flow-sheet">
+                            <h4>Aff Sheet</h4>
+                            {% for row in entry.flow.aff_sheet %}
+                            <div class="flow-row aff-row">
+                                <div class="flow-card aff">
+                                    <span>Aff contention</span>
+                                    <strong>{{ row.contention.tag }}</strong>
+                                    <p>{{ row.contention.summary }}</p>
+                                </div>
+
+                                <div class="flow-arrow">&rarr;</div>
+
+                                <div class="flow-stack">
+                                    {% if row.neg_responses %}
+                                        {% for response in row.neg_responses %}
+                                        <div class="flow-card neg">
+                                            <span>Neg response</span>
+                                            <strong>{{ response.tag }}</strong>
+                                            <p>{{ response.summary }}</p>
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <div class="flow-card missing">
+                                            <span>No neg response</span>
+                                            <strong>Dropped</strong>
+                                            <p>This contention appears unrefuted.</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="flow-arrow">&rarr;</div>
+
+                                <div class="flow-stack">
+                                    {% if row.aff_defense %}
+                                        {% for defense in row.aff_defense %}
+                                        <div class="flow-card aff">
+                                            <span>Aff defense</span>
+                                            <strong>{{ defense.tag }}</strong>
+                                            <p>{{ defense.summary }}</p>
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <div class="flow-card missing">
+                                            <span>No aff defense</span>
+                                            <strong>Not extended</strong>
+                                            <p>No later defense was identified.</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="flow-note">
+                                    <span>{{ row.status | default('contested') }}</span>
+                                    <p>{{ row.judge_note }}</p>
+                                </div>
+                            </div>
+                            {% else %}
+                            <p class="muted-text">No affirmative contentions generated.</p>
+                            {% endfor %}
+                        </section>
+
+                        <section class="flow-sheet">
+                            <h4>Neg Sheet</h4>
+                            {% for row in entry.flow.neg_sheet %}
+                            <div class="flow-row neg-row">
+                                <div class="flow-card neg">
+                                    <span>Neg contention</span>
+                                    <strong>{{ row.contention.tag }}</strong>
+                                    <p>{{ row.contention.summary }}</p>
+                                </div>
+
+                                <div class="flow-arrow">&rarr;</div>
+
+                                <div class="flow-stack">
+                                    {% if row.aff_rebuttals %}
+                                        {% for rebuttal in row.aff_rebuttals %}
+                                        <div class="flow-card aff">
+                                            <span>Aff rebuttal</span>
+                                            <strong>{{ rebuttal.tag }}</strong>
+                                            <p>{{ rebuttal.summary }}</p>
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <div class="flow-card missing">
+                                            <span>No aff rebuttal</span>
+                                            <strong>Dropped</strong>
+                                            <p>This contention appears unrefuted.</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="flow-note">
+                                    <span>{{ row.status | default('contested') }}</span>
+                                    <p>{{ row.judge_note }}</p>
+                                </div>
+                            </div>
+                            {% else %}
+                            <p class="muted-text">No negative contentions generated.</p>
+                            {% endfor %}
+                        </section>
+                    </div>
+
+                    {% if false %}
                     {% for chain in entry.flow.chains %}
                     <div class="flow-chain">
                         <div class="flow-card {{ chain.root.side | default('aff') }}">
@@ -89,6 +199,7 @@
                         </div>
                     </div>
                     {% endfor %}
+                    {% endif %}
                 </div>
 
                 <div class="review-grid">

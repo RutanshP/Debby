@@ -244,21 +244,20 @@ def calculate_reading_accuracy(reference_text, spoken_text):
 
 def fallback_flow_for_entry(entry):
     return {
-        'chains': [
+        'aff_sheet': [
             {
-                'root': {
-                    'side': 'aff',
+                'contention': {
                     'tag': 'Aff case',
                     'summary': 'Open transcripts to review the affirmative case.'
                 },
-                'responses': [
+                'neg_responses': [
                     {
-                        'side': 'neg',
                         'tag': 'Neg response',
                         'summary': 'Open transcripts to review the negative speech.'
-                    },
+                    }
+                ],
+                'aff_defense': [
                     {
-                        'side': 'aff',
                         'tag': 'Aff rebuttal',
                         'summary': 'Open transcripts to review the final rebuttal.'
                     }
@@ -267,6 +266,28 @@ def fallback_flow_for_entry(entry):
                 'judge_note': 'This older round has no generated flow.'
             }
         ],
+        'neg_sheet': [
+            {
+                'contention': {
+                    'tag': 'Neg case',
+                    'summary': 'Open transcripts to review the negative case.'
+                },
+                'aff_rebuttals': [
+                    {
+                        'tag': 'Aff rebuttal',
+                        'summary': 'Open transcripts to review the final rebuttal.'
+                    }
+                ],
+                'status': 'archived',
+                'judge_note': 'This older round has no generated flow.'
+            }
+        ],
+        'ballot': {
+            'aff_unrefuted': 0,
+            'neg_unrefuted': 0,
+            'winner': winner_side_from_rfd(entry.get('winner')),
+            'explanation': summarize_rfd_for_voter(entry.get('winner'), 180)
+        },
         'dropped': [],
         'voters': [
             rfd_voter_for_entry(entry)
@@ -275,8 +296,130 @@ def fallback_flow_for_entry(entry):
     }
 
 
+def flow_item(tag='Untitled', summary='Open transcripts for details.'):
+    return {
+        'tag': tag or 'Untitled',
+        'summary': summary or 'Open transcripts for details.'
+    }
+
+
+def normalize_sheet_row(row, side):
+    row = row or {}
+    contention = row.get('contention') or row.get('root') or {}
+    normalized = {
+        'contention': flow_item(contention.get('tag'), contention.get('summary')),
+        'status': row.get('status') or 'contested',
+        'judge_note': row.get('judge_note') or 'No judge note generated.'
+    }
+
+    if side == 'aff':
+        normalized['neg_responses'] = [
+            flow_item(item.get('tag'), item.get('summary'))
+            for item in (row.get('neg_responses') or [])
+        ]
+        normalized['aff_defense'] = [
+            flow_item(item.get('tag'), item.get('summary'))
+            for item in (row.get('aff_defense') or [])
+        ]
+    else:
+        normalized['aff_rebuttals'] = [
+            flow_item(item.get('tag'), item.get('summary'))
+            for item in (row.get('aff_rebuttals') or [])
+        ]
+
+    return normalized
+
+
+def legacy_chains_to_sheets(chains):
+    aff_sheet = []
+    neg_sheet = []
+
+    for chain in chains or []:
+        root = chain.get('root') or {}
+        responses = chain.get('responses') or []
+        root_side = (root.get('side') or 'aff').lower()
+        row = {
+            'contention': flow_item(root.get('tag'), root.get('summary')),
+            'status': chain.get('status') or 'contested',
+            'judge_note': chain.get('judge_note') or 'No judge note generated.'
+        }
+
+        if root_side == 'neg':
+            row['aff_rebuttals'] = [
+                flow_item(response.get('tag'), response.get('summary'))
+                for response in responses
+                if (response.get('side') or '').lower() == 'aff'
+            ]
+            neg_sheet.append(row)
+        else:
+            row['neg_responses'] = [
+                flow_item(response.get('tag'), response.get('summary'))
+                for response in responses
+                if (response.get('side') or '').lower() == 'neg'
+            ]
+            row['aff_defense'] = [
+                flow_item(response.get('tag'), response.get('summary'))
+                for response in responses
+                if (response.get('side') or '').lower() == 'aff'
+            ]
+            aff_sheet.append(row)
+
+    return aff_sheet, neg_sheet
+
+
+def count_unrefuted(rows):
+    return sum(
+        1 for row in rows
+        if (row.get('status') or '').strip().lower() == 'unrefuted'
+    )
+
+
+def normalize_ballot(flow, entry, aff_sheet, neg_sheet):
+    ballot = flow.get('ballot') or {}
+    aff_unrefuted = ballot.get('aff_unrefuted')
+    neg_unrefuted = ballot.get('neg_unrefuted')
+
+    if not isinstance(aff_unrefuted, int):
+        aff_unrefuted = count_unrefuted(aff_sheet)
+    if not isinstance(neg_unrefuted, int):
+        neg_unrefuted = count_unrefuted(neg_sheet)
+
+    if aff_unrefuted > neg_unrefuted:
+        winner = 'aff'
+    elif neg_unrefuted > aff_unrefuted:
+        winner = 'neg'
+    else:
+        winner = ballot.get('winner') or winner_side_from_rfd(entry.get('winner'))
+
+    return {
+        'aff_unrefuted': aff_unrefuted,
+        'neg_unrefuted': neg_unrefuted,
+        'winner': winner,
+        'explanation': ballot.get('explanation') or summarize_rfd_for_voter(entry.get('winner'), 180)
+    }
+
+
 def normalize_flow_for_entry(entry):
     flow = entry.get('flow') or fallback_flow_for_entry(entry)
+    flow = dict(flow)
+
+    if 'aff_sheet' not in flow and 'neg_sheet' not in flow:
+        aff_sheet, neg_sheet = legacy_chains_to_sheets(flow.get('chains') or [])
+    else:
+        aff_sheet = flow.get('aff_sheet') or []
+        neg_sheet = flow.get('neg_sheet') or []
+
+    if not aff_sheet and not neg_sheet:
+        fallback = fallback_flow_for_entry(entry)
+        aff_sheet = fallback['aff_sheet']
+        neg_sheet = fallback['neg_sheet']
+
+    aff_sheet = [normalize_sheet_row(row, 'aff') for row in aff_sheet[:4]]
+    neg_sheet = [normalize_sheet_row(row, 'neg') for row in neg_sheet[:4]]
+    flow['aff_sheet'] = aff_sheet
+    flow['neg_sheet'] = neg_sheet
+    flow['ballot'] = normalize_ballot(flow, entry, aff_sheet, neg_sheet)
+
     voters = flow.get('voters') or []
     legacy_voters = not voters or all(
         (voter.get('tag') or '').lower() in {'decision', 'winner'}
@@ -534,6 +677,39 @@ def api_score_speed_drill():
         })
     except Exception as e:
         logger.error(f'Error scoring speed drill: {e}')
+        return jsonify({'error': 'Could not score the recording. Please try again.'}), 500
+
+@app.route('/api/score-audio-drill', methods=['POST'])
+def api_score_audio_drill():
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file provided.'}), 400
+
+    drill_type = request.form.get('drill_type')
+    drill_raw = request.form.get('drill') or '{}'
+
+    if drill_type not in {'rebuttal', 'impact'}:
+        return jsonify({'error': 'This drill type does not use audio scoring here.'}), 400
+
+    try:
+        drill = json.loads(drill_raw)
+    except json.JSONDecodeError:
+        return jsonify({'error': 'Invalid drill payload.'}), 400
+
+    audio = request.files['audio']
+    audio.save(drill_audio_file_path)
+
+    try:
+        transcript = transcribe(drill_audio_file_path)
+        if isinstance(transcript, tuple):
+            transcript = transcript[0]
+        transcript = (transcript or '').strip()
+        if not transcript:
+            return jsonify({'error': 'No speech was detected in the recording.'}), 400
+
+        feedback = score_drill(drill_type, drill, transcript)
+        return jsonify({'feedback': feedback, 'transcript': transcript})
+    except Exception as e:
+        logger.error(f'Error scoring audio drill: {e}')
         return jsonify({'error': 'Could not score the recording. Please try again.'}), 500
 
 @app.route('/process-recording', methods=['POST'])
