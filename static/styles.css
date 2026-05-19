@@ -997,6 +997,17 @@ textarea.topic {
     line-height: 1.55;
 }
 
+.loading-feedback {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+}
+
+.loading-feedback img {
+    height: 2rem;
+    width: 2rem;
+}
+
 .drill-feedback h3 {
     color: #00796b;
     margin: 0 0 0.5rem;

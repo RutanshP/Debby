@@ -60,7 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setLoading(message) {
         feedbackEl.classList.remove('empty-state');
-        feedbackEl.innerHTML = `<p>${escapeHtml(message)}</p>`;
+        feedbackEl.innerHTML = `
+            <div class="loading-feedback">
+                <img src="/static/loading.gif" alt="Loading">
+                <p>${escapeHtml(message)}</p>
+            </div>
+        `;
     }
 
     function showError(message) {
@@ -174,6 +179,33 @@ document.addEventListener('DOMContentLoaded', () => {
             : currentType
                 ? 'Type your answer, then submit.'
                 : 'Choose a drill, then press Start Drill.';
+
+        if (audioMode) {
+            audioResponseCard.innerHTML = audioGuidanceHtml();
+        }
+    }
+
+    function audioGuidanceHtml() {
+        const guidance = {
+            rebuttal: {
+                title: 'Rebuttal drill',
+                body: 'Answer the argument directly: name the claim, attack the warrant, then explain why their impact no longer matters. Keep it organized like a short speech. Debby will transcribe and score the speech.'
+            },
+            speed: {
+                title: 'Speed reading drill',
+                body: 'Read the passage exactly as written. Push your pace while keeping words clear, punctuation controlled, and stumbles low. Debby will transcribe and score the speech.'
+            },
+            impact: {
+                title: 'Impact extension drill',
+                body: 'Extend the argument into weighing: explain magnitude, probability, timeframe, and why this impact should matter more than the other side. Debby will transcribe and score the speech.'
+            }
+        };
+        const selected = guidance[currentType] || {
+            title: 'Audio drill',
+            body: 'Give a clear, organized spoken response to the prompt. Debby will transcribe and score the speech.'
+        };
+
+        return `<span>${escapeHtml(selected.title)}</span><p>${escapeHtml(selected.body)}</p>`;
     }
 
     async function fetchJson(url, options) {
@@ -447,6 +479,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        clearInterval(timerInterval);
+        timerInterval = null;
         stopSpeedButton.disabled = true;
         mediaRecorder.onstop = async () => {
             speedWaveform.stop();

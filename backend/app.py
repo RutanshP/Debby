@@ -672,7 +672,7 @@ def api_score_speed_drill():
                 'duration_seconds': round(duration_seconds, 1),
                 'word_count': word_count,
                 'transcript': transcript,
-                'wpm_series': calculate_wpm_series(drill_audio_file_path, words, interval=1),
+                'wpm_series': calculate_wpm_series(drill_audio_file_path, words, interval=4),
             }
         })
     except Exception as e:
