@@ -168,7 +168,7 @@ def transcript_word_count(transcript):
 
 
 def winner_side_from_rfd(rfd):
-    first_word = ((rfd or '').strip().split() or ['unknown'])[0].lower()
+    first_word = ((str(rfd) if rfd is not None else '').strip().split() or ['unknown'])[0].lower()
     if first_word == 'for':
         return 'aff'
     if first_word == 'against':
@@ -177,7 +177,7 @@ def winner_side_from_rfd(rfd):
 
 
 def summarize_rfd_for_voter(rfd, limit=260):
-    summary = re.sub(r'\s+', ' ', (rfd or '').strip())
+    summary = re.sub(r'\s+', ' ', (str(rfd) if rfd is not None else '').strip())
     if not summary:
         return 'No RFD was saved for this round.'
 
@@ -303,9 +303,17 @@ def flow_item(tag='Untitled', summary='Open transcripts for details.'):
     }
 
 
+def as_dict(value):
+    return value if isinstance(value, dict) else {}
+
+
+def as_list(value):
+    return value if isinstance(value, list) else []
+
+
 def normalize_sheet_row(row, side):
-    row = row or {}
-    contention = row.get('contention') or row.get('root') or {}
+    row = as_dict(row)
+    contention = as_dict(row.get('contention') or row.get('root'))
     normalized = {
         'contention': flow_item(contention.get('tag'), contention.get('summary')),
         'status': row.get('status') or 'contested',
@@ -314,17 +322,17 @@ def normalize_sheet_row(row, side):
 
     if side == 'aff':
         normalized['neg_responses'] = [
-            flow_item(item.get('tag'), item.get('summary'))
-            for item in (row.get('neg_responses') or [])
+            flow_item(as_dict(item).get('tag'), as_dict(item).get('summary'))
+            for item in as_list(row.get('neg_responses'))
         ]
         normalized['aff_defense'] = [
-            flow_item(item.get('tag'), item.get('summary'))
-            for item in (row.get('aff_defense') or [])
+            flow_item(as_dict(item).get('tag'), as_dict(item).get('summary'))
+            for item in as_list(row.get('aff_defense'))
         ]
     else:
         normalized['aff_rebuttals'] = [
-            flow_item(item.get('tag'), item.get('summary'))
-            for item in (row.get('aff_rebuttals') or [])
+            flow_item(as_dict(item).get('tag'), as_dict(item).get('summary'))
+            for item in as_list(row.get('aff_rebuttals'))
         ]
 
     return normalized
@@ -334,9 +342,10 @@ def legacy_chains_to_sheets(chains):
     aff_sheet = []
     neg_sheet = []
 
-    for chain in chains or []:
-        root = chain.get('root') or {}
-        responses = chain.get('responses') or []
+    for chain in as_list(chains):
+        chain = as_dict(chain)
+        root = as_dict(chain.get('root'))
+        responses = as_list(chain.get('responses'))
         root_side = (root.get('side') or 'aff').lower()
         row = {
             'contention': flow_item(root.get('tag'), root.get('summary')),
@@ -346,21 +355,21 @@ def legacy_chains_to_sheets(chains):
 
         if root_side == 'neg':
             row['aff_rebuttals'] = [
-                flow_item(response.get('tag'), response.get('summary'))
+                flow_item(as_dict(response).get('tag'), as_dict(response).get('summary'))
                 for response in responses
-                if (response.get('side') or '').lower() == 'aff'
+                if (as_dict(response).get('side') or '').lower() == 'aff'
             ]
             neg_sheet.append(row)
         else:
             row['neg_responses'] = [
-                flow_item(response.get('tag'), response.get('summary'))
+                flow_item(as_dict(response).get('tag'), as_dict(response).get('summary'))
                 for response in responses
-                if (response.get('side') or '').lower() == 'neg'
+                if (as_dict(response).get('side') or '').lower() == 'neg'
             ]
             row['aff_defense'] = [
-                flow_item(response.get('tag'), response.get('summary'))
+                flow_item(as_dict(response).get('tag'), as_dict(response).get('summary'))
                 for response in responses
-                if (response.get('side') or '').lower() == 'aff'
+                if (as_dict(response).get('side') or '').lower() == 'aff'
             ]
             aff_sheet.append(row)
 
@@ -370,12 +379,12 @@ def legacy_chains_to_sheets(chains):
 def count_unrefuted(rows):
     return sum(
         1 for row in rows
-        if (row.get('status') or '').strip().lower() == 'unrefuted'
+        if (as_dict(row).get('status') or '').strip().lower() == 'unrefuted'
     )
 
 
 def normalize_ballot(flow, entry, aff_sheet, neg_sheet):
-    ballot = flow.get('ballot') or {}
+    ballot = as_dict(flow.get('ballot'))
     aff_unrefuted = ballot.get('aff_unrefuted')
     neg_unrefuted = ballot.get('neg_unrefuted')
 
@@ -401,28 +410,28 @@ def normalize_ballot(flow, entry, aff_sheet, neg_sheet):
 
 def normalize_flow_for_entry(entry):
     flow = entry.get('flow') or fallback_flow_for_entry(entry)
-    flow = dict(flow)
+    flow = dict(flow) if isinstance(flow, dict) else fallback_flow_for_entry(entry)
 
     if 'aff_sheet' not in flow and 'neg_sheet' not in flow:
-        aff_sheet, neg_sheet = legacy_chains_to_sheets(flow.get('chains') or [])
+        aff_sheet, neg_sheet = legacy_chains_to_sheets(flow.get('chains'))
     else:
-        aff_sheet = flow.get('aff_sheet') or []
-        neg_sheet = flow.get('neg_sheet') or []
+        aff_sheet = as_list(flow.get('aff_sheet'))
+        neg_sheet = as_list(flow.get('neg_sheet'))
 
     if not aff_sheet and not neg_sheet:
         fallback = fallback_flow_for_entry(entry)
         aff_sheet = fallback['aff_sheet']
         neg_sheet = fallback['neg_sheet']
 
-    aff_sheet = [normalize_sheet_row(row, 'aff') for row in aff_sheet[:4]]
-    neg_sheet = [normalize_sheet_row(row, 'neg') for row in neg_sheet[:4]]
+    aff_sheet = [normalize_sheet_row(row, 'aff') for row in as_list(aff_sheet)[:4]]
+    neg_sheet = [normalize_sheet_row(row, 'neg') for row in as_list(neg_sheet)[:4]]
     flow['aff_sheet'] = aff_sheet
     flow['neg_sheet'] = neg_sheet
     flow['ballot'] = normalize_ballot(flow, entry, aff_sheet, neg_sheet)
 
-    voters = flow.get('voters') or []
+    voters = as_list(flow.get('voters'))
     legacy_voters = not voters or all(
-        (voter.get('tag') or '').lower() in {'decision', 'winner'}
+        (as_dict(voter).get('tag') or '').lower() in {'decision', 'winner'}
         for voter in voters
     )
 
@@ -513,7 +522,7 @@ def speech_statistics():
 @app.route('/wpm-plot', methods=['GET'])
 def wpm_plot():
     plt.switch_backend('Agg')
-    interval = request.args.get('interval', default=2, type=float)
+    interval = request.args.get('interval', default=4, type=float)
     interval = min(max(interval, 0.5), 10)
 
     def plot_wpm(first_series, second_series):
@@ -900,6 +909,8 @@ def view_entries():
         if winner is None:
             entry['winner'] = "Not available"  # Set to 'Not available' if winner is None
         else:
+            winner = str(winner)
+            entry['winner'] = winner
             # Split the winner string by spaces and normalize the first word
             first_word = winner.split()[0].strip().lower()  # Get the first word and normalize it
             print(first_word)
