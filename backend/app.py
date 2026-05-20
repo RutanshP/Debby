@@ -48,15 +48,18 @@ logger = logging.getLogger(__name__)
 logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 
-# MongoDB setup
-client = MongoClient(
-    os.getenv("MONGO_URI", "mongodb://localhost:27017/"),
-    serverSelectionTimeoutMS=2000,
-    connectTimeoutMS=2000,
-    socketTimeoutMS=2000,
-)
-db = client.debate_db
-entries = db.entries
+MONGO_URI = os.getenv("MONGO_URI")
+client = None
+entries = None
+if MONGO_URI:
+    client = MongoClient(
+        MONGO_URI,
+        serverSelectionTimeoutMS=2000,
+        connectTimeoutMS=2000,
+        socketTimeoutMS=2000,
+    )
+    db = client.debate_db
+    entries = db.entries
 LOCAL_ENTRIES_FILE = os.path.join(DATA_DIR, 'debate_entries.json')
 
 
@@ -126,6 +129,11 @@ def save_local_entry(entry):
 
 
 def insert_entry(entry):
+    if entries is None:
+        save_local_entry(entry)
+        logger.info('Debate entry logged successfully to local JSON.')
+        return 'local JSON'
+
     try:
         entries.insert_one(dict(entry))
         logger.info('Debate entry logged successfully to MongoDB.')
@@ -138,6 +146,12 @@ def insert_entry(entry):
 
 
 def get_entries(limit=None):
+    if entries is None:
+        local_entries = sorted(load_local_entries(), key=lambda entry: entry.get('date_time'), reverse=True)
+        if limit:
+            local_entries = local_entries[:limit]
+        return [format_entry(entry) for entry in local_entries]
+
     try:
         cursor = entries.find({}).sort('date_time', -1)
         if limit:
@@ -152,6 +166,12 @@ def get_entries(limit=None):
 
 
 def get_entry_by_date_time(date_time):
+    if entries is None:
+        for entry in load_local_entries():
+            if entry.get('date_time') == date_time:
+                return format_entry(entry)
+        return None
+
     try:
         entry = entries.find_one({'date_time': date_time})
         return format_entry(entry) if entry else None
