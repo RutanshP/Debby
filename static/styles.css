@@ -923,7 +923,8 @@ textarea.topic {
     margin-bottom: 0.25rem;
 }
 
-.drill-timer-box input {
+.drill-timer-box input,
+.drill-timer-box select {
     background-color: #e0f7fa;
     border: 2px solid #00796b;
     border-radius: 0.3125em;

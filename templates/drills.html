@@ -74,7 +74,13 @@
                     </div>
                     <div class="drill-timer-box">
                         <label for="drillTimerInput">Timer</label>
-                        <input id="drillTimerInput" type="text" value="01:00" pattern="\d{1,2}:\d{2}">
+                        <select id="drillTimerInput">
+                            <option value="00:30">30 sec</option>
+                            <option value="00:45">45 sec</option>
+                            <option value="01:00" selected>1 min</option>
+                            <option value="01:30">1:30</option>
+                            <option value="02:00">2 min</option>
+                        </select>
                     </div>
                 </div>
                 <div class="drill-prompt" id="drillPrompt"></div>

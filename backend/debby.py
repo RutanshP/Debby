@@ -35,10 +35,10 @@ SPEED_PASSAGES_FILE = os.path.join(DATA_DIR, 'speed_passages.json')
 SPEED_PASSAGE_REUSE_THRESHOLD = 20
 
 
-def _json_from_model(messages, fallback):
+def _json_from_model(messages, fallback, max_tokens=700):
     response = client.chat.completions.create(
         model="gpt-4o-mini-2024-07-18",
-        max_tokens=700,
+        max_tokens=max_tokens,
         temperature=0.7,
         response_format={"type": "json_object"},
         messages=messages
@@ -75,7 +75,56 @@ def _looks_like_speed_passage(text):
     if lower_text.startswith(instruction_starts):
         return False
 
-    return len(re.findall(r"\b[\w']+\b", text)) >= 120
+    return len(re.findall(r"\b[\w']+\b", text)) >= 30
+
+
+def _word_count(text):
+    return len(re.findall(r"\b[\w']+\b", text or ""))
+
+
+def speed_passage_word_target(timer_seconds):
+    try:
+        timer_seconds = int(timer_seconds)
+    except (TypeError, ValueError):
+        timer_seconds = 60
+
+    return min(max(round(timer_seconds * 5), 30), 600)
+
+
+def _fit_speed_passage_to_target(text, target_words):
+    words = re.findall(r"\S+", (text or '').strip())
+    if len(words) <= target_words:
+        return (text or '').strip()
+
+    trimmed = " ".join(words[:target_words]).strip()
+    if trimmed and trimmed[-1] not in ".!?":
+        trimmed += "."
+    return trimmed
+
+
+def _speed_fallback_passage(target_words):
+    sentences = [
+        "Debate rewards students who can read quickly, listen carefully, and make clear decisions under pressure.",
+        "A strong speaker does not simply move fast; they choose words with purpose and keep every claim connected to a reason.",
+        "When a round becomes complicated, the best debaters slow their thinking down even while their voice stays energetic.",
+        "They identify the main conflict, explain why it matters, and compare impacts in language the judge can follow.",
+        "Speed reading practice builds that control because it forces the speaker to balance pace, breathing, and accuracy.",
+        "If the words blur together, the argument loses force, but if the delivery is too slow, important analysis may never arrive.",
+        "The goal is not noise or panic; the goal is efficient communication.",
+        "Good practice also teaches recovery.",
+        "A speaker might stumble on a phrase, pause for a breath, and then return to the sentence without losing confidence.",
+        "Over time, those small recoveries become part of a calm rhythm.",
+        "Students who practice this way usually become easier to flow because their transitions are cleaner and their emphasis is more deliberate.",
+        "They know when to press forward, when to mark a key phrase, and when to let a judge absorb the point.",
+        "In tournament rounds, that skill can decide close debates.",
+        "The team with the clearest explanation of the most important issue often beats the team with more disconnected material.",
+        "A good speech therefore sounds fast, organized, and intentional at the same time.",
+        "Every sentence should help the listener understand what is being won, what is being answered, and why the ballot should move in one direction.",
+    ]
+    passage = " ".join(sentences)
+    while _word_count(passage) < target_words:
+        passage = f"{passage} {passage}"
+    return _fit_speed_passage_to_target(passage, target_words)
 
 
 def _load_speed_passages():
@@ -114,14 +163,14 @@ def _save_speed_passage(drill):
         "topic": drill.get('topic') or "Speed Reading",
         "prompt": drill.get('prompt', '').strip(),
         "task": "Read the passage aloud, then submit your recording.",
-        "timer_seconds": 75,
+        "timer_seconds": drill.get('timer_seconds') or 60,
     })
 
     with open(SPEED_PASSAGES_FILE, 'w', encoding='utf-8') as file:
         json.dump(passages, file, indent=2)
 
 
-def _cached_speed_drill():
+def _cached_speed_drill(timer_seconds=None):
     passages = _load_speed_passages()
     if len(passages) < SPEED_PASSAGE_REUSE_THRESHOLD:
         return None
@@ -129,7 +178,7 @@ def _cached_speed_drill():
     drill = dict(random.choice(passages))
     drill['title'] = DRILL_TYPES['speed']
     drill['task'] = "Read the passage aloud, then submit your recording."
-    drill['timer_seconds'] = 75
+    drill['timer_seconds'] = timer_seconds or drill.get('timer_seconds') or 60
     return drill
 
 
@@ -255,14 +304,19 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
     }
 
 
-def generate_drill(drill_type):
+def generate_drill(drill_type, timer_seconds=None):
     if drill_type not in DRILL_TYPES:
         raise ValueError("Unknown drill type.")
 
     if drill_type == 'speed':
-        cached_drill = _cached_speed_drill()
+        timer_seconds = timer_seconds or 60
+        word_target = speed_passage_word_target(timer_seconds)
+        cached_drill = _cached_speed_drill(timer_seconds)
         if cached_drill:
             return cached_drill
+    else:
+        timer_seconds = timer_seconds or 60
+        word_target = None
 
     drill_guidance = {
         'rebuttal': (
@@ -270,8 +324,8 @@ def generate_drill(drill_type):
             "and one paragraph argument with claim, warrant, and impact."
         ),
         'speed': (
-            "Create a two-paragraph speed-reading passage about debate, sports, school, "
-            "or technology. It should be 220-280 words total, readable aloud, and include "
+            "Create a speed-reading passage about debate, sports, school, or technology. "
+            f"It must be about {word_target} words total, readable aloud, and include "
             "varied punctuation so the user can practice pacing. The prompt must be the exact "
             "words the user should read aloud. The task must only tell the user to read the "
             "passage aloud; do not ask them to discuss, explain, write, or answer anything."
@@ -289,18 +343,9 @@ def generate_drill(drill_type):
     fallback = {
         "title": DRILL_TYPES[drill_type],
         "topic": "Resolved: Schools should require financial literacy classes.",
-        "prompt": (
-            "Schools should require financial literacy because students need practical skills for adulthood. "
-            "A student who understands budgets, interest, taxes, and savings can make better decisions before "
-            "they face real consequences. These classes would not replace academic subjects; they would connect "
-            "school to daily life and help students avoid common financial mistakes.\n\n"
-            "The strongest reason is prevention. Many young adults sign loans, open credit cards, or choose jobs "
-            "without understanding the long-term tradeoffs. If schools teach these skills early, students can "
-            "graduate with more confidence, protect themselves from debt traps, and help their families make "
-            "more informed choices."
-        ) if drill_type == 'speed' else "Schools should require financial literacy because students need practical skills for adulthood.",
+        "prompt": _speed_fallback_passage(word_target) if drill_type == 'speed' else "Schools should require financial literacy because students need practical skills for adulthood.",
         "task": "Read the passage aloud, then submit your recording." if drill_type == 'speed' else "Give your response aloud, then submit your recording.",
-        "timer_seconds": 60 if drill_type != 'speed' else 75,
+        "timer_seconds": timer_seconds,
     }
 
     if drill_type == 'contentions':
@@ -327,15 +372,17 @@ def generate_drill(drill_type):
             },
             {"role": "user", "content": drill_guidance[drill_type]},
         ],
-        fallback
+        fallback,
+        max_tokens=1400 if drill_type == 'speed' else 700
     )
 
     if drill_type == 'speed':
         drill['title'] = DRILL_TYPES['speed']
         drill['task'] = "Read the passage aloud, then submit your recording."
-        drill['timer_seconds'] = 75
+        drill['timer_seconds'] = timer_seconds
         if not _looks_like_speed_passage(drill.get('prompt')):
             drill['prompt'] = fallback['prompt']
+        drill['prompt'] = _fit_speed_passage_to_target(drill.get('prompt'), word_target)
         _save_speed_passage(drill)
     elif drill_type in {'rebuttal', 'impact'}:
         drill['task'] = "Give your response aloud, then submit your recording."

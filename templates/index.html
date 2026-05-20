@@ -222,7 +222,16 @@
             <div class="timer-container">
                 <h3>Timer</h3>
                 <label for="customTime">Speech Timer</label>
-                <input type="text" id="customTime" value="02:00" pattern="\d{1,2}:\d{2}" placeholder="MM:SS">
+                <select id="customTime">
+                    <option value="00:30">30 sec</option>
+                    <option value="00:45">45 sec</option>
+                    <option value="01:00">1 min</option>
+                    <option value="01:30">1:30</option>
+                    <option value="02:00" selected>2 min</option>
+                    <option value="03:00">3 min</option>
+                    <option value="04:00">4 min</option>
+                    <option value="05:00">5 min</option>
+                </select>
                 <div id="timer" class="timer-display">02:00</div>
                 <div class="timer-warning">Max: <span id="maxTimeDisplay">2:00</span></div>
             </div>
@@ -275,7 +284,7 @@
         }
 
         // Update the timer display and maximum time display when the custom time input changes
-        document.getElementById('customTime').addEventListener('input', function() {
+        document.getElementById('customTime').addEventListener('change', function() {
             const customTime = document.getElementById('customTime').value;
             updateTimerDisplay(customTime);
             updateMaxTimeDisplay(customTime);

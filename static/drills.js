@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const minutes = Number(match[1]);
         const seconds = Number(match[2] || 0);
-        return Math.min(Math.max((minutes * 60) + seconds, 10), 600);
+        return Math.min(Math.max((minutes * 60) + seconds, 1), 600);
     }
 
     function setLoading(message) {
@@ -238,7 +238,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await fetchJson('/api/generate-drill', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({ drill_type: currentType })
+                body: JSON.stringify({
+                    drill_type: currentType,
+                    timer_seconds: parseTime(timerInput.value)
+                })
             });
 
             currentDrill = data.drill;
@@ -381,7 +384,8 @@ document.addEventListener('DOMContentLoaded', () => {
         feedbackEl.innerHTML = `
             <div class="feedback-score">${escapeHtml(feedback.wpm)} WPM</div>
             <h3>${escapeHtml(feedback.headline)}</h3>
-            <p><strong>Accuracy:</strong> ${escapeHtml(feedback.accuracy)}%</p>
+            <p><strong>Accuracy:</strong> ${escapeHtml(feedback.accuracy)}% of attempted words</p>
+            <p><strong>Completion:</strong> ${escapeHtml(feedback.completion)}% of the passage</p>
             <p><strong>Duration:</strong> ${escapeHtml(feedback.duration_seconds)}s</p>
             <p><strong>Recognized words:</strong> ${escapeHtml(feedback.word_count)}</p>
             <div class="speed-chart-card">
@@ -541,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
     submitButton.addEventListener('click', submitTypedDrill);
     recordSpeedButton.addEventListener('click', startSpeedRecording);
     stopSpeedButton.addEventListener('click', stopSpeedRecording);
-    timerInput.addEventListener('input', () => {
+    timerInput.addEventListener('change', () => {
         if (!currentDrill) {
             const displayTime = formatTime(parseTime(timerInput.value));
             liveTimerEl.textContent = displayTime;

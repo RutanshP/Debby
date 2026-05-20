@@ -254,12 +254,16 @@ def normalize_words(text):
 def calculate_reading_accuracy(reference_text, spoken_text):
     reference_words = normalize_words(reference_text)
     spoken_words = normalize_words(spoken_text)
-    if not reference_words:
-        return 0
+    if not reference_words or not spoken_words:
+        return {'accuracy': 0, 'completion': 0, 'matched_words': 0}
 
     matcher = SequenceMatcher(None, reference_words, spoken_words)
     matched_words = sum(block.size for block in matcher.get_matching_blocks())
-    return round((matched_words / len(reference_words)) * 100)
+    return {
+        'accuracy': min(round((matched_words / len(spoken_words)) * 100), 100),
+        'completion': min(round((matched_words / len(reference_words)) * 100), 100),
+        'matched_words': matched_words
+    }
 
 
 def fallback_flow_for_entry(entry):
@@ -640,9 +644,10 @@ def home():
 def api_generate_drill():
     data = request.get_json(silent=True) or {}
     drill_type = data.get('drill_type', 'rebuttal')
+    timer_seconds = data.get('timer_seconds')
 
     try:
-        drill = generate_drill(drill_type)
+        drill = generate_drill(drill_type, timer_seconds=timer_seconds)
         drill['drill_type'] = drill_type
         return jsonify({'drill': drill})
     except Exception as e:
@@ -684,9 +689,11 @@ def api_score_speed_drill():
         duration_seconds = max(len(audio) / 1000.0, 1)
         word_count = transcript_word_count(transcript)
         wpm = round((word_count / duration_seconds) * 60)
-        accuracy = calculate_reading_accuracy(passage, transcript)
+        reading_stats = calculate_reading_accuracy(passage, transcript)
+        accuracy = reading_stats['accuracy']
+        completion = reading_stats['completion']
 
-        if wpm >= 190 and accuracy >= 85:
+        if wpm >= 190 and accuracy >= 85 and completion >= 80:
             headline = 'Fast and controlled'
         elif wpm >= 160:
             headline = 'Good pace, keep sharpening clarity'
@@ -698,8 +705,11 @@ def api_score_speed_drill():
                 'headline': headline,
                 'wpm': wpm,
                 'accuracy': accuracy,
+                'completion': completion,
                 'duration_seconds': round(duration_seconds, 1),
                 'word_count': word_count,
+                'matched_words': reading_stats['matched_words'],
+                'passage_word_count': transcript_word_count(passage),
                 'transcript': transcript,
                 'wpm_series': calculate_wpm_series(drill_audio_file_path, words, interval=4),
             }
