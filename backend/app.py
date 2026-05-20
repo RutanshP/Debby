@@ -922,30 +922,34 @@ def view_entries():
     user_wins = 0
     debby_wins = 0
 
-    for entry in all_entries:
-        entry['flow'] = normalize_flow_for_entry(entry)
-        winner = entry.get('winner')  # Get the 'winner' field from the entry
+    for index, entry in enumerate(all_entries):
+        try:
+            entry['flow'] = normalize_flow_for_entry(entry)
+            winner = entry.get('winner')
 
-        if winner is None:
-            entry['winner'] = "Not available"  # Set to 'Not available' if winner is None
-        else:
+            if winner is None:
+                entry['winner'] = "Not available"
+                continue
+
             winner = str(winner)
             entry['winner'] = winner
-            # Split the winner string by spaces and normalize the first word
-            first_word = winner.split()[0].strip().lower()  # Get the first word and normalize it
-            print(first_word)
+            first_word = (winner.split() or [''])[0].strip().lower()
 
-            # Check who won based on the first word of the 'winner' field
             if first_word == 'for':
                 user_wins += 1
             elif first_word == 'against':
                 debby_wins += 1
+        except Exception as error:
+            logger.exception(
+                'Could not normalize history entry %s (%s)',
+                index,
+                entry.get('date_time', 'unknown')
+            )
+            entry['winner'] = str(entry.get('winner') or 'Not available')
+            entry['flow'] = fallback_flow_for_entry(entry)
 
     # After iterating over all entries, calculate the total
     total_entries = len(all_entries)
-
-    print(f"User Wins: {user_wins}")
-    print(f"Debby's Wins: {debby_wins}")
 
     # Render the results in the view_entries.html template
     return render_template('view_entries.html', entries=all_entries, total_entries=total_entries, user_wins=user_wins, debby_wins=debby_wins)
