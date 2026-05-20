@@ -215,6 +215,8 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
                     "neg_sheet: max 4 rows. Each row has contention, aff_rebuttals, status, judge_note. "
                     "The neg sheet must flow NEG contention -> AFF rebuttals. "
                     "contention/responses/rebuttals/defense objects use tag and summary only. "
+                    "Do not create placeholder responses, rebuttals, or defenses. If no later answer exists, "
+                    "use an empty array; the app already has fixed wording for missing cells. "
                     "tag <= 8 words. summary <= 18 words. status must be unrefuted, refuted, or contested. "
                     "Mark a contention unrefuted only when the opposing side did not answer it. "
                     "ballot has aff_unrefuted, neg_unrefuted, winner, explanation. "

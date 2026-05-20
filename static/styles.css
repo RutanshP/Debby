@@ -585,6 +585,16 @@ textarea.topic {
     padding: 1rem;
 }
 
+.flow-sheet.aff-sheet {
+    background: #f2f7ff;
+    border-color: #b9cdf5;
+}
+
+.flow-sheet.neg-sheet {
+    background: #fff5f5;
+    border-color: #f1b8b8;
+}
+
 .flow-sheet h4 {
     margin: 0 0 0.75rem;
 }
@@ -608,17 +618,20 @@ textarea.topic {
 }
 
 .flow-card {
+    background: #ffffff;
     border: 1px solid #d9e7e4;
     border-radius: 0.5rem;
     padding: 0.85rem;
 }
 
 .flow-card.aff {
-    border-left: 4px solid #00796b;
+    border-color: #b9cdf5;
+    border-left: 4px solid #2f6fd6;
 }
 
 .flow-card.neg {
-    border-left: 4px solid #33665f;
+    border-color: #f1b8b8;
+    border-left: 4px solid #c93d3d;
 }
 
 .flow-card.missing {
@@ -627,11 +640,18 @@ textarea.topic {
 }
 
 .flow-card span {
-    color: #66817d;
     display: block;
     font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
+}
+
+.flow-card.aff span {
+    color: #2f6fd6;
+}
+
+.flow-card.neg span {
+    color: #c93d3d;
 }
 
 .flow-card strong {
