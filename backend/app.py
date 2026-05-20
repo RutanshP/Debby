@@ -345,18 +345,40 @@ def normalize_sheet_row(row, side):
     }
 
     if side == 'aff':
+        neg_responses = (
+            row.get('neg_responses')
+            or row.get('responses')
+            or row.get('neg_rebuttals')
+            or row.get('answers')
+            or []
+        )
+        aff_defense = (
+            row.get('aff_defense')
+            or row.get('defense')
+            or row.get('aff_responses')
+            or row.get('aff_rebuttals')
+            or []
+        )
         normalized['neg_responses'] = [
             flow_item(as_dict(item).get('tag'), as_dict(item).get('summary'))
-            for item in as_list(row.get('neg_responses'))
+            for item in as_list(neg_responses)
         ]
         normalized['aff_defense'] = [
             flow_item(as_dict(item).get('tag'), as_dict(item).get('summary'))
-            for item in as_list(row.get('aff_defense'))
+            for item in as_list(aff_defense)
         ]
     else:
+        aff_rebuttals = (
+            row.get('aff_rebuttals')
+            or row.get('rebuttals')
+            or row.get('aff_responses')
+            or row.get('responses')
+            or row.get('defense')
+            or []
+        )
         normalized['aff_rebuttals'] = [
             flow_item(as_dict(item).get('tag'), as_dict(item).get('summary'))
-            for item in as_list(row.get('aff_rebuttals'))
+            for item in as_list(aff_rebuttals)
         ]
 
     return normalized

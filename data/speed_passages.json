@@ -12,5 +12,12 @@
     "prompt": "Debate is a crucial aspect of education that sharpens students' critical thinking and public speaking skills. In a debate, participants must analyze complex issues, construct coherent arguments, and respond to opposing viewpoints. This process not only enhances their ability to think on their feet but also fosters respect for diverse perspectives. Moreover, engaging in debates cultivates teamwork; students often collaborate to prepare their cases, sharing insights and strategies. As they practice, they learn to articulate their thoughts clearly and persuasively. These skills are invaluable, extending beyond the classroom into future careers, where effective communication is key. Schools that prioritize debate programs empower students to become informed citizens, capable of discussing important societal issues with confidence. Thus, integrating debate into the curriculum is essential for developing well-rounded, articulate individuals.",
     "task": "Read the passage aloud, then submit your recording.",
     "timer_seconds": 30
+  },
+  {
+    "title": "Speed Reading",
+    "topic": "Speed Reading",
+    "prompt": "Debate is an essential skill that transcends the classroom. It fosters critical thinking, enhances communication, and prepares students for real-world challenges. In a debate, participants must articulate their viewpoints clearly and persuasively. This not only boosts confidence but also encourages respect for differing opinions. For instance, when arguing a point, students learn to anticipate counterarguments, enhancing their analytical abilities. Additionally, debate promotes teamwork and collaboration, as participants often work in pairs or groups to prepare their cases. Schools that incorporate debate into their curricula notice improved academic performance across various subjects. In sports, similar skills are vital\u2014players must strategize, communicate effectively, and adapt quickly during games. Thus, whether in debate or sports, developing these skills in school prepares students for success in any field they choose to pursue.",
+    "task": "Read the passage aloud, then submit your recording.",
+    "timer_seconds": 30
   }
 ]
