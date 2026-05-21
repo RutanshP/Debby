@@ -1,0 +1,264 @@
+"""HTTP routes for drill generation, scoring, and audio scoring."""
+
+from __future__ import annotations
+
+import os
+import uuid
+from datetime import datetime, timezone
+from typing import Any
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+
+from models.drill import (
+    Drill,
+    DrillCreateRequest,
+    DrillPrompt,
+    DrillScore,
+    DrillScoreRequest,
+    DrillType,
+    SpeedScore,
+)
+from services.drills import (
+    calculate_reading_accuracy,
+    compute_wpm,
+    generate_drill,
+    score_drill,
+    transcribe_audio,
+)
+
+# ---------------------------------------------------------------------------
+# Auth dep (provided by A1; we import lazily so a minimal stub can supply it
+# during integration). We resolve at call-time to keep this unit independent.
+# ---------------------------------------------------------------------------
+
+
+def _get_current_user_dep():
+    try:
+        from deps.auth import get_current_user  # type: ignore
+    except Exception:  # pragma: no cover - fallback for early integration
+        from fastapi import Header
+
+        async def get_current_user(authorization: str | None = Header(default=None)):
+            if not authorization or not authorization.lower().startswith("bearer "):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Missing or invalid bearer token.",
+                )
+
+            class _User:
+                id = "test-user"
+                email = None
+
+            return _User()
+
+    return get_current_user
+
+
+get_current_user = _get_current_user_dep()
+
+
+# ---------------------------------------------------------------------------
+# Supabase service-role client (A4). We use a lazy helper so tests can patch.
+# ---------------------------------------------------------------------------
+
+
+def _supabase_client():
+    try:
+        from services.supabase import service_role_client  # type: ignore
+
+        return service_role_client()
+    except Exception:
+        return None
+
+
+# In-memory fallback store so the unit is testable without Supabase.
+_FALLBACK_STORE: dict[str, dict[str, Any]] = {}
+
+
+def _persist_drill(row: dict[str, Any]) -> dict[str, Any]:
+    sb = _supabase_client()
+    if sb is None:
+        _FALLBACK_STORE[row["id"]] = row
+        return row
+    try:
+        result = sb.table("drills").insert(row).execute()
+        data = getattr(result, "data", None)
+        if isinstance(data, list) and data:
+            return data[0]
+    except Exception:
+        pass
+    _FALLBACK_STORE[row["id"]] = row
+    return row
+
+
+def _fetch_drill(drill_id: str, user_id: str) -> dict[str, Any] | None:
+    sb = _supabase_client()
+    if sb is None:
+        row = _FALLBACK_STORE.get(drill_id)
+        if row and row["user_id"] == user_id:
+            return row
+        return None
+    try:
+        result = (
+            sb.table("drills")
+            .select("*")
+            .eq("id", drill_id)
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+        return getattr(result, "data", None)
+    except Exception:
+        row = _FALLBACK_STORE.get(drill_id)
+        if row and row["user_id"] == user_id:
+            return row
+        return None
+
+
+def _update_drill(drill_id: str, user_id: str, patch: dict[str, Any]) -> None:
+    sb = _supabase_client()
+    if sb is None:
+        if drill_id in _FALLBACK_STORE:
+            _FALLBACK_STORE[drill_id].update(patch)
+        return
+    try:
+        sb.table("drills").update(patch).eq("id", drill_id).eq("user_id", user_id).execute()
+    except Exception:
+        if drill_id in _FALLBACK_STORE:
+            _FALLBACK_STORE[drill_id].update(patch)
+
+
+def _row_to_drill(row: dict[str, Any]) -> Drill:
+    prompt_data = row["prompt"]
+    if isinstance(prompt_data, str):
+        import json
+
+        prompt_data = json.loads(prompt_data)
+    score_data = row.get("score")
+    if isinstance(score_data, str):
+        import json
+
+        score_data = json.loads(score_data)
+    return Drill(
+        id=str(row["id"]),
+        user_id=str(row["user_id"]),
+        drill_type=row["drill_type"],
+        prompt=DrillPrompt(**prompt_data),
+        response=row.get("response"),
+        score=DrillScore(**score_data) if score_data else None,
+        timer_seconds=row.get("timer_seconds"),
+        created_at=row.get("created_at"),
+    )
+
+
+router = APIRouter()
+
+
+@router.post("/drills", response_model=Drill)
+async def create_drill(
+    body: DrillCreateRequest,
+    user=Depends(get_current_user),
+) -> Drill:
+    try:
+        prompt = await generate_drill(body.drill_type, timer_seconds=body.timer_seconds)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    row = {
+        "id": str(uuid.uuid4()),
+        "user_id": user.id,
+        "drill_type": body.drill_type,
+        "prompt": prompt.model_dump(),
+        "response": None,
+        "score": None,
+        "timer_seconds": prompt.timer_seconds,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    stored = _persist_drill(row)
+    return _row_to_drill(stored)
+
+
+@router.post("/drills/{drill_id}/score", response_model=DrillScore)
+async def score_drill_route(
+    drill_id: str,
+    body: DrillScoreRequest,
+    user=Depends(get_current_user),
+) -> DrillScore:
+    row = _fetch_drill(drill_id, user.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Drill not found.")
+
+    drill = _row_to_drill(row)
+    score = await score_drill(drill.drill_type, drill.prompt, body.response)
+    _update_drill(drill_id, user.id, {"response": body.response, "score": score.model_dump()})
+    return score
+
+
+@router.post("/drills/{drill_id}/score-speed", response_model=SpeedScore)
+async def score_speed_route(
+    drill_id: str,
+    audio: UploadFile = File(...),
+    user=Depends(get_current_user),
+) -> SpeedScore:
+    row = _fetch_drill(drill_id, user.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Drill not found.")
+
+    api_key = (os.getenv("ASSEMBLYAI_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AssemblyAI not configured.")
+
+    drill = _row_to_drill(row)
+    audio_bytes = await audio.read()
+
+    try:
+        transcript, duration = await transcribe_audio(audio_bytes, api_key)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Transcription failed: {exc}") from exc
+
+    accuracy = calculate_reading_accuracy(drill.prompt.prompt, transcript)
+    wpm = compute_wpm(transcript, duration)
+
+    _update_drill(
+        drill_id,
+        user.id,
+        {
+            "response": transcript,
+            "score": {"accuracy": accuracy, "wpm": wpm},
+        },
+    )
+    return SpeedScore(accuracy=accuracy, wpm=wpm)
+
+
+@router.post("/drills/{drill_id}/score-audio", response_model=DrillScore)
+async def score_audio_route(
+    drill_id: str,
+    audio: UploadFile = File(...),
+    user=Depends(get_current_user),
+) -> DrillScore:
+    row = _fetch_drill(drill_id, user.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Drill not found.")
+
+    drill = _row_to_drill(row)
+    if drill.drill_type not in {"rebuttal", "impact", "contention"}:
+        raise HTTPException(
+            status_code=400, detail="This drill type does not use audio scoring here."
+        )
+
+    api_key = (os.getenv("ASSEMBLYAI_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AssemblyAI not configured.")
+
+    audio_bytes = await audio.read()
+    try:
+        transcript, _duration = await transcribe_audio(audio_bytes, api_key)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Transcription failed: {exc}") from exc
+
+    if not transcript:
+        raise HTTPException(status_code=400, detail="No speech was detected in the recording.")
+
+    score = await score_drill(drill.drill_type, drill.prompt, transcript)
+    _update_drill(drill_id, user.id, {"response": transcript, "score": score.model_dump()})
+    return score
