@@ -259,11 +259,39 @@ def calculate_reading_accuracy(reference_text, spoken_text):
 
     matcher = SequenceMatcher(None, reference_words, spoken_words)
     matched_words = sum(block.size for block in matcher.get_matching_blocks())
+    completion_word_index = furthest_passage_word_reached(reference_words, spoken_words)
     return {
         'accuracy': min(round((matched_words / len(spoken_words)) * 100), 100),
-        'completion': min(round((matched_words / len(reference_words)) * 100), 100),
+        'completion': min(round((completion_word_index / len(reference_words)) * 100), 100),
         'matched_words': matched_words
     }
+
+
+def furthest_passage_word_reached(reference_words, spoken_words):
+    best_end = 0
+    tail_lengths = (8, 7, 6, 5, 4, 3)
+
+    for tail_length in tail_lengths:
+        if len(spoken_words) < tail_length:
+            continue
+
+        start_positions = range(max(len(spoken_words) - 18, 0), len(spoken_words) - tail_length + 1)
+        for spoken_start in start_positions:
+            spoken_window = spoken_words[spoken_start:spoken_start + tail_length]
+            for reference_start in range(0, len(reference_words) - tail_length + 1):
+                reference_window = reference_words[reference_start:reference_start + tail_length]
+                similarity = SequenceMatcher(None, reference_window, spoken_window).ratio()
+                if similarity >= 0.78:
+                    best_end = max(best_end, reference_start + tail_length)
+
+        if best_end:
+            return best_end
+
+    matcher = SequenceMatcher(None, reference_words, spoken_words)
+    for block in matcher.get_matching_blocks():
+        if block.size:
+            best_end = max(best_end, block.a + block.size)
+    return best_end
 
 
 def fallback_flow_for_entry(entry):
