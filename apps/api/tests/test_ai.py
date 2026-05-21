@@ -1,0 +1,280 @@
+"""Tests for the AI service + routes. All OpenAI calls are mocked."""
+
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from fastapi.testclient import TestClient
+
+import main
+from models.flow import FlowBallot
+from routes import ai as ai_route
+from services import ai as ai_service
+
+
+# --- helpers ------------------------------------------------------------------
+
+
+def _chat_completion(content: str):
+    """Build a minimal object shaped like an OpenAI ChatCompletion."""
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+    )
+
+
+class _AsyncStream:
+    """Async iterator producing fake streaming chunks."""
+
+    def __init__(self, tokens: list[str]):
+        self._tokens = tokens
+
+    def __aiter__(self):
+        return self._gen()
+
+    async def _gen(self):
+        for tok in self._tokens:
+            yield SimpleNamespace(
+                choices=[SimpleNamespace(delta=SimpleNamespace(content=tok))]
+            )
+
+
+@pytest.fixture
+def patched_client(monkeypatch: pytest.MonkeyPatch):
+    """Replace the shared client's chat.completions.create with an AsyncMock."""
+    fake_create = AsyncMock()
+    fake = MagicMock()
+    fake.chat.completions.create = fake_create
+    monkeypatch.setattr(ai_service, "client", fake)
+    return fake_create
+
+
+# --- service unit tests -------------------------------------------------------
+
+
+async def test_ai_speech_returns_string(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("hello debaters")
+    out = await ai_service.ai_speech("AI in schools")
+    assert out == "hello debaters"
+    patched_client.assert_awaited_once()
+
+
+async def test_ai_response_returns_string(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("neg rebuttal")
+    out = await ai_service.ai_response("topic", "aff speech text")
+    assert out == "neg rebuttal"
+
+
+async def test_ai_response_stream_yields_chunks(patched_client: AsyncMock):
+    patched_client.return_value = _AsyncStream(["Hello ", "my name ", "is Debby."])
+    tokens = [t async for t in ai_service.ai_response_stream("t", "speech")]
+    assert tokens == ["Hello ", "my name ", "is Debby."]
+
+
+async def test_winner_structured_output(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion(
+        json.dumps({"winner_side": "aff", "rfd": "Better impacts on healthcare."})
+    )
+    verdict = await ai_service.winner("aff", "neg", "aff2", "topic")
+    assert verdict.winner_side == "aff"
+    assert "healthcare" in verdict.rfd
+
+
+async def test_winner_accepts_legacy_for_against(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion(
+        json.dumps({"winner_side": "against", "rfd": "neg wins"})
+    )
+    verdict = await ai_service.winner("a", "b", "c", "t")
+    assert verdict.winner_side == "neg"
+
+
+async def test_winner_malformed_json_raises(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("not json {{{")
+    with pytest.raises(ValueError, match="malformed JSON"):
+        await ai_service.winner("a", "b", "c", "t")
+
+
+async def test_winner_missing_inputs_raises(patched_client: AsyncMock):
+    with pytest.raises(ValueError):
+        await ai_service.winner("", "neg", "aff2", "topic")
+
+
+async def test_generate_round_flow_returns_model(patched_client: AsyncMock):
+    payload = {
+        "aff_sheet": [
+            {
+                "contention": {"tag": "Econ growth", "summary": "Helps GDP."},
+                "neg_responses": [{"tag": "Inflation", "summary": "Hurts prices."}],
+                "aff_defense": [],
+                "status": "contested",
+                "judge_note": "Both sides clashed.",
+            }
+        ],
+        "neg_sheet": [
+            {
+                "contention": {"tag": "Inequality", "summary": "Top 1% gains."},
+                "aff_rebuttals": [],
+                "status": "unrefuted",
+                "judge_note": "Dropped by aff.",
+            }
+        ],
+        "ballot": {
+            "aff_unrefuted": 0,
+            "neg_unrefuted": 1,
+            "winner": "neg",
+            "explanation": "Neg dropped contention carries.",
+        },
+        "dropped": [],
+        "voters": [{"tag": "Impact", "winner": "neg", "reason": "Bigger econ harm."}],
+        "recommended_drills": ["rebuttal", "impact"],
+    }
+    patched_client.return_value = _chat_completion(json.dumps(payload))
+
+    flow = await ai_service.generate_round_flow("topic", "aff", "neg", "aff2", "rfd")
+    assert isinstance(flow, FlowBallot)
+    assert len(flow.aff_sheet) == 1
+    assert len(flow.neg_sheet) == 1
+    assert flow.ballot.winner == "neg"
+    assert flow.recommended_drills == ["rebuttal", "impact"]
+
+
+async def test_generate_round_flow_malformed_json_raises(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("definitely not json")
+    with pytest.raises(ValueError, match="malformed JSON"):
+        await ai_service.generate_round_flow("t", "a", "n", "a2", "r")
+
+
+async def test_generate_round_flow_caps_lists(patched_client: AsyncMock):
+    rows_aff = [
+        {
+            "contention": {"tag": f"a{i}", "summary": "s"},
+            "neg_responses": [],
+            "aff_defense": [],
+            "status": "contested",
+            "judge_note": "n",
+        }
+        for i in range(8)
+    ]
+    payload = {"aff_sheet": rows_aff, "neg_sheet": [], "voters": [], "dropped": []}
+    patched_client.return_value = _chat_completion(json.dumps(payload))
+    flow = await ai_service.generate_round_flow("t", "a", "n", "a2", "r")
+    assert len(flow.aff_sheet) == 4
+
+
+# --- route tests --------------------------------------------------------------
+
+
+def _override_user():
+    return ai_route.User(id="user-1", email="u@example.com")
+
+
+@pytest.fixture
+def client_authed():
+    main.app.dependency_overrides[ai_route.get_current_user] = _override_user
+    try:
+        yield TestClient(main.app)
+    finally:
+        main.app.dependency_overrides.pop(ai_route.get_current_user, None)
+
+
+@pytest.fixture
+def client_unauthed():
+    return TestClient(main.app)
+
+
+def test_speech_route_requires_auth(client_unauthed: TestClient):
+    r = client_unauthed.post("/api/ai/speech", json={"topic": "x", "side": "aff"})
+    assert r.status_code == 401
+
+
+def test_response_route_requires_auth(client_unauthed: TestClient):
+    r = client_unauthed.post(
+        "/api/ai/response", json={"topic": "x", "first_speech": "y"}
+    )
+    assert r.status_code == 401
+
+
+def test_judgment_route_requires_auth(client_unauthed: TestClient):
+    r = client_unauthed.post(
+        "/api/ai/judgment",
+        json={"topic": "x", "aff_speech": "a", "neg_speech": "n", "aff_two_speech": "a2"},
+    )
+    assert r.status_code == 401
+
+
+def test_speech_route_happy_path(
+    client_authed: TestClient, patched_client: AsyncMock
+):
+    patched_client.return_value = _chat_completion("a speech")
+    r = client_authed.post("/api/ai/speech", json={"topic": "x", "side": "aff"})
+    assert r.status_code == 200
+    assert r.json() == {"speech": "a speech"}
+
+
+def test_response_route_happy_path(
+    client_authed: TestClient, patched_client: AsyncMock
+):
+    patched_client.return_value = _chat_completion("neg")
+    r = client_authed.post(
+        "/api/ai/response", json={"topic": "x", "first_speech": "y"}
+    )
+    assert r.status_code == 200
+    assert r.json() == {"speech": "neg"}
+
+
+def test_response_stream_route(
+    client_authed: TestClient, patched_client: AsyncMock
+):
+    patched_client.return_value = _AsyncStream(["Hello ", "world"])
+    with client_authed.stream(
+        "POST",
+        "/api/ai/response-stream",
+        json={"topic": "x", "first_speech": "y"},
+    ) as r:
+        assert r.status_code == 200
+        body = b"".join(r.iter_bytes()).decode()
+    assert "data: Hello \n\n" in body
+    assert "data: world\n\n" in body
+    assert body.rstrip().endswith("data: [DONE]")
+
+
+def test_judgment_route_happy_path(
+    client_authed: TestClient, patched_client: AsyncMock
+):
+    flow_payload = {
+        "aff_sheet": [],
+        "neg_sheet": [],
+        "ballot": {"aff_unrefuted": 0, "neg_unrefuted": 0, "winner": "neg", "explanation": "tie"},
+        "dropped": [],
+        "voters": [],
+        "recommended_drills": [],
+    }
+    patched_client.side_effect = [
+        _chat_completion(json.dumps({"winner_side": "neg", "rfd": "neg wins"})),
+        _chat_completion(json.dumps(flow_payload)),
+    ]
+    r = client_authed.post(
+        "/api/ai/judgment",
+        json={"topic": "x", "aff_speech": "a", "neg_speech": "n", "aff_two_speech": "a2"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["winner_side"] == "neg"
+    assert data["rfd"] == "neg wins"
+    assert data["flow"]["ballot"]["winner"] == "neg"
+
+
+def test_judgment_route_malformed_flow_returns_502(
+    client_authed: TestClient, patched_client: AsyncMock
+):
+    patched_client.side_effect = [
+        _chat_completion(json.dumps({"winner_side": "aff", "rfd": "aff wins"})),
+        _chat_completion("not json"),
+    ]
+    r = client_authed.post(
+        "/api/ai/judgment",
+        json={"topic": "x", "aff_speech": "a", "neg_speech": "n", "aff_two_speech": "a2"},
+    )
+    assert r.status_code == 502
