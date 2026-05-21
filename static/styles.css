@@ -915,7 +915,9 @@ textarea.topic {
 }
 
 .drill-timer-box {
-    min-width: 7rem;
+    display: grid;
+    gap: 0.4rem;
+    min-width: 8.5rem;
 }
 
 .drill-timer-box label {
@@ -934,6 +936,13 @@ textarea.topic {
     margin-bottom: 0.4rem;
     padding: 0.45rem;
     text-align: center;
+    width: 100%;
+}
+
+.drill-timer-box button {
+    font-size: 0.95rem;
+    margin: 0;
+    padding: 0.65rem 0.85rem;
     width: 100%;
 }
 

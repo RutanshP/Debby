@@ -333,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
         context.scale(scale, scale);
         context.clearRect(0, 0, width, height);
 
-        const padding = { top: 18, right: 16, bottom: 42, left: 58 };
+        const padding = { top: 18, right: 16, bottom: 42, left: 78 };
         const plotWidth = width - padding.left - padding.right;
         const plotHeight = height - padding.top - padding.bottom;
         const maxTime = Math.max(...series.map((point) => Number(point.time) || 0), 1);
@@ -355,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
             context.moveTo(padding.left, y);
             context.lineTo(width - padding.right, y);
             context.stroke();
-            context.fillText(String(value), 8, y + 4);
+            context.fillText(String(value), 36, y + 4);
         }
 
         const xTickCount = Math.min(Math.max(series.length - 1, 1), 6);
