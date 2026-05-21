@@ -1,5 +1,7 @@
 # Debby
 
+> **Refactor in progress.** Debby is being rewritten from Flask + vanilla JS to **FastAPI (`apps/api/`)** and **Next.js (`apps/web/`)** with Supabase auth/DB. The legacy Flask app under `backend/`, `static/`, `templates/`, and `main.py` continues to run until cutover. See `apps/api/` and `apps/web/` for the new code and `apps/api/migrations/0001_init.sql` for the new schema.
+
 Debby is a web application for independent debate practice. It lets students generate debate topics, record speeches, receive an AI opponent response, deliver a rebuttal, and review a judge-style reason for decision with speech statistics.
 
 The app currently supports MSPDP and Parliamentary debate practice, including tournament-based Parliamentary topic selection, speed-reading drills, case generation, round history, and delivery analytics.

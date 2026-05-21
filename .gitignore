@@ -26,3 +26,16 @@ data/debate_entries.json
 # --- OS specific ---
 .DS_Store
 Thumbs.db
+
+# --- Next.js / Node ---
+apps/web/node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/coverage/
+apps/web/.env
+apps/web/.env.local
+
+# --- FastAPI venvs ---
+apps/api/.venv/
+apps/api/__pycache__/
+apps/api/.pytest_cache/
