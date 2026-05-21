@@ -191,6 +191,124 @@ def _winner_side_from_rfd(rfd):
     return first_word
 
 
+def _flow_item(tag='Untitled', summary='Open transcripts for details.'):
+    return {
+        "tag": (tag or "Untitled").strip(),
+        "summary": (summary or "Open transcripts for details.").strip(),
+    }
+
+
+def _normalize_flow_items(items, prefix):
+    normalized = []
+    for index, item in enumerate(items or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("id") or f"{prefix}{index}")
+        normalized.append({
+            "id": item_id,
+            "tag": item.get("tag") or f"{prefix.upper()} {index}",
+            "summary": item.get("summary") or "Open transcripts for details.",
+        })
+    return normalized[:4]
+
+
+def _items_for_target(links, target_key, target_id, source_lookup=None):
+    items = []
+    for link in links or []:
+        if not isinstance(link, dict) or str(link.get(target_key)) != str(target_id):
+            continue
+
+        source = {}
+        source_id = link.get("neg_id") or link.get("aff_id")
+        if source_lookup and source_id is not None:
+            source = source_lookup.get(str(source_id), {})
+
+        items.append(_flow_item(
+            link.get("tag") or source.get("tag"),
+            link.get("summary") or source.get("summary")
+        ))
+    return items
+
+
+def _aff_row_status(neg_responses, aff_defense):
+    if not neg_responses:
+        return "unrefuted", "The negative did not directly answer this affirmative contention."
+    if aff_defense:
+        return "contested", "The negative answered this point, and the affirmative gave later defense."
+    return "refuted", "The negative answered this point, and no later affirmative defense was identified."
+
+
+def _neg_row_status(aff_rebuttals):
+    if not aff_rebuttals:
+        return "unrefuted", "The affirmative did not directly answer this negative contention."
+    return "contested", "The affirmative gave a rebuttal to this negative contention."
+
+
+def _build_flow_from_analysis(analysis, rfd, fallback):
+    if not isinstance(analysis, dict):
+        return fallback
+
+    aff_contentions = _normalize_flow_items(analysis.get("aff_contentions"), "a")
+    neg_contentions = _normalize_flow_items(analysis.get("neg_contentions"), "n")
+
+    if not aff_contentions and not neg_contentions:
+        return fallback
+
+    aff_lookup = {item["id"]: item for item in aff_contentions}
+    neg_lookup = {item["id"]: item for item in neg_contentions}
+    neg_to_aff = analysis.get("neg_responses_to_aff") or []
+    aff_defense_to_aff = analysis.get("aff_defense_to_aff") or []
+    aff_to_neg = analysis.get("aff_rebuttals_to_neg") or []
+
+    aff_sheet = []
+    for contention in aff_contentions:
+        neg_responses = _items_for_target(neg_to_aff, "aff_id", contention["id"], neg_lookup)
+        aff_defense = _items_for_target(aff_defense_to_aff, "aff_id", contention["id"], aff_lookup)
+        status, judge_note = _aff_row_status(neg_responses, aff_defense)
+        aff_sheet.append({
+            "contention": _flow_item(contention["tag"], contention["summary"]),
+            "neg_responses": neg_responses,
+            "aff_defense": aff_defense,
+            "status": status,
+            "judge_note": judge_note,
+        })
+
+    neg_sheet = []
+    for contention in neg_contentions:
+        aff_rebuttals = _items_for_target(aff_to_neg, "neg_id", contention["id"], aff_lookup)
+        status, judge_note = _neg_row_status(aff_rebuttals)
+        neg_sheet.append({
+            "contention": _flow_item(contention["tag"], contention["summary"]),
+            "aff_rebuttals": aff_rebuttals,
+            "status": status,
+            "judge_note": judge_note,
+        })
+
+    aff_unrefuted = sum(1 for row in aff_sheet if row["status"] == "unrefuted")
+    neg_unrefuted = sum(1 for row in neg_sheet if row["status"] == "unrefuted")
+    if aff_unrefuted > neg_unrefuted:
+        flow_winner = "aff"
+    elif neg_unrefuted > aff_unrefuted:
+        flow_winner = "neg"
+    else:
+        flow_winner = _winner_side_from_rfd(rfd)
+
+    ballot = analysis.get("ballot") if isinstance(analysis.get("ballot"), dict) else {}
+    return {
+        "aff_sheet": aff_sheet or fallback["aff_sheet"],
+        "neg_sheet": neg_sheet or fallback["neg_sheet"],
+        "ballot": {
+            "aff_unrefuted": aff_unrefuted,
+            "neg_unrefuted": neg_unrefuted,
+            "winner": flow_winner,
+            "explanation": ballot.get("explanation") or _truncate_for_flow(rfd, 180),
+        },
+        "dropped": (analysis.get("dropped") or [])[:4],
+        "voters": (analysis.get("voters") or fallback["voters"])[:3],
+        "recommended_drills": (analysis.get("recommended_drills") or fallback["recommended_drills"])[:4],
+    }
+
+
 def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
     fallback = {
         "aff_sheet": [
@@ -257,25 +375,20 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
             {
                 "role": "system",
                 "content": (
-                    "You create compact parliamentary debate flow sheets as JSON. "
-                    "Return JSON only with keys: aff_sheet, neg_sheet, ballot, dropped, voters, recommended_drills. "
-                    "aff_sheet: max 4 rows. Each row has contention, neg_responses, aff_defense, status, judge_note. "
-                    "The aff sheet must flow AFF contention -> NEG responses -> AFF defense. "
-                    "If a NEG contention directly answers or turns an AFF contention, include that NEG contention "
-                    "inside neg_responses on the matching AFF row too. "
-                    "neg_sheet: max 4 rows. Each row has contention, aff_rebuttals, status, judge_note. "
-                    "The neg sheet must flow NEG contention -> AFF rebuttals. "
-                    "If the AFF rebuttal directly answers a NEG contention, include it in aff_rebuttals even if it "
-                    "is phrased as defense of the original AFF case. "
-                    "Only mark a response/rebuttal empty when there is no direct or implicit clash in the later speech. "
-                    "contention/responses/rebuttals/defense objects use tag and summary only. "
-                    "Do not create placeholder responses, rebuttals, or defenses. If no later answer exists, "
-                    "use an empty array; the app already has fixed wording for missing cells. "
-                    "tag <= 8 words. summary <= 18 words. status must be unrefuted, refuted, or contested. "
-                    "Mark a contention unrefuted only when the opposing side did not answer it. "
-                    "ballot has aff_unrefuted, neg_unrefuted, winner, explanation. "
-                    "Winner must be the side with more unrefuted contentions; if tied, use impact weighing from the RFD. "
-                    "ballot winner must be aff or neg; explanation <= 35 words. "
+                    "You analyze parliamentary debate speeches as JSON. Do not create final UI flow sheets. "
+                    "The app will build aff_sheet and neg_sheet itself. "
+                    "Return JSON only with keys: aff_contentions, neg_contentions, neg_responses_to_aff, "
+                    "aff_defense_to_aff, aff_rebuttals_to_neg, ballot, dropped, voters, recommended_drills. "
+                    "aff_contentions and neg_contentions: max 4 each, objects with id, tag, summary. "
+                    "Use stable ids like a1, a2, n1, n2. tag <= 8 words. summary <= 18 words. "
+                    "neg_responses_to_aff: objects with aff_id, optional neg_id, tag, summary. Include direct "
+                    "negative answers, turns, and negative contentions that directly clash with an aff contention. "
+                    "aff_defense_to_aff: objects with aff_id, tag, summary. Include later affirmative defense of "
+                    "an aff contention from the rebuttal speech. "
+                    "aff_rebuttals_to_neg: objects with neg_id, tag, summary. Include affirmative rebuttals that "
+                    "answer negative contentions, even when phrased as defense of the aff case. "
+                    "Do not create placeholders. Empty arrays mean no direct or implicit clash was found. "
+                    "ballot has explanation only; the app counts unrefuted rows and chooses winner. "
                     "dropped max 4. voters max 3. Each voter winner must be aff or neg. "
                     "recommended_drills can only include: rebuttal, impact, contentions, speed. "
                     "Do not quote long text."
@@ -299,14 +412,7 @@ def generate_round_flow(topic, aff_speech, neg_speech, aff_rebuttal, rfd):
     except json.JSONDecodeError:
         return fallback
 
-    return {
-        "aff_sheet": flow.get("aff_sheet", [])[:4] or fallback["aff_sheet"],
-        "neg_sheet": flow.get("neg_sheet", [])[:4] or fallback["neg_sheet"],
-        "ballot": flow.get("ballot") or fallback["ballot"],
-        "dropped": flow.get("dropped", [])[:4],
-        "voters": flow.get("voters", [])[:3] or fallback["voters"],
-        "recommended_drills": flow.get("recommended_drills", [])[:4],
-    }
+    return _build_flow_from_analysis(flow, rfd, fallback)
 
 
 def generate_drill(drill_type, timer_seconds=None):
@@ -570,12 +676,39 @@ def ai_response(topic, first_speech_transcription):
     message = client.chat.completions.create(
         #model="claude-3-opus-20240229",
         model="gpt-4o-mini-2024-07-18",
-        max_tokens=512,
+        max_tokens=1200,
         temperature=0.0,
         messages=[
-            {"role": "system", "content": "You are a negation parliamentary debater by the name of Debby. Your job is to make a debate case and a subsequent negation speech on the topic you are given."},
-            {"role": "user", "content": "Given the following topic: \n" + topic + "\nand also given the following affirmative speech: \n" + first_speech_transcription +
-                "\nwrite a negation speech in the format of a high school parliamentary debate case that lasts two minutes at average speaking pace, and includes evidence. In the start of your speech, you must say: \"Hello my name is Debby.\""}
+            {
+                "role": "system",
+                "content": (
+                    "You are a negation parliamentary debater named Debby. Write a complete "
+                    "negative speech in a high school parliamentary style. The speech must first "
+                    "present Debby's own negative contentions, then separately refute the "
+                    "affirmative's contentions. If one of Debby's negative contentions directly "
+                    "clashes with an affirmative contention, cross-apply it in the refutation "
+                    "section instead of repeating the whole argument."
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Given the following topic:\n"
+                    + topic
+                    + "\n\nAffirmative speech:\n"
+                    + first_speech_transcription
+                    + "\n\nWrite a two-minute negation speech at average speaking pace. "
+                    "Start exactly with: \"Hello my name is Debby.\" "
+                    "Use this order:\n"
+                    "1. Brief roadmap.\n"
+                    "2. Debby's negative contentions, with clear taglines and logical warrants.\n"
+                    "3. Refutation of the affirmative speech, answering each major affirmative contention.\n"
+                    "4. Short weighing/summary.\n"
+                    "Do not start with refutation. Do not mix refutation into the negative case except "
+                    "for brief signposting. In the refutation section, you may cross-apply Debby's own "
+                    "contentions when they directly answer the affirmative."
+                )
+            }
         ]
     )
     return message.choices[0].message.content

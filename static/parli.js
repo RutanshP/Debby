@@ -4,9 +4,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const sideSelect = document.getElementById('side');
     const formatSelect = document.getElementById('format');
     const caseOutput = document.getElementById('case-output');
+    let isGenerating = false;
 
     function showLoading() {
-        caseOutput.innerHTML = '<img src="static/loading.gif" alt="Loading..." style="width: 2em; height: 2em;">';
+        caseOutput.classList.remove('placeholder');
+        caseOutput.innerHTML = '<img src="/static/loading.gif" alt="Loading..." style="width: 2em; height: 2em;">';
     }
 
     function hideLoading() {
@@ -28,11 +30,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateSubmitButtonState() {
         const topic = topicInput.value.trim();
         const format = formatSelect.value;
-        if (topic && format) {
-            submitButton.disabled = false;
-        } else {
-            submitButton.disabled = true;
-        }
+        submitButton.disabled = isGenerating || !topic || !format;
+        submitButton.style.backgroundColor = submitButton.disabled ? '#d4e5d3' : '#00796b';
+    }
+
+    function setGeneratingState(isLoading) {
+        isGenerating = isLoading;
+        topicInput.disabled = isLoading;
+        sideSelect.disabled = isLoading;
+        formatSelect.disabled = isLoading;
+        submitButton.textContent = isLoading ? 'Generating...' : 'Submit';
+        updateSubmitButtonState();
     }
 
     // Add event listeners to inputs to update submit button state
@@ -55,6 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const url = `/generate-case?topic=${encodeURIComponent(topic)}&side=${encodeURIComponent(side)}&format=${encodeURIComponent(format)}`;
+        setGeneratingState(true);
         showLoading();
 
         fetch(url)
@@ -73,6 +82,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 hideLoading();
                 console.error('Error:', error);
                 alert('An error occurred while generating the debate case.');
+            })
+            .finally(() => {
+                setGeneratingState(false);
             });
     });
     updateSubmitButtonState();
