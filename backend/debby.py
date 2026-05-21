@@ -400,7 +400,11 @@ def score_drill(drill_type, drill, response_text):
         raise ValueError("Unknown drill type.")
 
     rubric = {
-        'rebuttal': "Judge whether the response directly answers the claim, warrant, and impact.",
+        'rebuttal': (
+            "Judge only logical clash: whether the response directly answers the claim, "
+            "attacks the warrant/link chain, and explains why the impact no longer matters. "
+            "Do not require, reward, or penalize use of cited evidence, statistics, or sources."
+        ),
         'impact': "Judge magnitude, probability, timeframe, weighing, and whether the impact chain is complete.",
         'contentions': "Judge number, diversity, strategic usefulness, and whether taglines are distinct.",
         'speed': "Do not score speed reading here.",
@@ -421,7 +425,8 @@ def score_drill(drill_type, drill, response_text):
                 "content": (
                     "You are a debate coach scoring practice drills. Return only JSON with keys: "
                     "score (0-10 integer), headline, strengths (array), improvements (array), "
-                    "model_answer. Keep feedback concrete and concise."
+                    "model_answer. Keep feedback concrete and concise. For rebuttal drills, evaluate "
+                    "logic and direct clash only; do not mention missing evidence or citations."
                 )
             },
             {

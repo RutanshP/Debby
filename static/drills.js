@@ -68,6 +68,11 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
+    function setStatus(message) {
+        feedbackEl.classList.remove('empty-state');
+        feedbackEl.innerHTML = `<p>${escapeHtml(message)}</p>`;
+    }
+
     function showError(message) {
         feedbackEl.classList.remove('empty-state');
         feedbackEl.innerHTML = `<div class="auth-error">${escapeHtml(message)}</div>`;
@@ -328,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
         context.scale(scale, scale);
         context.clearRect(0, 0, width, height);
 
-        const padding = { top: 18, right: 16, bottom: 34, left: 42 };
+        const padding = { top: 18, right: 16, bottom: 42, left: 58 };
         const plotWidth = width - padding.left - padding.right;
         const plotHeight = height - padding.top - padding.bottom;
         const maxTime = Math.max(...series.map((point) => Number(point.time) || 0), 1);
@@ -353,6 +358,19 @@ document.addEventListener('DOMContentLoaded', () => {
             context.fillText(String(value), 8, y + 4);
         }
 
+        const xTickCount = Math.min(Math.max(series.length - 1, 1), 6);
+        for (let tick = 0; tick <= xTickCount; tick += 1) {
+            const time = Math.round((maxTime / xTickCount) * tick);
+            const x = xFor(time);
+            context.strokeStyle = '#edf4f2';
+            context.beginPath();
+            context.moveTo(x, padding.top);
+            context.lineTo(x, padding.top + plotHeight);
+            context.stroke();
+            context.fillStyle = '#66817d';
+            context.fillText(`${time}s`, x - 10, height - 20);
+        }
+
         context.strokeStyle = '#00796b';
         context.lineWidth = 3;
         context.beginPath();
@@ -375,8 +393,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         context.fillStyle = '#66817d';
-        context.fillText('WPM', 8, 14);
-        context.fillText('Time (seconds)', Math.max(width / 2 - 42, padding.left), height - 8);
+        context.save();
+        context.translate(14, padding.top + plotHeight / 2 + 16);
+        context.rotate(-Math.PI / 2);
+        context.fillText('WPM', 0, 0);
+        context.restore();
+        context.fillText('Time (seconds)', Math.max(width / 2 - 42, padding.left), height - 6);
     }
 
     function renderSpeedFeedback(feedback) {
@@ -471,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
             recordSpeedButton.disabled = true;
             stopSpeedButton.disabled = false;
             stopSpeedButton.textContent = currentType === 'speed' ? 'Stop and Score' : 'Stop and Submit';
-            setLoading('Recording...');
+            setStatus('Recording...');
             startTimer();
         } catch (error) {
             showError('Could not start recording. Check microphone permissions.');
