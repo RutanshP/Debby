@@ -1,0 +1,149 @@
+"""Rounds REST API."""
+
+from __future__ import annotations
+
+import math
+from typing import Any
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+
+try:  # pragma: no cover - import resolution only
+    from deps.auth import User, get_current_user  # provided by unit A1
+except ImportError:  # pragma: no cover - fallback so this unit boots in isolation
+    from pydantic import BaseModel
+
+    class User(BaseModel):  # type: ignore[no-redef]
+        id: str
+        email: str | None = None
+
+    async def get_current_user() -> "User":  # type: ignore[no-redef]
+        # Without A1 wired in, every request is unauthorized.
+        raise HTTPException(status_code=401, detail="auth not configured")
+
+from models.round import (
+    CreateRoundRequest,
+    Round,
+    SpeechResponse,
+    WpmPoint,
+)
+from services import rounds as rounds_service
+from services.transcription import TranscriptionError, transcribe
+
+router = APIRouter(tags=["rounds"])
+
+_ALLOWED_SPEECH_TYPES = {"aff", "aff_two", "neg"}
+_SPEECH_COLUMN = {
+    "aff": "aff_speech",
+    "aff_two": "aff_two_speech",
+    "neg": "neg_speech",
+}
+
+
+@router.post("/rounds", response_model=Round)
+async def create_round_route(
+    payload: CreateRoundRequest,
+    user: User = Depends(get_current_user),
+) -> Round:
+    return await rounds_service.create_round(
+        user_id=user.id,
+        format=payload.format,
+        topic=payload.topic,
+        side=payload.side,
+    )
+
+
+@router.get("/rounds", response_model=list[Round])
+async def list_rounds_route(
+    limit: int = 25,
+    user: User = Depends(get_current_user),
+) -> list[Round]:
+    limit = max(1, min(limit, 100))
+    return await rounds_service.list_rounds(user_id=user.id, limit=limit)
+
+
+@router.get("/rounds/{round_id}", response_model=Round)
+async def get_round_route(
+    round_id: str,
+    user: User = Depends(get_current_user),
+) -> Round:
+    row = await rounds_service.get_round(user_id=user.id, round_id=round_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Round not found")
+    return row
+
+
+@router.post("/rounds/{round_id}/speeches", response_model=SpeechResponse)
+async def add_speech_route(
+    round_id: str,
+    audio: UploadFile = File(...),
+    speech_type: str = Form(...),
+    user: User = Depends(get_current_user),
+) -> SpeechResponse:
+    if speech_type not in _ALLOWED_SPEECH_TYPES:
+        raise HTTPException(status_code=400, detail="invalid speech_type")
+
+    round_row = await rounds_service.get_round(user.id, round_id)
+    if round_row is None:
+        raise HTTPException(status_code=404, detail="Round not found")
+
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="audio file is empty")
+
+    try:
+        result = await transcribe(audio_bytes, include_words=True)
+    except TranscriptionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    duration_seconds = max(result.audio_duration_seconds, 0.0)
+    words = result.words or []
+    wpm = _compute_wpm(result.text, duration_seconds)
+    wpm_series = _compute_wpm_series(words, duration_seconds)
+
+    update_fields: dict[str, Any] = {
+        _SPEECH_COLUMN[speech_type]: result.text,
+        "average_wpm": wpm,
+        "wpm_series": [point.model_dump() for point in wpm_series],
+    }
+    if speech_type == "aff":
+        update_fields["first_speech_wpm"] = wpm
+    elif speech_type == "aff_two":
+        update_fields["second_speech_wpm"] = wpm
+
+    await rounds_service.update_round(user.id, round_id, update_fields)
+
+    return SpeechResponse(
+        transcript=result.text,
+        wpm=wpm,
+        wpm_series=wpm_series,
+        duration_seconds=duration_seconds,
+    )
+
+
+def _compute_wpm(transcript: str, duration_seconds: float) -> int:
+    word_count = len((transcript or "").split())
+    minutes = max(duration_seconds / 60.0, 1 / 60.0)
+    return round(word_count / minutes)
+
+
+def _compute_wpm_series(words: list, duration_seconds: float, interval: int = 2) -> list[WpmPoint]:
+    duration = max(duration_seconds, 1.0)
+    bucket_count = max(math.ceil(duration / interval), 1)
+    buckets = [0] * bucket_count
+
+    for word in words:
+        start_ms = getattr(word, "start", None)
+        if start_ms is None:
+            continue
+        bucket_index = min(int((start_ms / 1000.0) // interval), bucket_count - 1)
+        buckets[bucket_index] += 1
+
+    series: list[WpmPoint] = []
+    for index, count in enumerate(buckets):
+        start_second = index * interval
+        end_second = min(start_second + interval, duration)
+        bucket_seconds = max(end_second - start_second, 1)
+        series.append(
+            WpmPoint(t=float(start_second), wpm=round((count / bucket_seconds) * 60))
+        )
+    return series
