@@ -223,8 +223,9 @@ describe("RoundRunner", () => {
     fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
     await screen.findByText("T");
     fireEvent.click(screen.getByRole("button", { name: /accept topic/i }));
+    const affBtn = await screen.findByTestId("record-record-aff-speech");
     await act(async () => {
-      fireEvent.click(await screen.findByTestId("record-record-aff-speech"));
+      fireEvent.click(affBtn);
     });
     await screen.findByText("aff one");
 
@@ -238,8 +239,9 @@ describe("RoundRunner", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /continue to rebuttal/i }));
 
+    const rebuttalBtn = await screen.findByTestId("record-record-rebuttal");
     await act(async () => {
-      fireEvent.click(await screen.findByTestId("record-record-rebuttal"));
+      fireEvent.click(rebuttalBtn);
     });
     await screen.findByText("aff two");
 

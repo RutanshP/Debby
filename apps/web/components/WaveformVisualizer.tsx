@@ -22,7 +22,7 @@ export function WaveformVisualizer({ stream, className }: WaveformVisualizerProp
     let analyser: AnalyserNode | null = null;
     let source: MediaStreamAudioSourceNode | null = null;
     let frame = 0;
-    let freq: Uint8Array | null = null;
+    let freq: Uint8Array<ArrayBuffer> | null = null;
 
     function resize() {
       if (!canvas || !container || !ctx) return { width: 0, height: 0 };
@@ -96,7 +96,7 @@ export function WaveformVisualizer({ stream, className }: WaveformVisualizerProp
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 256;
         analyser.smoothingTimeConstant = 0.72;
-        freq = new Uint8Array(analyser.frequencyBinCount);
+        freq = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
         source = audioContext.createMediaStreamSource(stream);
         source.connect(analyser);
         drawLive();

@@ -16,9 +16,9 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
-# Inject a fake ``deps.auth`` module (unit A1's contract) before importing
-# anything that depends on it. Tests opt in/out of auth by setting
-# ``fake_auth.current_user``.
+# Auth: override the real deps.auth.get_current_user via FastAPI's
+# dependency_overrides. Avoids sys.modules shimming so we don't fight
+# import order with other test modules.
 # ---------------------------------------------------------------------------
 
 
@@ -27,33 +27,12 @@ class _FakeUser(BaseModel):
     email: str | None = None
 
 
-fake_auth = types.ModuleType("deps.auth")
+# Holds the user the override should return for the current test. Mutated by
+# the ``auth_user_a`` fixture; ``None`` means the override raises 401.
+fake_auth = types.SimpleNamespace(current_user=None)
 
 
-def _make_get_current_user() -> Any:
-    async def get_current_user() -> _FakeUser:
-        user = getattr(fake_auth, "current_user", None)
-        if user is None:
-            raise HTTPException(status_code=401, detail="unauthorized")
-        return user
-
-    return get_current_user
-
-
-fake_auth.User = _FakeUser  # type: ignore[attr-defined]
-fake_auth.get_current_user = _make_get_current_user()  # type: ignore[attr-defined]
-fake_auth.current_user = None  # type: ignore[attr-defined]
-
-sys.modules.setdefault("deps.auth", fake_auth)
-# Always overwrite to make sure tests see the same instance, even if the
-# real module was somehow loaded earlier in the test session.
-sys.modules["deps.auth"] = fake_auth
-
-
-# ---------------------------------------------------------------------------
-# Now import the units under test.
-# ---------------------------------------------------------------------------
-
+from deps.auth import get_current_user as _real_get_current_user  # noqa: E402
 from routes import rounds as rounds_route  # noqa: E402
 from services import rounds as rounds_service  # noqa: E402
 from services import supabase_client  # noqa: E402
@@ -167,6 +146,14 @@ def fake_supabase(monkeypatch: pytest.MonkeyPatch) -> _FakeSupabase:
 def app(fake_supabase: _FakeSupabase) -> FastAPI:
     app = FastAPI()
     app.include_router(rounds_route.router, prefix="/api")
+
+    async def _override() -> _FakeUser:
+        user = fake_auth.current_user
+        if user is None:
+            raise HTTPException(status_code=401, detail="unauthorized")
+        return user
+
+    app.dependency_overrides[_real_get_current_user] = _override
     return app
 
 

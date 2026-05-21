@@ -12,7 +12,7 @@ interface RoundResponse {
 }
 
 interface PageProps {
-  params: Promise<{ roundId: string }> | { roundId: string };
+  params: Promise<{ roundId: string }>;
 }
 
 function NotFound() {
@@ -27,7 +27,7 @@ function NotFound() {
 }
 
 export default async function FlowbotRoundPage({ params }: PageProps) {
-  const { roundId } = await Promise.resolve(params);
+  const { roundId } = await params;
 
   const cookieStore = await Promise.resolve(cookies());
   const supabase = getServerSupabase(cookieStore);

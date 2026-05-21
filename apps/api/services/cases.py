@@ -191,17 +191,18 @@ async def make_case(topic: str, side: str) -> str:
 
     `side` is "aff" for affirmative or "neg" for negation.
     """
-    if side == "aff":
-        user = _PARLI_AFF_USER.format(topic=topic)
-    else:
-        user = _PARLI_NEG_USER.format(topic=topic)
+    template = _PARLI_AFF_USER if side == "aff" else _PARLI_NEG_USER
+    # The prompt templates contain literal "{...}" braces that aren't
+    # format-string placeholders, so substitute the topic with plain
+    # replacement instead of .format().
+    user = template.replace("{topic}", topic)
     return await _chat(_SYSTEM_PROMPT, user)
 
 
 async def make_mspdp_case(topic: str, side: str) -> str:
     """Generate an MSPDP debate case in markdown."""
     if side == "aff":
-        user = _MSPDP_AFF_USER.format(topic=topic)
+        user = _MSPDP_AFF_USER.replace("{topic}", topic)
         return await _chat(_SYSTEM_PROMPT, user)
-    user = _MSPDP_NEG_USER.format(topic=topic)
+    user = _MSPDP_NEG_USER.replace("{topic}", topic)
     return await _chat(_MSPDP_NEG_SYSTEM, user)

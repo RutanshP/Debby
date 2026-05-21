@@ -13,6 +13,25 @@ from main import app
 from models.drill import DrillPrompt
 from services import drills as drills_service
 
+# Override the real Supabase JWT verification with a stub user so route
+# tests don't have to mint real tokens. The `authed_user` fixture
+# turns the override on (and removes it on teardown) so tests that
+# need a 401 path can run unauthenticated.
+from deps.auth import User, get_current_user as _real_get_current_user
+
+
+async def _fake_current_user() -> User:
+    return User(id="00000000-0000-0000-0000-000000000001", email="t@example.com")
+
+
+@pytest.fixture
+def authed_user():
+    app.dependency_overrides[_real_get_current_user] = _fake_current_user
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(_real_get_current_user, None)
+
 
 def _mock_chat_completion(payload: dict) -> SimpleNamespace:
     return SimpleNamespace(
@@ -208,7 +227,7 @@ def test_score_audio_requires_auth():
 # ---------------------------------------------------------------------------
 
 
-def test_create_drill_route_happy_path():
+def test_create_drill_route_happy_path(authed_user):
     payload = {
         "title": "Rebuttal Speech",
         "topic": "Schools",
@@ -230,7 +249,7 @@ def test_create_drill_route_happy_path():
     assert body["id"]
 
 
-def test_score_route_uses_stored_drill():
+def test_score_route_uses_stored_drill(authed_user):
     create_payload = {
         "title": "Rebuttal Speech",
         "topic": "Schools",

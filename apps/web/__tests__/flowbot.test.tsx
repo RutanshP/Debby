@@ -85,7 +85,7 @@ describe("FlowbotRoundPage (server component)", () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { default: Page } = await loadPage();
-    const element = await Page({ params: { roundId: "r1" } });
+    const element = await Page({ params: Promise.resolve({ roundId: "r1" }) });
 
     render(element);
 
@@ -119,7 +119,7 @@ describe("FlowbotRoundPage (server component)", () => {
     ) as unknown as typeof fetch;
 
     const { default: Page } = await loadPage();
-    const element = await Page({ params: { roundId: "missing" } });
+    const element = await Page({ params: Promise.resolve({ roundId: "missing" }) });
     render(element);
 
     expect(screen.getByText(/Round not found/i)).toBeInTheDocument();
@@ -143,7 +143,7 @@ describe("FlowbotRoundPage (server component)", () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { default: Page } = await loadPage();
-    const element = await Page({ params: { roundId: "r1" } });
+    const element = await Page({ params: Promise.resolve({ roundId: "r1" }) });
     render(element);
 
     expect(screen.getByText(/Round not found/i)).toBeInTheDocument();
