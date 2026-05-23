@@ -18,11 +18,11 @@ Flask-only revision is tagged `legacy-flask`.
 ## 1. Supabase
 
 1. Create a new project at https://supabase.com/dashboard. Pick a strong DB password and save it.
-2. Once provisioned, go to **Settings → API** and copy:
+2. Once provisioned, go to **Settings → API keys** and copy:
    - **Project URL** → this is `SUPABASE_URL` (also `NEXT_PUBLIC_SUPABASE_URL`)
-   - **anon public** key → this is `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - **service_role** key → this is `SUPABASE_SERVICE_ROLE_KEY` (server-only; never expose to the browser)
-3. **Settings → API → JWT Settings → JWT Secret** → this is `SUPABASE_JWT_SECRET`
+   - **Publishable key** (`sb_publishable_…`) → this is `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Safe to expose in the browser; replaces the legacy anon JWT key.
+   - **Secret key** (`sb_secret_…`) → this is `SUPABASE_SECRET_KEY`. Server-only; never expose to the browser. Bypasses RLS. Replaces the legacy `service_role` JWT key.
+3. JWT verification needs **no env var** on the backend — Debby pulls Supabase's public signing keys from `<SUPABASE_URL>/auth/v1/.well-known/jwks.json` at runtime and caches them. (The legacy `SUPABASE_JWT_SECRET` is no longer used.)
 4. **Authentication → Providers**: enable Email; turn off "Confirm email" while you smoke-test if you want frictionless signup.
 5. **SQL Editor → New query**: paste the contents of `apps/api/migrations/0001_init.sql` and run it. Verify the `rounds`, `drills`, and `speed_passages` tables appear under **Database → Tables**, each with RLS enabled.
 6. Run `apps/api/migrations/0002_seed_speed_passages.sql` the same way (this seeds the speed-drill passages).
@@ -40,8 +40,7 @@ Flask-only revision is tagged `legacy-flask`.
    OPENAI_API_KEY=sk-...
    ASSEMBLYAI_API_KEY=...
    SUPABASE_URL=https://<project>.supabase.co
-   SUPABASE_SERVICE_ROLE_KEY=eyJ...
-   SUPABASE_JWT_SECRET=...
+   SUPABASE_SECRET_KEY=sb_secret_...
    ALLOWED_ORIGINS=https://<your-vercel-domain>.vercel.app,http://localhost:3000
    ```
 4. Deploy. After it goes green, hit `https://<railway-domain>/healthz` — you should see `{"status":"ok"}`.
@@ -56,7 +55,7 @@ Flask-only revision is tagged `legacy-flask`.
 3. **Environment Variables** (Production, Preview, Development):
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
    NEXT_PUBLIC_API_BASE_URL=https://<railway-domain>
    ```
 4. Deploy. Once the build is green, visit `/login` — Supabase auth UI should render.
@@ -72,7 +71,7 @@ This is the multi-user isolation regression test for the global-state bug the re
 4. Drills (`/drills`): generate one of each of the four drill types; submit a text response on the rebuttal drill; submit a recording on the speed drill.
 5. Case builder (`/parli-gpt`): generate a Parli case for `aff`, then a random MSPDP case.
 
-If any of those steps fail with 401: re-check that the Railway `SUPABASE_JWT_SECRET` matches Supabase's JWT secret exactly (no trailing newline).
+If any of those steps fail with 401: re-check that `SUPABASE_URL` on Railway points at the right project so the backend can fetch the JWKS, and that Railway has the **secret** key (`sb_secret_…`) — not the publishable one.
 
 ## 5. Decommission the Flask app
 

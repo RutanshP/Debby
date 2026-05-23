@@ -1,20 +1,29 @@
-"""Auth dependency: verifies Supabase JWTs and yields a `User` model.
+"""Auth dependency: verifies Supabase JWTs against the project's JWKS.
 
-Used by every protected FastAPI route. The contract (`User` shape and
-`get_current_user` signature) is depended on by other backend units.
+Supabase deprecated symmetric HS256 + a shared JWT secret in late 2025;
+user-session tokens are now signed with ES256/RS256 and verified via the
+project's public JWKS endpoint (`/auth/v1/.well-known/jwks.json`).
+
+The dependency exposes the same `User` shape it always did so the other
+backend units don't need to change.
 """
 
 from __future__ import annotations
 
 import os
 
+import jwt
 from fastapi import Header, HTTPException, status
-from jose import jwt
-from jose.exceptions import ExpiredSignatureError, JWTError
+from jwt import PyJWKClient
 from pydantic import BaseModel
 
-_ALGORITHM = "HS256"
+_ALGORITHMS = ["ES256", "RS256"]
 _AUDIENCE = "authenticated"
+
+# PyJWKClient caches the JWKS in-process and refetches automatically on
+# kid miss, so a single module-level instance is fine. The URL is taken
+# from SUPABASE_URL at first use to keep import side-effect-free.
+_jwks_client: PyJWKClient | None = None
 
 
 class User(BaseModel):
@@ -28,13 +37,23 @@ def _unauthorized(detail: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 
+def _get_jwks_client() -> PyJWKClient:
+    global _jwks_client
+    if _jwks_client is None:
+        url = os.environ.get("SUPABASE_URL")
+        if not url:
+            raise _unauthorized("Server auth not configured")
+        _jwks_client = PyJWKClient(f"{url.rstrip('/')}/auth/v1/.well-known/jwks.json")
+    return _jwks_client
+
+
 async def get_current_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> User:
-    """Decode + verify the Bearer token; return the authenticated `User`.
+    """Verify the Bearer token against Supabase's JWKS; return the User.
 
     Raises 401 on any failure: missing/malformed header, expired token,
-    signature mismatch, or malformed JWT.
+    signature mismatch, unknown signing key, or malformed JWT.
     """
     if not authorization:
         raise _unauthorized("Missing Authorization header")
@@ -43,21 +62,22 @@ async def get_current_user(
     if scheme.lower() != "bearer" or not token:
         raise _unauthorized("Invalid Authorization scheme; expected Bearer")
 
-    secret = os.environ.get("SUPABASE_JWT_SECRET")
-    if not secret:
-        # Misconfiguration — surface as 401 so we never accept unverified tokens.
-        raise _unauthorized("Server auth not configured")
-
     try:
+        signing_key = _get_jwks_client().get_signing_key_from_jwt(token).key
         payload = jwt.decode(
             token,
-            secret,
-            algorithms=[_ALGORITHM],
+            signing_key,
+            algorithms=_ALGORITHMS,
             audience=_AUDIENCE,
         )
-    except ExpiredSignatureError as exc:
+    except jwt.ExpiredSignatureError as exc:
         raise _unauthorized("Token expired") from exc
-    except JWTError as exc:
+    except jwt.InvalidAudienceError as exc:
+        raise _unauthorized("Invalid audience") from exc
+    except jwt.PyJWKClientError as exc:
+        # Unknown kid, JWKS fetch failure, malformed kid, etc.
+        raise _unauthorized("Invalid token signing key") from exc
+    except jwt.PyJWTError as exc:
         raise _unauthorized("Invalid token") from exc
 
     user_id = payload.get("sub")

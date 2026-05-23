@@ -2,10 +2,15 @@ import { createBrowserClient, createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+// `sb_publishable_…` replaces the legacy anon JWT key. Fall back to the
+// legacy env name during the migration window.
+const SUPABASE_PUBLISHABLE_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  "";
 
 export function getBrowserSupabase() {
-  return createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return createBrowserClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 }
 
 type CookieStore = {
@@ -14,7 +19,7 @@ type CookieStore = {
 };
 
 export function getServerSupabase(cookieStore: CookieStore) {
-  return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  return createServerClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     cookies: {
       get(name: string) {
         return cookieStore.get(name)?.value;
