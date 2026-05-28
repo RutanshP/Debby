@@ -111,11 +111,16 @@ async def add_speech_route(
         speech_type,
         [point.model_dump() for point in wpm_series],
     )
+    total_speech_seconds = _add_interval_seconds(
+        round_row.total_speech_time,
+        duration_seconds,
+    )
 
     update_fields: dict[str, Any] = {
         _SPEECH_COLUMN[speech_type]: result.text,
         "average_wpm": average_wpm,
         "wpm_series": wpm_series_store,
+        "total_speech_time": _format_interval_seconds(total_speech_seconds),
     }
     if speech_type == "aff":
         update_fields["first_speech_wpm"] = wpm
@@ -145,6 +150,52 @@ def _merge_wpm_series(existing: Any, speech_type: str, series: list[dict[str, An
 
     merged[speech_type] = series
     return merged
+
+
+def _parse_interval_seconds(value: Any) -> float:
+    """Parse common Supabase/Postgres interval representations into seconds."""
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return max(float(value), 0.0)
+    if isinstance(value, dict):
+        seconds = 0.0
+        seconds += float(value.get("hours") or 0) * 3600
+        seconds += float(value.get("minutes") or 0) * 60
+        seconds += float(value.get("seconds") or 0)
+        return max(seconds, 0.0)
+    if not isinstance(value, str):
+        return 0.0
+
+    text = value.strip()
+    if not text:
+        return 0.0
+
+    parts = text.split(":")
+    try:
+        if len(parts) == 3:
+            return max(
+                (float(parts[0]) * 3600) + (float(parts[1]) * 60) + float(parts[2]),
+                0.0,
+            )
+        if len(parts) == 2:
+            return max((float(parts[0]) * 60) + float(parts[1]), 0.0)
+        if len(parts) == 1:
+            return max(float(parts[0]), 0.0)
+    except ValueError:
+        return 0.0
+    return 0.0
+
+
+def _add_interval_seconds(existing: Any, addition: float) -> float:
+    return _parse_interval_seconds(existing) + max(float(addition or 0), 0.0)
+
+
+def _format_interval_seconds(seconds: float) -> str:
+    whole_seconds = max(round(seconds), 0)
+    hours, remainder = divmod(whole_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 def _compute_wpm(transcript: str, duration_seconds: float) -> int:

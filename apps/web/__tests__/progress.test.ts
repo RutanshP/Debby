@@ -1,0 +1,49 @@
+import { headlineStats, type ProgressDrill, type ProgressRound } from "@/lib/progress";
+
+describe("headlineStats", () => {
+  it("counts round speech time and drill practice time", () => {
+    const rounds: ProgressRound[] = [
+      {
+        id: "r1",
+        topic: "Topic",
+        format: "parli",
+        side: "aff",
+        winner_side: "aff",
+        total_speech_time: "00:02:30",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "r2",
+        topic: "Topic 2",
+        format: "mspdp",
+        side: "neg",
+        winner_side: "aff",
+        total_speech_time: { minutes: 1, seconds: 30 },
+        created_at: "2026-01-02T00:00:00Z",
+      },
+    ];
+    const drills: ProgressDrill[] = [
+      {
+        id: "d1",
+        drill_type: "contention",
+        timer_seconds: 60,
+        created_at: "2026-01-03T00:00:00Z",
+      },
+      {
+        id: "d2",
+        drill_type: "speed",
+        score: { duration_seconds: 45 },
+        timer_seconds: 120,
+        created_at: "2026-01-04T00:00:00Z",
+      },
+      {
+        id: "d3",
+        drill_type: "impact",
+        prompt: { timer_seconds: 30 },
+        created_at: "2026-01-05T00:00:00Z",
+      },
+    ];
+
+    expect(headlineStats(rounds, drills).totalPracticeMinutes).toBe(6);
+  });
+});

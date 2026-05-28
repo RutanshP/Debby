@@ -19,14 +19,19 @@ export interface ProgressRound {
   average_wpm?: number | null;
   first_speech_wpm?: number | null;
   second_speech_wpm?: number | null;
-  total_speech_time?: string | null; // Postgres interval, ISO-8601, or "HH:MM:SS"
+  total_speech_time?:
+    | string
+    | number
+    | { hours?: number; minutes?: number; seconds?: number }
+    | null; // Postgres interval, ISO-8601, seconds, or "HH:MM:SS"
   created_at: string;
 }
 
 export interface ProgressDrill {
   id: string;
   drill_type: DrillType | string;
-  score?: { score?: number | null } | null;
+  prompt?: { timer_seconds?: number | null } | null;
+  score?: { score?: number | null; duration_seconds?: number | null } | null;
   timer_seconds?: number | null;
   created_at?: string | null;
 }
@@ -85,8 +90,20 @@ function userWon(r: ProgressRound): boolean | null {
 
 // Best-effort parser for either an ISO-8601 duration ("PT1M30S") or a
 // "HH:MM:SS"/"MM:SS" string. Returns seconds.
-function parseIntervalSeconds(value: string | null | undefined): number {
+function positiveNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function parseIntervalSeconds(value: ProgressRound["total_speech_time"]): number {
   if (!value) return 0;
+  if (typeof value === "number") return positiveNumber(value);
+  if (typeof value === "object") {
+    return (
+      positiveNumber(value.hours) * 3600 +
+      positiveNumber(value.minutes) * 60 +
+      positiveNumber(value.seconds)
+    );
+  }
   const iso = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/i.exec(value);
   if (iso) {
     const [, h, m, s] = iso;
@@ -99,6 +116,14 @@ function parseIntervalSeconds(value: string | null | undefined): number {
     if (hms.length === 1) return hms[0];
   }
   return 0;
+}
+
+function drillPracticeSeconds(drill: ProgressDrill): number {
+  return (
+    positiveNumber(drill.score?.duration_seconds) ||
+    positiveNumber(drill.timer_seconds) ||
+    positiveNumber(drill.prompt?.timer_seconds)
+  );
 }
 
 export function headlineStats(
@@ -116,7 +141,7 @@ export function headlineStats(
   const avgWpm = wpms.length > 0 ? Math.round(wpms.reduce((a, b) => a + b, 0) / wpms.length) : null;
 
   const roundSeconds = rounds.reduce((sum, r) => sum + parseIntervalSeconds(r.total_speech_time), 0);
-  const drillSeconds = drills.reduce((sum, d) => sum + (d.timer_seconds ?? 0), 0);
+  const drillSeconds = drills.reduce((sum, d) => sum + drillPracticeSeconds(d), 0);
   const totalPracticeMinutes = Math.round((roundSeconds + drillSeconds) / 60);
 
   return { totalRounds, winRate, avgWpm, totalPracticeMinutes };
