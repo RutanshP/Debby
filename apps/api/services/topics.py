@@ -70,6 +70,11 @@ def get_parli_topic(tournament: str | None) -> str:
     return random.choice(all_resolutions)
 
 
+def list_parli_tournaments() -> list[str]:
+    """Return sorted unique Parli tournament names from the CSV."""
+    return sorted({tournament for tournament, _ in _load_parli_rows() if tournament})
+
+
 def get_mspdp_topic() -> str:
     """Return a random MSPDP resolution."""
     resolutions = _load_mspdp_resolutions()

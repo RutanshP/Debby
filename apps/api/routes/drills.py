@@ -22,9 +22,11 @@ from services.drills import (
     calculate_reading_accuracy,
     compute_wpm,
     generate_drill,
+    reading_match_counts,
     score_drill,
     transcribe_audio,
 )
+from models.round import WpmPoint
 
 # ---------------------------------------------------------------------------
 # Auth dep (provided by A1; we import lazily so a minimal stub can supply it
@@ -212,22 +214,41 @@ async def score_speed_route(
     audio_bytes = await audio.read()
 
     try:
-        transcript, duration = await transcribe_audio(audio_bytes, api_key)
+        transcript, duration, words = await transcribe_audio(
+            audio_bytes, api_key, include_words=True
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Transcription failed: {exc}") from exc
 
+    matched_words, _attempted_words, passage_words = reading_match_counts(
+        drill.prompt.prompt, transcript
+    )
     accuracy = calculate_reading_accuracy(drill.prompt.prompt, transcript)
+    completion = min(matched_words / passage_words, 1.0) if passage_words else 0.0
     wpm = compute_wpm(transcript, duration)
+    wpm_series = _compute_speed_wpm_series(words, transcript, duration)
 
     _update_drill(
         drill_id,
         user.id,
         {
             "response": transcript,
-            "score": {"accuracy": accuracy, "wpm": wpm},
+            "score": {
+                "accuracy": accuracy,
+                "completion": completion,
+                "duration_seconds": duration,
+                "wpm": wpm,
+                "wpm_series": [point.model_dump() for point in wpm_series],
+            },
         },
     )
-    return SpeedScore(accuracy=accuracy, wpm=wpm)
+    return SpeedScore(
+        accuracy=accuracy,
+        completion=completion,
+        duration_seconds=duration,
+        wpm=wpm,
+        wpm_series=wpm_series,
+    )
 
 
 @router.post("/drills/{drill_id}/score-audio", response_model=DrillScore)
@@ -241,7 +262,7 @@ async def score_audio_route(
         raise HTTPException(status_code=404, detail="Drill not found.")
 
     drill = _row_to_drill(row)
-    if drill.drill_type not in {"rebuttal", "impact", "contention"}:
+    if drill.drill_type not in {"rebuttal", "impact"}:
         raise HTTPException(
             status_code=400, detail="This drill type does not use audio scoring here."
         )
@@ -262,3 +283,41 @@ async def score_audio_route(
     score = await score_drill(drill.drill_type, drill.prompt, transcript)
     _update_drill(drill_id, user.id, {"response": transcript, "score": score.model_dump()})
     return score
+
+
+def _compute_speed_wpm_series(
+    words: list[dict[str, Any]],
+    transcript: str,
+    duration_seconds: float,
+    interval: int = 2,
+) -> list[WpmPoint]:
+    duration = max(float(duration_seconds or 0), 1.0)
+    bucket_count = max(int((duration + interval - 0.001) // interval), 1)
+    buckets = [0] * bucket_count
+
+    if words:
+        for word in words:
+            start_ms = word.get("start")
+            try:
+                start_seconds = float(start_ms) / 1000.0
+            except (TypeError, ValueError):
+                continue
+            bucket_index = min(int(start_seconds // interval), bucket_count - 1)
+            buckets[bucket_index] += 1
+    else:
+        # Fallback for transcripts without timestamps: spread words evenly so the
+        # chart still communicates overall speed instead of disappearing.
+        total_words = len((transcript or "").split())
+        for index in range(total_words):
+            bucket_index = min(int((index / max(total_words, 1)) * bucket_count), bucket_count - 1)
+            buckets[bucket_index] += 1
+
+    series: list[WpmPoint] = []
+    for index, count in enumerate(buckets):
+        start_second = index * interval
+        end_second = min(start_second + interval, duration)
+        bucket_seconds = max(end_second - start_second, 1.0)
+        series.append(
+            WpmPoint(t=float(start_second), wpm=round((count / bucket_seconds) * 60))
+        )
+    return series

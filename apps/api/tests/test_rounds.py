@@ -322,6 +322,20 @@ def test_speeches_happy_path(
     assert row["aff_speech"] == body["transcript"]
     assert row["average_wpm"] == 7
     assert row["first_speech_wpm"] == 7
+    assert row["wpm_series"]["aff"] == body["wpm_series"]
+
+
+def test_merge_wpm_series_preserves_both_recorded_speeches() -> None:
+    existing = {"aff": [{"t": 0, "wpm": 120}]}
+    merged = rounds_route._merge_wpm_series(
+        existing,
+        "aff_two",
+        [{"t": 0, "wpm": 140}],
+    )
+    assert merged == {
+        "aff": [{"t": 0, "wpm": 120}],
+        "aff_two": [{"t": 0, "wpm": 140}],
+    }
 
 
 @respx.mock

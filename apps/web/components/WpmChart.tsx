@@ -34,14 +34,30 @@ export function WpmChart({ series, height = 240 }: WpmChartProps) {
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={series} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+      <LineChart data={series} margin={{ top: 8, right: 16, bottom: 32, left: 20 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis
           dataKey="t"
           tickFormatter={(v: number) => `${Math.round(v)}s`}
           stroke="#64748b"
+          label={{
+            value: "Time (seconds)",
+            position: "insideBottom",
+            offset: -18,
+            fill: "#64748b",
+            fontSize: 12,
+          }}
         />
-        <YAxis stroke="#64748b" />
+        <YAxis
+          stroke="#64748b"
+          label={{
+            value: "WPM",
+            angle: -90,
+            position: "insideLeft",
+            fill: "#64748b",
+            fontSize: 12,
+          }}
+        />
         <Tooltip
           formatter={(value: number) => [`${Math.round(value)} wpm`, "WPM"]}
           labelFormatter={(label: number) => `${Math.round(label)}s`}

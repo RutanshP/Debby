@@ -8,7 +8,23 @@ const SIDE_LABEL: Record<string, string> = {
   neg: "Negative",
 };
 
+function formatLines(rfd: string): string[] {
+  const lines = rfd
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length > 1) return lines;
+
+  return rfd
+    .split(/(?<=\.)\s+(?=[A-Z])/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 export function RfdCard({ winnerSide, rfd }: RfdCardProps) {
+  const lines = formatLines(rfd);
+
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       <header className="mb-3 flex items-baseline justify-between">
@@ -19,7 +35,24 @@ export function RfdCard({ winnerSide, rfd }: RfdCardProps) {
           </span>
         )}
       </header>
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{rfd}</p>
+      <div className="space-y-2 text-sm leading-relaxed text-slate-700">
+        {lines.map((line, index) => {
+          const [label, ...rest] = line.split(":");
+          const hasLabel = rest.length > 0 && label.length <= 28;
+          return (
+            <p key={`${line}-${index}`}>
+              {hasLabel ? (
+                <>
+                  <span className="font-semibold text-slate-900">{label}:</span>
+                  <span> {rest.join(":").trim()}</span>
+                </>
+              ) : (
+                line
+              )}
+            </p>
+          );
+        })}
+      </div>
     </article>
   );
 }

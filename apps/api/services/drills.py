@@ -107,15 +107,25 @@ def normalize_words(text: str | None) -> list[str]:
     return re.findall(r"[a-z0-9']+", (text or "").lower())
 
 
-def calculate_reading_accuracy(reference_text: str, spoken_text: str) -> float:
-    """Returns a 0..1 accuracy score (matched words / spoken words)."""
+def reading_match_counts(reference_text: str, spoken_text: str) -> tuple[int, int, int]:
+    """Return matched, spoken, and reference word counts for speed scoring."""
     reference = normalize_words(reference_text)
     spoken = normalize_words(spoken_text)
     if not reference or not spoken:
-        return 0.0
+        return (0, len(spoken), len(reference))
     matcher = SequenceMatcher(None, reference, spoken)
     matched = sum(block.size for block in matcher.get_matching_blocks())
-    return min(matched / len(spoken), 1.0)
+    return (matched, len(spoken), len(reference))
+
+
+def calculate_reading_accuracy(reference_text: str, spoken_text: str) -> float:
+    """Returns a 0..1 accuracy score (matched words / spoken words)."""
+    matched, spoken_count, _reference_count = reading_match_counts(
+        reference_text, spoken_text
+    )
+    if spoken_count == 0:
+        return 0.0
+    return min(matched / spoken_count, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +330,11 @@ async def score_drill(
 # ---------------------------------------------------------------------------
 
 
-async def transcribe_audio(audio_bytes: bytes, api_key: str) -> tuple[str, float]:
+async def transcribe_audio(
+    audio_bytes: bytes,
+    api_key: str,
+    include_words: bool = False,
+) -> tuple[str, float] | tuple[str, float, list[dict[str, int | str]]]:
     """Returns (transcript, duration_seconds). Duration may be 0 if unavailable."""
     headers = {"authorization": api_key}
     async with httpx.AsyncClient(timeout=120.0) as http:
@@ -335,9 +349,12 @@ async def transcribe_audio(audio_bytes: bytes, api_key: str) -> tuple[str, float
         start_resp = await http.post(
             f"{ASSEMBLYAI_BASE_URL}/transcript",
             headers={**headers, "content-type": "application/json"},
-            json={"audio_url": upload_url},
+            json={"audio_url": upload_url, "speech_models": ["universal-2"]},
         )
-        start_resp.raise_for_status()
+        if start_resp.status_code >= 400:
+            raise RuntimeError(
+                f"Transcript creation failed: {start_resp.status_code} {start_resp.text}"
+            )
         transcript_id = start_resp.json()["id"]
 
         poll_url = f"{ASSEMBLYAI_BASE_URL}/transcript/{transcript_id}"
@@ -353,7 +370,10 @@ async def transcribe_audio(audio_bytes: bytes, api_key: str) -> tuple[str, float
                     duration_s = float(duration_ms) / 1000.0
                 else:
                     duration_s = float(duration_ms)
-                return (data.get("text") or "").strip(), duration_s
+                text = (data.get("text") or "").strip()
+                if include_words:
+                    return text, duration_s, list(data.get("words") or [])
+                return text, duration_s
             if status == "error":
                 raise RuntimeError(data.get("error") or "Transcription failed.")
             await _sleep(2.0)

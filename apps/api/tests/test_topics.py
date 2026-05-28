@@ -5,7 +5,12 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from main import app
-from services.topics import coin_toss, get_mspdp_topic, get_parli_topic
+from services.topics import (
+    coin_toss,
+    get_mspdp_topic,
+    get_parli_topic,
+    list_parli_tournaments,
+)
 
 
 client = TestClient(app)
@@ -23,6 +28,12 @@ def test_get_parli_topic_with_none() -> None:
     topic = get_parli_topic(None)
     assert isinstance(topic, str)
     assert topic.strip() != ""
+
+
+def test_list_parli_tournaments() -> None:
+    tournaments = list_parli_tournaments()
+    assert "Bargain Belt" in tournaments
+    assert tournaments == sorted(tournaments)
 
 
 def test_get_parli_topic_unknown_tournament_falls_back() -> None:
@@ -62,6 +73,13 @@ def test_route_parli_with_tournament() -> None:
     body = resp.json()
     assert body["format"] == "parli"
     assert body["topic"].strip() != ""
+
+
+def test_route_tournaments() -> None:
+    resp = client.get("/api/topics/tournaments")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "Bargain Belt" in body["tournaments"]
 
 
 def test_route_mspdp_happy_path() -> None:

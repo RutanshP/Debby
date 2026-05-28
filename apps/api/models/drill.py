@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from models.round import WpmPoint
+
 DrillType = Literal["rebuttal", "speed", "impact", "contention"]
 
 # Legacy code used "contentions" (plural); we expose the singular form publicly
@@ -56,7 +58,10 @@ class DrillScore(BaseModel):
 
 class SpeedScore(BaseModel):
     accuracy: float
+    completion: float
+    duration_seconds: float
     wpm: int
+    wpm_series: list[WpmPoint] = Field(default_factory=list)
 
 
 class Drill(BaseModel):

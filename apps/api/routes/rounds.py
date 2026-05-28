@@ -99,11 +99,23 @@ async def add_speech_route(
     words = result.words or []
     wpm = _compute_wpm(result.text, duration_seconds)
     wpm_series = _compute_wpm_series(words, duration_seconds)
+    first_wpm = wpm if speech_type == "aff" else round_row.first_speech_wpm
+    second_wpm = wpm if speech_type == "aff_two" else round_row.second_speech_wpm
+    average_wpm = (
+        round((first_wpm + second_wpm) / 2)
+        if first_wpm is not None and second_wpm is not None
+        else wpm
+    )
+    wpm_series_store = _merge_wpm_series(
+        round_row.wpm_series,
+        speech_type,
+        [point.model_dump() for point in wpm_series],
+    )
 
     update_fields: dict[str, Any] = {
         _SPEECH_COLUMN[speech_type]: result.text,
-        "average_wpm": wpm,
-        "wpm_series": [point.model_dump() for point in wpm_series],
+        "average_wpm": average_wpm,
+        "wpm_series": wpm_series_store,
     }
     if speech_type == "aff":
         update_fields["first_speech_wpm"] = wpm
@@ -118,6 +130,21 @@ async def add_speech_route(
         wpm_series=wpm_series,
         duration_seconds=duration_seconds,
     )
+
+
+def _merge_wpm_series(existing: Any, speech_type: str, series: list[dict[str, Any]]) -> Any:
+    if speech_type not in {"aff", "aff_two"}:
+        return existing if existing is not None else {}
+
+    if isinstance(existing, dict):
+        merged = dict(existing)
+    else:
+        merged = {}
+        if isinstance(existing, list):
+            merged["aff"] = existing
+
+    merged[speech_type] = series
+    return merged
 
 
 def _compute_wpm(transcript: str, duration_seconds: float) -> int:

@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from models.flow import FlowBallot, WinnerVerdict
 from services import ai as ai_service
+from services import rounds as rounds_service
 
 try:  # pragma: no cover — import-time fallback
     from deps.auth import User, get_current_user  # type: ignore
@@ -61,6 +62,7 @@ class ResponseBody(BaseModel):
 
 
 class JudgmentBody(BaseModel):
+    round_id: str | None = None
     topic: str = Field(..., min_length=1)
     aff_speech: str = Field(..., min_length=1)
     neg_speech: str = Field(..., min_length=1)
@@ -159,6 +161,16 @@ async def post_judgment(
             body.aff_two_speech,
             verdict.rfd,
         )
+        if body.round_id:
+            await rounds_service.update_round(
+                user.id,
+                body.round_id,
+                {
+                    "neg_speech": body.neg_speech,
+                    "rfd": verdict.rfd,
+                    "flow": flow.model_dump(mode="json"),
+                },
+            )
     except (RateLimitError, APIStatusError, ValueError) as exc:
         raise _translate_openai_error(exc) from exc
 

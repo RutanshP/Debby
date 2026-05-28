@@ -12,6 +12,7 @@ from services.topics import (
     coin_toss,
     get_mspdp_topic,
     get_parli_topic,
+    list_parli_tournaments,
 )
 
 router = APIRouter()
@@ -23,6 +24,15 @@ class TopicResponse(BaseModel):
     topic: str
     side: Side
     format: TopicFormat
+
+
+class TournamentListResponse(BaseModel):
+    tournaments: list[str]
+
+
+@router.get("/topics/tournaments", response_model=TournamentListResponse)
+async def get_tournaments() -> TournamentListResponse:
+    return TournamentListResponse(tournaments=list_parli_tournaments())
 
 
 @router.get("/topics", response_model=TopicResponse)

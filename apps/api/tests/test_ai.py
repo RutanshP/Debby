@@ -67,6 +67,19 @@ async def test_ai_response_returns_string(patched_client: AsyncMock):
     assert out == "neg rebuttal"
 
 
+async def test_ai_response_prompt_prioritizes_case_then_refutation(
+    patched_client: AsyncMock,
+):
+    patched_client.return_value = _chat_completion("neg speech")
+    await ai_service.ai_response("topic", "aff speech text")
+
+    messages = patched_client.await_args.kwargs["messages"]
+    user_prompt = messages[1]["content"]
+    assert "present Debby's own negative contentions" in user_prompt
+    assert "refute the affirmative's major contentions" in user_prompt
+    assert "cross-apply" in user_prompt
+
+
 async def test_ai_response_stream_yields_chunks(patched_client: AsyncMock):
     patched_client.return_value = _AsyncStream(["Hello ", "my name ", "is Debby."])
     tokens = [t async for t in ai_service.ai_response_stream("t", "speech")]
@@ -80,6 +93,48 @@ async def test_winner_structured_output(patched_client: AsyncMock):
     verdict = await ai_service.winner("aff", "neg", "aff2", "topic")
     assert verdict.winner_side == "aff"
     assert "healthcare" in verdict.rfd
+
+
+async def test_winner_prompt_keeps_rfd_short_and_separate_from_flow(
+    patched_client: AsyncMock,
+):
+    patched_client.return_value = _chat_completion(
+        json.dumps(
+            {
+                "winner_side": "aff",
+                "rfd": "Winning contention: Healthcare.\nWhy it won: It was extended.\nImpact comparison: It outweighs.",
+            }
+        )
+    )
+    await ai_service.winner("aff", "neg", "aff2", "topic")
+
+    system_prompt = patched_client.await_args.kwargs["messages"][0]["content"]
+    user_prompt = patched_client.await_args.kwargs["messages"][1]["content"]
+    assert "not a flow sheet" in system_prompt
+    assert "under 90 words" in system_prompt
+    assert "Merely repeating" in system_prompt
+    assert "Do not infer, repair, or invent" in system_prompt
+    assert "not in the RFD" in user_prompt
+
+
+async def test_winner_prompt_disallows_incoherent_aff_win(
+    patched_client: AsyncMock,
+):
+    patched_client.return_value = _chat_completion(
+        json.dumps(
+            {
+                "winner_side": "neg",
+                "rfd": "Winning contention: None.\nWhy it won: No side made a judgeable topical argument.\nImpact comparison: No impacts were weighed.",
+            }
+        )
+    )
+    verdict = await ai_service.winner(
+        "I like pizza and my weekend was fun.",
+        "This is also unrelated.",
+        "Nothing about the topic.",
+        "China is a greater threat to the US than Iran.",
+    )
+    assert verdict.winner_side == "neg"
 
 
 async def test_winner_accepts_legacy_for_against(patched_client: AsyncMock):
@@ -138,6 +193,74 @@ async def test_generate_round_flow_returns_model(patched_client: AsyncMock):
     assert len(flow.neg_sheet) == 1
     assert flow.ballot.winner == "neg"
     assert flow.recommended_drills == ["rebuttal", "impact"]
+
+
+async def test_generate_round_flow_accepts_legacy_loose_strings(patched_client: AsyncMock):
+    payload = {
+        "aff_sheet": [
+            {
+                "contention": "Investment is key for business growth.",
+                "neg_responses": ["Financial burden of going green."],
+                "aff_defense": "Long-term returns outweigh short-term costs.",
+                "status": "contested",
+            }
+        ],
+        "neg_sheet": [
+            {
+                "contention": "Market competitiveness issues.",
+                "aff_rebuttals": "Green branding attracts customers.",
+            }
+        ],
+        "ballot": {"winner": "for", "explanation": "Aff does more weighing."},
+        "voters": ["Aff outweighs on long-term growth."],
+        "recommended_drills": ["rebuttal", "nonsense", "impact"],
+    }
+    patched_client.return_value = _chat_completion(json.dumps(payload))
+
+    flow = await ai_service.generate_round_flow("topic", "aff", "neg", "aff2", "rfd")
+
+    assert flow.aff_sheet[0].contention.tag == "Investment is key for business growth."
+    assert flow.aff_sheet[0].aff_defense[0].summary.startswith("Long-term returns")
+    assert flow.neg_sheet[0].aff_rebuttals[0].tag.startswith("Green branding")
+    assert flow.ballot.winner == "aff"
+    assert flow.voters[0].winner == "aff"
+    assert flow.recommended_drills == ["rebuttal", "impact"]
+
+
+async def test_generate_round_flow_filters_topic_restatements(patched_client: AsyncMock):
+    payload = {
+        "aff_sheet": [
+            {
+                "contention": {
+                    "tag": "Greater threat to the US than Iran",
+                    "summary": "Greater threat to the US than Iran.",
+                },
+                "neg_responses": [],
+                "aff_defense": [],
+            },
+            {
+                "contention": {
+                    "tag": "Technological growth",
+                    "summary": "China's AI and chip investment increases military risk.",
+                },
+                "neg_responses": [],
+                "aff_defense": [],
+            },
+        ],
+        "neg_sheet": [],
+        "voters": [],
+        "dropped": [],
+    }
+    patched_client.return_value = _chat_completion(json.dumps(payload))
+    flow = await ai_service.generate_round_flow(
+        "China is a greater threat to the US than Iran.",
+        "aff",
+        "neg",
+        "aff2",
+        "rfd",
+    )
+    assert len(flow.aff_sheet) == 1
+    assert flow.aff_sheet[0].contention.tag == "Technological growth"
 
 
 async def test_generate_round_flow_malformed_json_raises(patched_client: AsyncMock):
