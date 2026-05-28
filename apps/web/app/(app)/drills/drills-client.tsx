@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { RecordButton } from "@/components/RecordButton";
 import { WpmChart, type WpmPoint } from "@/components/WpmChart";
@@ -19,7 +19,7 @@ const DRILL_TYPES: DrillTypeOption[] = [
     type: "rebuttal",
     label: "Rebuttal",
     description: "Answer a short opposing argument.",
-    mode: "Typing",
+    mode: "Audio",
   },
   {
     type: "speed",
@@ -31,7 +31,7 @@ const DRILL_TYPES: DrillTypeOption[] = [
     type: "impact",
     label: "Impact Extension",
     description: "Turn an argument into full weighing.",
-    mode: "Typing",
+    mode: "Audio",
   },
   {
     type: "contention",
@@ -41,12 +41,12 @@ const DRILL_TYPES: DrillTypeOption[] = [
   },
 ];
 
-const SPEED_TIMER_OPTIONS = [30, 60, 120];
+const TIMER_OPTIONS = [30, 60, 120];
 
 interface DrillPrompt {
   id: string | number;
   drill_type: DrillType;
-  prompt?: string;
+  prompt?: string | DrillPromptBody;
   passage?: string;
   topic?: string;
   title?: string;
@@ -61,9 +61,67 @@ interface DrillScore {
 
 interface SpeedScore {
   accuracy?: number;
+  completion?: number;
+  duration_seconds?: number;
   wpm?: number;
   wpm_series?: WpmPoint[];
   feedback?: string;
+}
+
+interface DrillPromptBody {
+  title?: string;
+  topic?: string;
+  prompt?: string;
+  task?: string;
+  timer_seconds?: number;
+}
+
+function promptBody(drill: DrillPrompt): DrillPromptBody {
+  return typeof drill.prompt === "object" && drill.prompt !== null
+    ? (drill.prompt as DrillPromptBody)
+    : {};
+}
+
+function drillTitle(drill: DrillPrompt): string {
+  return promptBody(drill).title ?? drill.title ?? "Your Drill";
+}
+
+function drillTopic(drill: DrillPrompt): string | undefined {
+  return promptBody(drill).topic ?? drill.topic;
+}
+
+function drillPromptText(drill: DrillPrompt): string | undefined {
+  return (
+    (typeof drill.prompt === "string" ? drill.prompt : promptBody(drill).prompt) ??
+    drill.passage
+  );
+}
+
+function drillTask(drill: DrillPrompt): string | undefined {
+  return promptBody(drill).task;
+}
+
+function speedFeedbackLabel(wpm?: number, accuracy?: number): string {
+  if (typeof wpm !== "number") return "Speed reading complete";
+  if (wpm >= 220 && (accuracy ?? 1) >= 0.85) return "Fast and controlled";
+  if (wpm >= 180) return "Solid pace";
+  return "Keep building pace";
+}
+
+function FeedbackLoading() {
+  return (
+    <section
+      aria-label="Feedback loading"
+      role="status"
+      className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
+    >
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-teal/30 border-t-teal" />
+      <div>
+        <h2 className="text-xl font-semibold text-slate-900">Feedback</h2>
+        <p className="text-sm text-slate-600">Scoring your drill...</p>
+      </div>
+    </section>
+  );
 }
 
 export function DrillsClient() {
@@ -73,11 +131,43 @@ export function DrillsClient() {
   const [response, setResponse] = useState("");
   const [score, setScore] = useState<DrillScore | null>(null);
   const [speedScore, setSpeedScore] = useState<SpeedScore | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [generating, setGenerating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoSubmittedRef = useRef(false);
+  const responseRef = useRef("");
+  const submittingRef = useRef(false);
 
   const isSpeed = drillType === "speed";
+  const isContention = drillType === "contention";
+  const usesAudio = !isContention;
+  const drillComplete = Boolean(score || speedScore);
+  const typingTimerExpired =
+    isContention && remainingSeconds !== null && remainingSeconds <= 0;
+
+  useEffect(() => {
+    responseRef.current = response;
+  }, [response]);
+
+  useEffect(() => {
+    submittingRef.current = submitting;
+  }, [submitting]);
+
+  function clearCurrentDrill() {
+    setDrill(null);
+    setResponse("");
+    setScore(null);
+    setSpeedScore(null);
+    setRemainingSeconds(null);
+    setError(null);
+    autoSubmittedRef.current = false;
+  }
+
+  function handleDrillTypeChange(nextType: DrillType) {
+    setDrillType(nextType);
+    clearCurrentDrill();
+  }
 
   async function handleGenerate() {
     setError(null);
@@ -87,12 +177,14 @@ export function DrillsClient() {
     setGenerating(true);
     try {
       const body: Record<string, unknown> = { drill_type: drillType };
-      if (isSpeed) body.timer_seconds = timerSeconds;
+      body.timer_seconds = timerSeconds;
       const data = await apiFetch<DrillPrompt>("/api/drills", {
         method: "POST",
         body: JSON.stringify(body),
       });
       setDrill(data);
+      setRemainingSeconds(promptBody(data).timer_seconds ?? timerSeconds);
+      autoSubmittedRef.current = false;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate drill");
     } finally {
@@ -100,16 +192,19 @@ export function DrillsClient() {
     }
   }
 
-  async function handleSubmitText() {
+  const handleSubmitText = useCallback(async (responseOverride?: string) => {
     if (!drill) return;
+    const responseText = responseOverride ?? responseRef.current;
     setError(null);
+    setScore(null);
+    setSpeedScore(null);
     setSubmitting(true);
     try {
       const data = await apiFetch<DrillScore>(
         `/api/drills/${drill.id}/score`,
         {
           method: "POST",
-          body: JSON.stringify({ response }),
+          body: JSON.stringify({ response: responseText }),
         },
       );
       setScore(data);
@@ -118,11 +213,39 @@ export function DrillsClient() {
     } finally {
       setSubmitting(false);
     }
-  }
+  }, [drill]);
+
+  useEffect(() => {
+    if (!isContention || !drill || drillComplete || remainingSeconds === null) return;
+    if (remainingSeconds <= 0) {
+      const responseText = responseRef.current;
+      if (responseText.trim() && !submittingRef.current && !autoSubmittedRef.current) {
+        autoSubmittedRef.current = true;
+        void handleSubmitText(responseText);
+      }
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setRemainingSeconds((current) =>
+        current === null ? current : Math.max(current - 1, 0),
+      );
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    isContention,
+    drill,
+    drillComplete,
+    remainingSeconds,
+    handleSubmitText,
+  ]);
 
   async function handleSubmitSpeed(blob: Blob) {
     if (!drill) return;
     setError(null);
+    setScore(null);
+    setSpeedScore(null);
     setSubmitting(true);
     try {
       const form = new FormData();
@@ -142,6 +265,8 @@ export function DrillsClient() {
   async function handleSubmitAudio(blob: Blob) {
     if (!drill) return;
     setError(null);
+    setScore(null);
+    setSpeedScore(null);
     setSubmitting(true);
     try {
       const form = new FormData();
@@ -174,7 +299,7 @@ export function DrillsClient() {
             <button
               key={option.type}
               type="button"
-              onClick={() => setDrillType(option.type)}
+              onClick={() => handleDrillTypeChange(option.type)}
               aria-pressed={active}
               className={`flex flex-col gap-1 rounded-lg border p-4 text-left transition-colors ${
                 active
@@ -192,18 +317,18 @@ export function DrillsClient() {
         })}
       </section>
 
-      {isSpeed && (
-        <div className="flex items-center gap-3">
-          <label htmlFor="timer" className="text-sm font-medium text-slate-700">
+      {!drill && (
+        <div className="flex w-fit items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <label htmlFor="timer" className="text-sm font-semibold text-teal-dark">
             Timer
           </label>
           <select
             id="timer"
             value={timerSeconds}
             onChange={(e) => setTimerSeconds(Number(e.target.value))}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm"
+            className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
           >
-            {SPEED_TIMER_OPTIONS.map((s) => (
+            {TIMER_OPTIONS.map((s) => (
               <option key={s} value={s}>
                 {s} sec
               </option>
@@ -233,25 +358,48 @@ export function DrillsClient() {
         <section className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">
-              {drill.title ?? "Your Drill"}
+              {drillTitle(drill)}
             </h2>
-            {drill.topic && <p className="text-sm text-slate-500">{drill.topic}</p>}
+            {drillTopic(drill) && (
+              <p className="text-sm text-slate-500">{drillTopic(drill)}</p>
+            )}
           </div>
-          {drill.prompt && (
-            <p className="whitespace-pre-wrap text-slate-800">{drill.prompt}</p>
-          )}
-          {isSpeed && drill.passage && (
-            <div
-              data-testid="speed-passage"
-              className="whitespace-pre-wrap rounded-md bg-slate-50 p-4 text-slate-800"
+          {drillPromptText(drill) && (
+            <p
+              data-testid={isSpeed ? "speed-passage" : undefined}
+              className="whitespace-pre-wrap text-slate-800"
             >
-              {drill.passage}
+              {drillPromptText(drill)}
+            </p>
+          )}
+          {drillTask(drill) && (
+            <p className="text-sm font-medium text-slate-600">{drillTask(drill)}</p>
+          )}
+          {isContention && remainingSeconds !== null && !drillComplete && (
+            <div className="w-fit rounded-md bg-teal/10 px-4 py-2 text-sm font-semibold text-teal-dark">
+              Time left: {remainingSeconds}s
             </div>
           )}
 
-          {isSpeed ? (
+          {drillComplete ? (
             <div>
-              <RecordButton onComplete={handleSubmitSpeed} label="Record Reading" disabled={submitting} />
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={generating}
+                className="rounded-md bg-teal px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {generating ? "Generating..." : "Redo Drill"}
+              </button>
+            </div>
+          ) : usesAudio ? (
+            <div>
+              <RecordButton
+                onComplete={isSpeed ? handleSubmitSpeed : handleSubmitAudio}
+                label={isSpeed ? "Record Reading" : "Record Response"}
+                disabled={submitting}
+                maxDurationSeconds={timerSeconds}
+              />
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -260,27 +408,30 @@ export function DrillsClient() {
                 onChange={(e) => setResponse(e.target.value)}
                 placeholder="Your response goes here..."
                 rows={6}
+                disabled={typingTimerExpired}
                 className="w-full rounded-md border border-slate-300 p-3 text-sm focus:border-teal focus:outline-none focus:ring-1 focus:ring-teal"
               />
+              {typingTimerExpired && (
+                <p className="text-sm font-medium text-amber-700">
+                  Time is up. Submit what you have.
+                </p>
+              )}
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={handleSubmitText}
+                  onClick={() => void handleSubmitText()}
                   disabled={submitting || !response.trim()}
                   className="rounded-md bg-teal px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submitting ? "Scoring…" : "Submit Response"}
                 </button>
-                <RecordButton
-                  onComplete={handleSubmitAudio}
-                  label="Score by Audio"
-                  disabled={submitting}
-                />
               </div>
             </div>
           )}
         </section>
       )}
+
+      {submitting && !score && !speedScore && <FeedbackLoading />}
 
       {score && (
         <section
@@ -320,32 +471,47 @@ export function DrillsClient() {
       {speedScore && (
         <section
           aria-label="Speed drill result"
-          className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
+          className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
         >
-          <h2 className="text-xl font-semibold text-slate-900">Speed Result</h2>
-          <div className="flex gap-6">
-            {typeof speedScore.accuracy === "number" && (
-              <div>
-                <p className="text-xs uppercase text-slate-500">Accuracy</p>
-                <p className="text-2xl font-bold text-teal-dark">
-                  {Math.round(speedScore.accuracy * 100)}%
-                </p>
-              </div>
-            )}
+          <div className="flex flex-col items-start gap-2">
+            <h2 className="text-2xl font-bold text-teal-dark">Feedback</h2>
             {typeof speedScore.wpm === "number" && (
-              <div>
-                <p className="text-xs uppercase text-slate-500">WPM</p>
-                <p className="text-2xl font-bold text-teal-dark">
-                  {Math.round(speedScore.wpm)}
-                </p>
+              <div className="rounded-full bg-teal/10 px-3 py-1 text-sm font-bold text-teal-dark">
+                {Math.round(speedScore.wpm)} WPM
               </div>
             )}
           </div>
-          {speedScore.feedback && (
-            <p className="whitespace-pre-wrap text-slate-800">{speedScore.feedback}</p>
-          )}
+          <div className="space-y-3 text-slate-700">
+            <p className="text-lg font-bold text-teal-dark">
+              {speedScore.feedback ??
+                speedFeedbackLabel(speedScore.wpm, speedScore.accuracy)}
+            </p>
+            <div className="space-y-1">
+              {typeof speedScore.accuracy === "number" && (
+                <p>
+                  <span className="font-bold text-teal-dark">Accuracy:</span>{" "}
+                  {Math.round(speedScore.accuracy * 100)}% of attempted words
+                </p>
+              )}
+              {typeof speedScore.completion === "number" && (
+                <p>
+                  <span className="font-bold text-teal-dark">Completion:</span>{" "}
+                  {Math.round(speedScore.completion * 100)}% of the passage
+                </p>
+              )}
+              {typeof speedScore.duration_seconds === "number" && (
+                <p>
+                  <span className="font-bold text-teal-dark">Duration:</span>{" "}
+                  {Math.round(speedScore.duration_seconds)}s
+                </p>
+              )}
+            </div>
+          </div>
           {speedScore.wpm_series && speedScore.wpm_series.length > 0 && (
-            <WpmChart series={speedScore.wpm_series} />
+            <div className="rounded-lg border border-slate-200 bg-teal/5 p-3">
+              <h3 className="mb-2 text-sm font-bold text-slate-900">WPM over time</h3>
+              <WpmChart series={speedScore.wpm_series} />
+            </div>
           )}
         </section>
       )}

@@ -8,7 +8,7 @@ output behavior identical.
 from __future__ import annotations
 
 import json
-from typing import AsyncIterator, Literal
+from typing import Any, AsyncIterator, Literal
 
 from models.flow import FlowBallot, WinnerVerdict
 from services.openai_client import client
@@ -26,6 +26,237 @@ def _truncate_for_flow(text: str | None, limit: int = 1500) -> str:
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _short_words(text: str, limit: int, fallback: str) -> str:
+    words = (text or "").strip().split()
+    if not words:
+        return fallback
+    return " ".join(words[:limit])
+
+
+_TOPIC_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "be",
+    "by",
+    "for",
+    "from",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "than",
+    "that",
+    "the",
+    "their",
+    "this",
+    "to",
+    "us",
+    "with",
+}
+
+
+def _content_words(text: str) -> set[str]:
+    cleaned = "".join(ch.lower() if ch.isalnum() else " " for ch in text)
+    return {
+        word
+        for word in cleaned.split()
+        if len(word) > 2 and word not in _TOPIC_STOPWORDS
+    }
+
+
+def _is_topic_restatement(item: dict[str, Any], topic: str) -> bool:
+    topic_words = _content_words(topic)
+    item_words = _content_words(
+        f"{item.get('tag', '')} {item.get('summary', '')}"
+    )
+    if not topic_words or not item_words:
+        return False
+
+    overlap = len(item_words & topic_words) / max(len(item_words), 1)
+    unique_words = item_words - topic_words
+    return overlap >= 0.7 and len(unique_words) <= 1
+
+
+def _winner_side_from_text(value: Any, fallback: Side = "neg") -> Side:
+    side = str(value or "").strip().lower()
+    if side in ("aff", "for", "affirmation", "affirmative", "pro"):
+        return "aff"
+    if side in ("neg", "against", "negation", "negative", "con"):
+        return "neg"
+    return fallback
+
+
+def _flow_item(value: Any, fallback_tag: str = "Untitled") -> dict[str, Any]:
+    if isinstance(value, str):
+        text = value.strip()
+        return {
+            "tag": _short_words(text, 8, fallback_tag),
+            "summary": _short_words(text, 18, "Open transcripts for details."),
+        }
+
+    if isinstance(value, dict):
+        tag = value.get("tag") or value.get("title") or value.get("claim")
+        summary = (
+            value.get("summary")
+            or value.get("reason")
+            or value.get("content")
+            or value.get("text")
+            or value.get("argument")
+        )
+        if not tag and isinstance(summary, str):
+            tag = _short_words(summary, 8, fallback_tag)
+        if not summary and isinstance(tag, str):
+            summary = tag
+        item: dict[str, Any] = {
+            "tag": str(tag or fallback_tag),
+            "summary": str(summary or "Open transcripts for details."),
+        }
+        if "refuted" in value:
+            item["refuted"] = value.get("refuted")
+        return item
+
+    return {"tag": fallback_tag, "summary": "Open transcripts for details."}
+
+
+def _flow_items(value: Any, fallback_tag: str) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [_flow_item(item, fallback_tag) for item in value]
+    return [_flow_item(value, fallback_tag)]
+
+
+def _row_status(value: Any) -> str:
+    status = str(value or "").strip().lower()
+    if status in ("unrefuted", "refuted", "contested"):
+        return status
+    return "contested"
+
+
+def _normalize_sheet_row(row: Any, side: Side) -> dict[str, Any]:
+    row = row if isinstance(row, dict) else {"contention": row}
+    contention = row.get("contention") or row.get("root") or row.get("claim")
+    normalized: dict[str, Any] = {
+        "contention": _flow_item(
+            contention,
+            "Aff contention" if side == "aff" else "Neg contention",
+        ),
+        "status": _row_status(row.get("status")),
+        "judge_note": str(row.get("judge_note") or "No judge note generated."),
+    }
+
+    if side == "aff":
+        neg_responses = (
+            row.get("neg_responses")
+            or row.get("responses")
+            or row.get("neg_rebuttals")
+            or row.get("answers")
+        )
+        aff_defense = (
+            row.get("aff_defense")
+            or row.get("defense")
+            or row.get("aff_responses")
+            or row.get("aff_rebuttals")
+        )
+        normalized["neg_responses"] = _flow_items(neg_responses, "Neg response")
+        normalized["aff_defense"] = _flow_items(aff_defense, "Aff defense")
+    else:
+        aff_rebuttals = (
+            row.get("aff_rebuttals")
+            or row.get("rebuttals")
+            or row.get("aff_responses")
+            or row.get("responses")
+            or row.get("defense")
+        )
+        normalized["aff_rebuttals"] = _flow_items(aff_rebuttals, "Aff rebuttal")
+
+    return normalized
+
+
+def _normalize_flow_data(data: Any, rfd: str, topic: str = "") -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("generate_round_flow: model did not return a JSON object")
+
+    aff_sheet = data.get("aff_sheet") if isinstance(data.get("aff_sheet"), list) else []
+    neg_sheet = data.get("neg_sheet") if isinstance(data.get("neg_sheet"), list) else []
+    aff_rows = [
+        row
+        for row in (_normalize_sheet_row(row, "aff") for row in aff_sheet[:4])
+        if not _is_topic_restatement(row["contention"], topic)
+    ]
+    neg_rows = [
+        row
+        for row in (_normalize_sheet_row(row, "neg") for row in neg_sheet[:4])
+        if not _is_topic_restatement(row["contention"], topic)
+    ]
+
+    ballot = data.get("ballot") if isinstance(data.get("ballot"), dict) else {}
+    winner = _winner_side_from_text(
+        ballot.get("winner"),
+        _winner_side_from_text(data.get("winner")),
+    )
+    aff_unrefuted = ballot.get("aff_unrefuted")
+    neg_unrefuted = ballot.get("neg_unrefuted")
+    if not isinstance(aff_unrefuted, int):
+        aff_unrefuted = sum(1 for row in aff_rows if row["status"] == "unrefuted")
+    if not isinstance(neg_unrefuted, int):
+        neg_unrefuted = sum(1 for row in neg_rows if row["status"] == "unrefuted")
+
+    voters = data.get("voters") if isinstance(data.get("voters"), list) else []
+    normalized_voters = []
+    for voter in voters[:3]:
+        if isinstance(voter, str):
+            normalized_voters.append(
+                {
+                    "tag": _short_words(voter, 8, "Winning impact"),
+                    "winner": winner,
+                    "reason": voter,
+                }
+            )
+        elif isinstance(voter, dict):
+            normalized_voters.append(
+                {
+                    "tag": str(
+                        voter.get("tag")
+                        or voter.get("title")
+                        or "Winning contention / impact"
+                    ),
+                    "winner": _winner_side_from_text(voter.get("winner"), winner),
+                    "reason": str(voter.get("reason") or voter.get("summary") or ""),
+                }
+            )
+
+    drills = (
+        data.get("recommended_drills")
+        if isinstance(data.get("recommended_drills"), list)
+        else []
+    )
+    allowed_drills = {"rebuttal", "impact", "contentions", "speed"}
+
+    return {
+        "aff_sheet": aff_rows,
+        "neg_sheet": neg_rows,
+        "ballot": {
+            "aff_unrefuted": aff_unrefuted,
+            "neg_unrefuted": neg_unrefuted,
+            "winner": winner,
+            "explanation": str(ballot.get("explanation") or _truncate_for_flow(rfd, 180)),
+        },
+        "dropped": _flow_items(data.get("dropped"), "Dropped argument")[:4],
+        "voters": normalized_voters,
+        "recommended_drills": [
+            str(drill).strip().lower()
+            for drill in drills[:4]
+            if str(drill).strip().lower() in allowed_drills
+        ],
+    }
 
 
 # --- speech generation --------------------------------------------------------
@@ -81,7 +312,7 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
 
     message = await client.chat.completions.create(
         model=MODEL,
-        max_tokens=512,
+        max_tokens=700,
         temperature=0.0,
         messages=[
             {
@@ -100,8 +331,14 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
                     + first_speech_transcription
                     + "\nwrite a negation speech in the format of a high school "
                     "parliamentary debate case that lasts two minutes at average "
-                    "speaking pace, and includes evidence. In the start of your "
-                    "speech, you must say: \"Hello my name is Debby.\""
+                    "speaking pace, and includes evidence. Structure it as: first, "
+                    "present Debby's own negative contentions; second, refute the "
+                    "affirmative's major contentions. When one of Debby's own "
+                    "contentions answers an affirmative point, explicitly cross-apply "
+                    "it as a refutation. For example, say that your money tradeoff "
+                    "contention also refutes their innovation point because that money "
+                    "can fund innovation elsewhere. Use clear signposting. In the "
+                    "start of your speech, you must say: \"Hello my name is Debby.\""
                 ),
             },
         ],
@@ -116,7 +353,7 @@ async def ai_response_stream(
 
     stream = await client.chat.completions.create(
         model=MODEL,
-        max_tokens=512,
+        max_tokens=700,
         temperature=0.0,
         stream=True,
         messages=[
@@ -136,8 +373,14 @@ async def ai_response_stream(
                     + first_speech_transcription
                     + "\nwrite a negation speech in the format of a high school "
                     "parliamentary debate case that lasts two minutes at average "
-                    "speaking pace, and includes evidence. In the start of your "
-                    "speech, you must say: \"Hello my name is Debby.\""
+                    "speaking pace, and includes evidence. Structure it as: first, "
+                    "present Debby's own negative contentions; second, refute the "
+                    "affirmative's major contentions. When one of Debby's own "
+                    "contentions answers an affirmative point, explicitly cross-apply "
+                    "it as a refutation. For example, say that your money tradeoff "
+                    "contention also refutes their innovation point because that money "
+                    "can fund innovation elsewhere. Use clear signposting. In the "
+                    "start of your speech, you must say: \"Hello my name is Debby.\""
                 ),
             },
         ],
@@ -162,7 +405,22 @@ _WINNER_SYSTEM = (
     "rebuttal. You must decide a winner based on the strength of each case "
     "and the refutations of the speech. "
     "Return JSON with two keys: winner_side (either \"aff\" or \"neg\") and "
-    "rfd (the reason for decision text). "
+    "rfd (the reason for decision text). The RFD is not a flow sheet. Do not "
+    "include the full flow, every contention, aff_sheet, neg_sheet, or a "
+    "speech-by-speech recap. Keep it concise and readable with exactly three "
+    "short labeled lines: 'Winning contention: ...', 'Why it won: ...', and "
+    "'Impact comparison: ...'. Total RFD length must be under 90 words. "
+    "Before deciding, check whether each side made at least one topical, "
+    "judgeable contention. A judgeable contention must contain a claim plus "
+    "some warrant, reason, mechanism, evidence, or impact. Merely repeating "
+    "the topic/resolution, naming an actor, or saying one side is a greater "
+    "threat is not a contention. Do not infer, repair, or invent missing "
+    "arguments from incoherent or off-topic speech. Only credit arguments that "
+    "are actually present in the transcript. If the affirmative constructive "
+    "does not make a topical judgeable contention, the affirmative cannot win "
+    "on case offense or dropped arguments. If both sides are incoherent or "
+    "off-topic, return winner_side \"neg\" only as the procedural default and "
+    "make the RFD say that no side made a judgeable topical argument. "
     "Criteria: First, if the negation did not fully refute all of the "
     "affirmation's points, the affirmation should win. Second, there must be "
     "evidence-based warranting for each point — statistics, link chains, "
@@ -211,8 +469,12 @@ async def winner(
                     + second_speech_transcription
                     + "\nDecide a winner and return JSON: "
                     "{\"winner_side\": \"aff\" | \"neg\", \"rfd\": \"...\"}. "
-                    "The rfd should explain impact analysis and why the "
-                    "winning side has bigger impacts."
+                    "The rfd should only name the contention or impact that won "
+                    "the debate, briefly explain why it won, and compare impacts. "
+                    "Put detailed flow information only in the separate flow JSON, "
+                    "not in the RFD. Do not use any contention that is merely a "
+                    "restatement of the topic or that is not actually present in "
+                    "the transcript."
                 ),
             },
         ],
@@ -245,6 +507,12 @@ _FLOW_SYSTEM = (
     "Return JSON only with keys: aff_sheet, neg_sheet, ballot, dropped, voters, recommended_drills. "
     "aff_sheet: max 4 rows. Each row has contention, neg_responses, aff_defense, status, judge_note. "
     "The aff sheet must flow AFF contention -> NEG responses -> AFF defense. "
+    "A contention must include a claim plus a warrant, mechanism, reason, "
+    "evidence, or impact from the transcript. Do not treat the topic, "
+    "resolution, side statement, actor name, or comparison phrase as a "
+    "contention. For example, 'greater threat to the US than Iran' is only a "
+    "restatement unless the speech gives a real reason why. If a speech has no "
+    "judgeable topical contention, leave that side's sheet empty. "
     "If a NEG contention directly answers or turns an AFF contention, include that NEG contention "
     "inside neg_responses on the matching AFF row too. "
     "neg_sheet: max 4 rows. Each row has contention, aff_rebuttals, status, judge_note. "
@@ -301,17 +569,4 @@ async def generate_round_flow(
     except json.JSONDecodeError as exc:
         raise ValueError(f"generate_round_flow: malformed JSON from model: {raw!r}") from exc
 
-    # Trim to legacy caps before validation.
-    if isinstance(data, dict):
-        if isinstance(data.get("aff_sheet"), list):
-            data["aff_sheet"] = data["aff_sheet"][:4]
-        if isinstance(data.get("neg_sheet"), list):
-            data["neg_sheet"] = data["neg_sheet"][:4]
-        if isinstance(data.get("dropped"), list):
-            data["dropped"] = data["dropped"][:4]
-        if isinstance(data.get("voters"), list):
-            data["voters"] = data["voters"][:3]
-        if isinstance(data.get("recommended_drills"), list):
-            data["recommended_drills"] = data["recommended_drills"][:4]
-
-    return FlowBallot.model_validate(data)
+    return FlowBallot.model_validate(_normalize_flow_data(data, rfd, topic))

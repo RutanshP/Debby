@@ -96,9 +96,12 @@ describe("HistoryPage (server component) — list view", () => {
     render(element);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      unknown,
+      RequestInit,
+    ];
     expect(String(url)).toContain("/api/rounds?limit=50");
-    expect((init as RequestInit).headers).toMatchObject({
+    expect(init.headers).toMatchObject({
       Authorization: "Bearer abc123",
     });
   });
@@ -159,7 +162,13 @@ describe("HistoryDetailPage (server component)", () => {
       rfd: "Aff wins.",
       winner_side: "aff",
       flow: { aff: [{ tag: "Econ", summary: "growth" }], neg: [] },
-      wpm_series: [{ t: 0, wpm: 150 }],
+      first_speech_wpm: 150,
+      second_speech_wpm: 170,
+      average_wpm: 160,
+      wpm_series: {
+        aff: [{ t: 0, wpm: 150 }],
+        aff_two: [{ t: 0, wpm: 170 }],
+      },
       aff_speech: "first",
       neg_speech: "second",
       aff_two_speech: "rebuttal",
@@ -174,6 +183,11 @@ describe("HistoryDetailPage (server component)", () => {
 
     expect(screen.getByRole("heading", { name: "UBI" })).toBeInTheDocument();
     expect(screen.getByText("Aff wins.")).toBeInTheDocument();
+    expect(screen.getByText(/speech statistics/i)).toBeInTheDocument();
+    expect(screen.getByText("1st speech WPM")).toBeInTheDocument();
+    expect(screen.getByText("2nd speech WPM")).toBeInTheDocument();
+    expect(screen.getByText("150")).toBeInTheDocument();
+    expect(screen.getByText("170")).toBeInTheDocument();
     expect(screen.getByText("Econ")).toBeInTheDocument();
     expect(screen.getByText(/affirmative speech/i)).toBeInTheDocument();
   });

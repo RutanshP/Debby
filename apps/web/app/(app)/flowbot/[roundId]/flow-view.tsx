@@ -10,7 +10,9 @@ function isEmptyFlow(flow: FlowSheetData | null | undefined): boolean {
   if (!flow) return true;
   const affEmpty = !flow.aff || flow.aff.length === 0;
   const negEmpty = !flow.neg || flow.neg.length === 0;
-  return affEmpty && negEmpty && !flow.ballot;
+  const affSheetEmpty = !flow.aff_sheet || flow.aff_sheet.length === 0;
+  const negSheetEmpty = !flow.neg_sheet || flow.neg_sheet.length === 0;
+  return affEmpty && negEmpty && affSheetEmpty && negSheetEmpty && !flow.ballot;
 }
 
 export default function FlowView({ flow }: FlowViewProps) {
@@ -30,6 +32,11 @@ export default function FlowView({ flow }: FlowViewProps) {
     neg: flow!.neg ?? [],
     ballot: flow!.ballot,
     unrefuted: flow!.unrefuted,
+    aff_sheet: flow!.aff_sheet,
+    neg_sheet: flow!.neg_sheet,
+    dropped: flow!.dropped,
+    voters: flow!.voters,
+    recommended_drills: flow!.recommended_drills,
   };
 
   return <FlowSheet flow={safeFlow} />;

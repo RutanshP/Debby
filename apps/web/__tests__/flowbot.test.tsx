@@ -30,6 +30,45 @@ describe("FlowView", () => {
     expect(screen.getByText("Aff wins on warming.")).toBeInTheDocument();
   });
 
+  it("renders the legacy structured flow format", () => {
+    const flow: FlowSheetData = {
+      aff_sheet: [
+        {
+          contention: { tag: "Investment", summary: "Green investment grows." },
+          neg_responses: [{ tag: "Cost", summary: "It costs too much." }],
+          aff_defense: [{ tag: "Returns", summary: "Returns outweigh costs." }],
+          status: "contested",
+          judge_note: "Both sides clashed.",
+        },
+      ],
+      neg_sheet: [
+        {
+          contention: { tag: "Competition", summary: "Firms lose competitiveness." },
+          aff_rebuttals: [{ tag: "Brand", summary: "Green branding helps." }],
+          status: "refuted",
+          judge_note: "Aff answered it.",
+        },
+      ],
+      ballot: {
+        aff_unrefuted: 1,
+        neg_unrefuted: 0,
+        winner: "aff",
+        explanation: "Aff outweighs.",
+      },
+    };
+
+    render(<FlowView flow={flow} />);
+
+    expect(screen.getByText("Aff contention")).toBeInTheDocument();
+    expect(screen.getByText("Neg response")).toBeInTheDocument();
+    expect(screen.getByText("Aff defense")).toBeInTheDocument();
+    expect(screen.getByText("Neg contention")).toBeInTheDocument();
+    expect(screen.getByText("Aff rebuttal")).toBeInTheDocument();
+    expect(screen.getByText("Aff Sheet")).toBeInTheDocument();
+    expect(screen.getByText("Neg Sheet")).toBeInTheDocument();
+    expect(screen.queryByText("Aff outweighs.")).not.toBeInTheDocument();
+  });
+
   it("shows no-flow placeholder when flow is empty", () => {
     render(<FlowView flow={null} />);
     expect(screen.getByTestId("flow-empty")).toBeInTheDocument();
@@ -90,9 +129,12 @@ describe("FlowbotRoundPage (server component)", () => {
     render(element);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      unknown,
+      RequestInit,
+    ];
     expect(String(url)).toContain("/api/rounds/r1");
-    expect((init as RequestInit).headers).toMatchObject({
+    expect(init.headers).toMatchObject({
       Authorization: "Bearer abc123",
     });
     expect(screen.getByText("A")).toBeInTheDocument();

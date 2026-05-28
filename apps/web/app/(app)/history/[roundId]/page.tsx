@@ -15,7 +15,10 @@ interface Round {
   rfd: string | null;
   winner_side: "aff" | "neg" | null;
   flow: FlowSheetData | null;
-  wpm_series: WpmPoint[] | null;
+  wpm_series: WpmPoint[] | { aff?: WpmPoint[]; aff_two?: WpmPoint[] } | null;
+  first_speech_wpm: number | null;
+  second_speech_wpm: number | null;
+  average_wpm: number | null;
   aff_speech: string | null;
   neg_speech: string | null;
   aff_two_speech: string | null;
@@ -34,6 +37,32 @@ function NotFound() {
         Round not found.
       </div>
     </main>
+  );
+}
+
+function winnerFromFlow(flow: FlowSheetData | null): "aff" | "neg" | null {
+  const winner = typeof flow?.ballot === "object" ? flow.ballot.winner : null;
+  return winner === "aff" || winner === "neg" ? winner : null;
+}
+
+function speechSeries(
+  wpmSeries: Round["wpm_series"],
+  speechType: "aff" | "aff_two",
+): WpmPoint[] {
+  if (Array.isArray(wpmSeries)) return speechType === "aff" ? wpmSeries : [];
+  return wpmSeries?.[speechType] ?? [];
+}
+
+function StatCard({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-semibold text-slate-900">
+        {value ?? "N/A"}
+      </div>
+    </div>
   );
 }
 
@@ -75,14 +104,23 @@ export default async function HistoryDetailPage({ params }: PageProps) {
         </p>
       </header>
 
-      {round.rfd && <RfdCard rfd={round.rfd} winnerSide={round.winner_side} />}
-
-      {round.wpm_series && round.wpm_series.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-lg font-semibold text-slate-800">Speech pace</h2>
-          <WpmChart series={round.wpm_series} />
-        </section>
+      {round.rfd && (
+        <RfdCard
+          rfd={round.rfd}
+          winnerSide={round.winner_side ?? winnerFromFlow(round.flow)}
+        />
       )}
+
+      <section>
+        <h2 className="mb-3 text-lg font-semibold text-slate-800">
+          Speech statistics
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatCard label="1st speech WPM" value={round.first_speech_wpm} />
+          <StatCard label="2nd speech WPM" value={round.second_speech_wpm} />
+          <StatCard label="Average WPM" value={round.average_wpm} />
+        </div>
+      </section>
 
       {round.flow && (
         <section>
@@ -98,6 +136,9 @@ export default async function HistoryDetailPage({ params }: PageProps) {
             <summary className="cursor-pointer text-sm font-medium text-slate-700">
               Affirmative speech
             </summary>
+            <div className="mt-4">
+              <WpmChart series={speechSeries(round.wpm_series, "aff")} />
+            </div>
             <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
               {round.aff_speech}
             </p>
@@ -118,6 +159,9 @@ export default async function HistoryDetailPage({ params }: PageProps) {
             <summary className="cursor-pointer text-sm font-medium text-slate-700">
               Rebuttal
             </summary>
+            <div className="mt-4">
+              <WpmChart series={speechSeries(round.wpm_series, "aff_two")} />
+            </div>
             <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
               {round.aff_two_speech}
             </p>

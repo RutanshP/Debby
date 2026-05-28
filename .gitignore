@@ -34,6 +34,7 @@ apps/web/out/
 apps/web/coverage/
 apps/web/.env
 apps/web/.env.local
+apps/web/tsconfig.tsbuildinfo
 
 # --- FastAPI venvs ---
 apps/api/.venv/

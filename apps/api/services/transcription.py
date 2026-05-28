@@ -66,7 +66,7 @@ async def transcribe(
         # 2) Request transcription.
         create_resp = await client.post(
             _TRANSCRIPT_URL,
-            json={"audio_url": upload_url, "speech_model": "universal-2"},
+            json={"audio_url": upload_url, "speech_models": ["universal-2"]},
             headers=headers,
         )
         if create_resp.status_code >= 400:

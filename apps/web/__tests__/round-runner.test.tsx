@@ -1,11 +1,6 @@
-import React from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 
 // --- Mocks --------------------------------------------------------------
-
-jest.mock("ai/react", () => ({
-  useCompletion: jest.fn(),
-}));
 
 jest.mock("../lib/supabase", () => ({
   getBrowserSupabase: () => ({
@@ -44,10 +39,7 @@ jest.mock("../components/WpmChart", () => ({
   ),
 }));
 
-import { useCompletion } from "ai/react";
 import { RoundRunner } from "../app/(app)/round-runner";
-
-const mockedUseCompletion = useCompletion as unknown as jest.Mock;
 
 // --- Helpers -----------------------------------------------------------
 
@@ -59,53 +51,69 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
   });
 }
 
-function defaultUseCompletionStub() {
-  const complete = jest.fn(async () => "");
-  mockedUseCompletion.mockReturnValue({
-    complete,
-    completion: "",
-    isLoading: false,
-    error: undefined,
-    stop: jest.fn(),
-  });
-  return complete;
+function tournamentResponse() {
+  return jsonResponse({ tournaments: ["Bargain Belt", "Berkeley HS"] });
 }
 
 beforeEach(() => {
   jest.resetAllMocks();
-  defaultUseCompletionStub();
-  // @ts-expect-error override
   global.fetch = jest.fn();
 });
 
 // --- Tests --------------------------------------------------------------
 
 describe("RoundRunner", () => {
-  test("renders step 1 by default", () => {
+  test("renders step 1 by default", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(tournamentResponse());
     render(<RoundRunner />);
     expect(screen.getByText("Pick a topic")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /get topic/i })).toBeEnabled();
+    expect(await screen.findByRole("option", { name: "Bargain Belt" })).toBeInTheDocument();
   });
 
   test("selecting parli + clicking 'get topic' calls fetch with the right URL and renders the topic", async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce(
-      jsonResponse({ topic: "Resolved: cats > dogs", side: "aff", format: "parli" }),
-    );
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(tournamentResponse())
+      .mockResolvedValueOnce(
+        jsonResponse({ topic: "Resolved: cats > dogs", side: "aff", format: "parli" }),
+      );
 
     render(<RoundRunner />);
     fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
     });
-    const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    const url = (global.fetch as jest.Mock).mock.calls[1][0] as string;
     expect(url).toContain("/api/topics?");
     expect(url).toContain("format=parli");
     expect(await screen.findByText("Resolved: cats > dogs")).toBeInTheDocument();
   });
 
+  test("parli tournament selector defaults to no tournament and can select a CSV tournament", async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(tournamentResponse())
+      .mockResolvedValueOnce(
+        jsonResponse({ topic: "Bargain topic", side: "aff", format: "parli" }),
+      );
+
+    render(<RoundRunner />);
+
+    const tournament = await screen.findByRole("combobox", { name: /tournament/i });
+    await screen.findByRole("option", { name: "Bargain Belt" });
+    expect(tournament).toHaveValue("");
+    expect(screen.getByRole("option", { name: /no tournament/i })).toBeInTheDocument();
+    fireEvent.change(tournament, { target: { value: "Bargain Belt" } });
+    fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    const url = (global.fetch as jest.Mock).mock.calls[1][0] as string;
+    expect(url).toContain("tournament=Bargain+Belt");
+  });
+
   test("after recording the aff speech, fetch is called with FormData to /api/rounds/<id>/speeches", async () => {
     (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(tournamentResponse())
       // GET topic
       .mockResolvedValueOnce(
         jsonResponse({ topic: "T", side: "aff", format: "parli" }),
@@ -115,7 +123,9 @@ describe("RoundRunner", () => {
       // POST speech
       .mockResolvedValueOnce(
         jsonResponse({ transcript: "hello world", wpm_series: [] }),
-      );
+      )
+      // automatic AI opposition
+      .mockResolvedValueOnce(jsonResponse({ speech: "neg response" }));
 
     render(<RoundRunner />);
     fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
@@ -128,9 +138,9 @@ describe("RoundRunner", () => {
     });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(global.fetch).toHaveBeenCalledTimes(5);
     });
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[2];
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[3];
     expect(url).toContain("/api/rounds/round-123/speeches");
     expect((init as RequestInit).method).toBe("POST");
     expect((init as RequestInit).body).toBeInstanceOf(FormData);
@@ -141,31 +151,18 @@ describe("RoundRunner", () => {
     expect(await screen.findByText("hello world")).toBeInTheDocument();
   });
 
-  test("the AI-opposition step renders tokens that arrive on the mocked stream", async () => {
+  test("the AI-opposition step preloads but waits for Generate response click", async () => {
     // Sequence: topic -> round -> aff speech
     (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(tournamentResponse())
       .mockResolvedValueOnce(
         jsonResponse({ topic: "T", side: "aff", format: "parli" }),
       )
       .mockResolvedValueOnce(jsonResponse({ id: "r1" }))
       .mockResolvedValueOnce(
         jsonResponse({ transcript: "aff text", wpm_series: [] }),
-      );
-
-    // Rerender controllable useCompletion that streams tokens via state.
-    let setCompletion: ((s: string) => void) | null = null;
-    const complete = jest.fn(async () => "");
-    mockedUseCompletion.mockImplementation(() => {
-      const [c, set] = React.useState("");
-      setCompletion = set;
-      return {
-        complete,
-        completion: c,
-        isLoading: false,
-        error: undefined,
-        stop: jest.fn(),
-      };
-    });
+      )
+      .mockResolvedValueOnce(jsonResponse({ speech: "Hello world" }));
 
     render(<RoundRunner />);
     fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
@@ -177,23 +174,15 @@ describe("RoundRunner", () => {
     });
     await screen.findByText("aff text");
 
-    // We're now on step 3.
-    fireEvent.click(screen.getByRole("button", { name: /generate opposition/i }));
-    expect(complete).toHaveBeenCalled();
-
-    // Simulate streamed tokens by updating useCompletion completion state.
-    await act(async () => {
-      setCompletion!("Hello ");
-    });
-    await act(async () => {
-      setCompletion!("Hello world");
-    });
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(5));
+    expect(screen.queryByTestId("neg-tokens")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /generate response/i }));
 
     const tokens = await screen.findByTestId("neg-tokens");
     expect(tokens).toHaveTextContent("Hello world");
   });
 
-  test("final judgment renders RfdCard with returned RFD text and FlowSheet with returned flow", async () => {
+  test("final judgment renders RfdCard and history link without the full flow", async () => {
     const flow = {
       aff: [{ tag: "Econ", summary: "growth good" }],
       neg: [{ tag: "Env", summary: "climate bad" }],
@@ -201,6 +190,7 @@ describe("RoundRunner", () => {
     };
 
     (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(tournamentResponse())
       .mockResolvedValueOnce(
         jsonResponse({ topic: "T", side: "aff", format: "parli" }),
       ) // topic
@@ -208,6 +198,7 @@ describe("RoundRunner", () => {
       .mockResolvedValueOnce(
         jsonResponse({ transcript: "aff one", wpm_series: [] }),
       ) // aff speech
+      .mockResolvedValueOnce(jsonResponse({ speech: "neg speech" })) // AI opposition
       .mockResolvedValueOnce(
         jsonResponse({ transcript: "aff two", wpm_series: [] }),
       ) // aff_two speech
@@ -229,9 +220,7 @@ describe("RoundRunner", () => {
     });
     await screen.findByText("aff one");
 
-    // Skip AI opposition: just press continue (negDone via empty completion path)
-    fireEvent.click(screen.getByRole("button", { name: /generate opposition/i }));
-    // Wait for negDone to set after complete() resolves
+    fireEvent.click(screen.getByRole("button", { name: /generate response/i }));
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: /continue to rebuttal/i }),
@@ -245,14 +234,26 @@ describe("RoundRunner", () => {
     });
     await screen.findByText("aff two");
 
-    fireEvent.click(screen.getByRole("button", { name: /get judgment/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(7));
+    expect(
+      screen.queryByText("Aff wins because of clear impact comparison."),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /judge debate/i }));
 
     expect(
       await screen.findByText("Aff wins because of clear impact comparison."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Econ")).toBeInTheDocument();
-    expect(screen.getByText("growth good")).toBeInTheDocument();
-    expect(screen.getByText("Env")).toBeInTheDocument();
+    const [, judgmentInit] = (global.fetch as jest.Mock).mock.calls[6] as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(judgmentInit.body as string)).toMatchObject({
+      round_id: "r1",
+      neg_speech: "neg speech",
+    });
+    expect(screen.queryByText("Econ")).not.toBeInTheDocument();
+    expect(screen.queryByText("growth good")).not.toBeInTheDocument();
+    expect(screen.queryByText("Env")).not.toBeInTheDocument();
     expect(screen.getByText(/round saved as \/history\/r1/)).toBeInTheDocument();
   });
 });
