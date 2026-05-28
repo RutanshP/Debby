@@ -141,19 +141,57 @@ def _row_to_drill(row: dict[str, Any]) -> Drill:
         import json
 
         score_data = json.loads(score_data)
+    parsed_score: DrillScore | None = None
+    if isinstance(score_data, dict) and "score" in score_data:
+        try:
+            parsed_score = DrillScore(**score_data)
+        except Exception:
+            parsed_score = None
     return Drill(
         id=str(row["id"]),
         user_id=str(row["user_id"]),
         drill_type=row["drill_type"],
         prompt=DrillPrompt(**prompt_data),
         response=row.get("response"),
-        score=DrillScore(**score_data) if score_data else None,
+        score=parsed_score,
         timer_seconds=row.get("timer_seconds"),
         created_at=row.get("created_at"),
     )
 
 
 router = APIRouter()
+
+
+def _list_drills(user_id: str, limit: int) -> list[dict[str, Any]]:
+    sb = _supabase_client()
+    if sb is None:
+        rows = [r for r in _FALLBACK_STORE.values() if r["user_id"] == user_id]
+        rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+        return rows[:limit]
+    try:
+        result = (
+            sb.table("drills")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return list(getattr(result, "data", None) or [])
+    except Exception:
+        rows = [r for r in _FALLBACK_STORE.values() if r["user_id"] == user_id]
+        rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+        return rows[:limit]
+
+
+@router.get("/drills", response_model=list[Drill])
+async def list_drills_route(
+    limit: int = 25,
+    user=Depends(get_current_user),
+) -> list[Drill]:
+    limit = max(1, min(limit, 200))
+    rows = _list_drills(user.id, limit)
+    return [_row_to_drill(r) for r in rows if r.get("prompt") is not None]
 
 
 @router.post("/drills", response_model=Drill)

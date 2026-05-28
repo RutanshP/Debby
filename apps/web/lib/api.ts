@@ -42,3 +42,23 @@ export async function apiFetch<T>(
 export function apiStreamUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
 }
+
+export interface SpeechInsightsResponse {
+  summary: {
+    headline: string;
+    strengths: string[];
+    recurring_issues: string[];
+    suggested_focus: string;
+  };
+  rounds_covered: number;
+  generated_at: string;
+}
+
+export async function getInsights(): Promise<SpeechInsightsResponse | null> {
+  const value = await apiFetch<SpeechInsightsResponse | undefined>("/api/insights");
+  return value ?? null;
+}
+
+export async function refreshInsights(): Promise<SpeechInsightsResponse> {
+  return apiFetch<SpeechInsightsResponse>("/api/insights/refresh", { method: "POST" });
+}

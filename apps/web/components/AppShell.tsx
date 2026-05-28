@@ -7,6 +7,7 @@ const navItems = [
   { href: "/", label: "Practice" },
   { href: "/drills", label: "Drills" },
   { href: "/parli-gpt", label: "Case Builder" },
+  { href: "/progress", label: "Progress" },
   { href: "/history", label: "History" },
 ];
 
