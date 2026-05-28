@@ -61,8 +61,22 @@ const timerOptions = [
   { label: "5 min", seconds: 300 },
 ];
 
+const SIDE_LABEL: Record<Side, string> = {
+  aff: "Affirmative",
+  neg: "Negative",
+};
+
 function formatDuration(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function winnerLabel(
+  winner: Side | null | undefined,
+  userSide: Side,
+): string | null {
+  if (!winner) return null;
+  const person = winner === userSide ? "You" : "Debby";
+  return `${person} (${SIDE_LABEL[winner]})`;
 }
 
 function StepCard({
@@ -124,6 +138,8 @@ export function RoundRunner() {
   const [affTranscript, setAffTranscript] = useState<string | null>(null);
   const [affWpm, setAffWpm] = useState<WpmPoint[]>([]);
   const [affLoading, setAffLoading] = useState(false);
+  const [affAiRequested, setAffAiRequested] = useState(false);
+  const [affAiError, setAffAiError] = useState<string | null>(null);
 
   // Step 3
   const [negTokens, setNegTokens] = useState("");
@@ -131,11 +147,14 @@ export function RoundRunner() {
   const [negLoading, setNegLoading] = useState(false);
   const [negRequested, setNegRequested] = useState(false);
   const [negError, setNegError] = useState<string | null>(null);
+  const [negWpm, setNegWpm] = useState<WpmPoint[]>([]);
 
   // Step 4
   const [affTwoTranscript, setAffTwoTranscript] = useState<string | null>(null);
   const [affTwoWpm, setAffTwoWpm] = useState<WpmPoint[]>([]);
   const [affTwoLoading, setAffTwoLoading] = useState(false);
+  const [affTwoRequested, setAffTwoRequested] = useState(false);
+  const [affTwoError, setAffTwoError] = useState<string | null>(null);
 
   // Step 5
   const [judgment, setJudgment] = useState<JudgmentResponse | null>(null);
@@ -145,10 +164,16 @@ export function RoundRunner() {
   const [speechDurationSeconds, setSpeechDurationSeconds] = useState(120);
 
   const abortRef = useRef<AbortController | null>(null);
+  const affStartedRef = useRef(false);
   const negStartedRef = useRef(false);
+  const affTwoStartedRef = useRef(false);
   const judgmentStartedRef = useRef(false);
+  const affPromiseRef = useRef<Promise<string> | null>(null);
   const negPromiseRef = useRef<Promise<string> | null>(null);
+  const affTwoPromiseRef = useRef<Promise<string> | null>(null);
   const judgmentPromiseRef = useRef<Promise<JudgmentResponse> | null>(null);
+  const userSide = topic?.side ?? "aff";
+  const userIsAff = userSide === "aff";
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -209,13 +234,27 @@ export function RoundRunner() {
       });
       setRoundId(round.id);
       setStep(2);
+      affStartedRef.current = false;
       negStartedRef.current = false;
+      affTwoStartedRef.current = false;
       judgmentStartedRef.current = false;
+      affPromiseRef.current = null;
       negPromiseRef.current = null;
+      affTwoPromiseRef.current = null;
       judgmentPromiseRef.current = null;
+      setAffTranscript(null);
+      setAffWpm([]);
+      setAffAiRequested(false);
+      setAffAiError(null);
       setNegTokens("");
       setNegDone(false);
       setNegRequested(false);
+      setNegError(null);
+      setNegWpm([]);
+      setAffTwoTranscript(null);
+      setAffTwoWpm([]);
+      setAffTwoRequested(false);
+      setAffTwoError(null);
       setJudgment(null);
       setJudgmentRequested(false);
       setJudgmentError(null);
@@ -224,8 +263,48 @@ export function RoundRunner() {
     }
   }, [topic]);
 
+  const handlePracticeAgain = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    affStartedRef.current = false;
+    negStartedRef.current = false;
+    affTwoStartedRef.current = false;
+    judgmentStartedRef.current = false;
+    affPromiseRef.current = null;
+    negPromiseRef.current = null;
+    affTwoPromiseRef.current = null;
+    judgmentPromiseRef.current = null;
+    setStep(1);
+    setTopic(null);
+    setTopicError(null);
+    setRoundId(null);
+    setAffTranscript(null);
+    setAffWpm([]);
+    setAffLoading(false);
+    setAffAiRequested(false);
+    setAffAiError(null);
+    setNegTokens("");
+    setNegDone(false);
+    setNegLoading(false);
+    setNegRequested(false);
+    setNegError(null);
+    setNegWpm([]);
+    setAffTwoTranscript(null);
+    setAffTwoWpm([]);
+    setAffTwoLoading(false);
+    setAffTwoRequested(false);
+    setAffTwoError(null);
+    setJudgment(null);
+    setJudgmentLoading(false);
+    setJudgmentRequested(false);
+    setJudgmentError(null);
+  }, []);
+
   const uploadSpeech = useCallback(
-    async (blob: Blob, speechType: "aff" | "aff_two"): Promise<SpeechResponse> => {
+    async (
+      blob: Blob,
+      speechType: "aff" | "neg" | "aff_two",
+    ): Promise<SpeechResponse> => {
       if (!roundId) throw new Error("No round id");
       const form = new FormData();
       form.append("audio", blob);
@@ -255,6 +334,45 @@ export function RoundRunner() {
     },
     [uploadSpeech],
   );
+
+  const prefetchAiAffSpeech = useCallback(async (): Promise<string> => {
+    if (!topic) return "";
+    if (affTranscript?.trim()) return affTranscript;
+    if (affPromiseRef.current) return affPromiseRef.current;
+
+    setAffAiError(null);
+    setAffLoading(true);
+    const promise = apiFetch<AiSpeechResponse>("/api/ai/speech", {
+        method: "POST",
+        body: JSON.stringify({ topic: topic.topic, side: "aff" }),
+      })
+      .then((res) => {
+        setAffTranscript(res.speech);
+        return res.speech;
+      })
+      .catch((err) => {
+        setAffAiError(
+          err instanceof Error ? err.message : "Failed to generate affirmative speech",
+        );
+        throw err;
+      })
+      .finally(() => {
+        setAffLoading(false);
+        affPromiseRef.current = null;
+      });
+
+    affPromiseRef.current = promise;
+    return promise;
+  }, [topic, affTranscript]);
+
+  const revealAiAffSpeech = useCallback(async () => {
+    setAffAiRequested(true);
+    try {
+      await prefetchAiAffSpeech();
+    } catch {
+      // Error text is already stored for the UI.
+    }
+  }, [prefetchAiAffSpeech]);
 
   const prefetchAiOpposition = useCallback(async (): Promise<string> => {
     if (!topic || !affTranscript) return "";
@@ -296,6 +414,26 @@ export function RoundRunner() {
     }
   }, [prefetchAiOpposition]);
 
+  const handleNegComplete = useCallback(
+    async (blob: Blob) => {
+      setNegLoading(true);
+      try {
+        const res = await uploadSpeech(blob, "neg");
+        setNegTokens(res.transcript);
+        setNegDone(true);
+        setNegWpm(res.wpm_series ?? []);
+        affTwoStartedRef.current = false;
+        affTwoPromiseRef.current = null;
+        setAffTwoRequested(false);
+        setAffTwoError(null);
+        setStep(4);
+      } finally {
+        setNegLoading(false);
+      }
+    },
+    [uploadSpeech],
+  );
+
   const handleAffTwoComplete = useCallback(
     async (blob: Blob) => {
       setAffTwoLoading(true);
@@ -314,12 +452,55 @@ export function RoundRunner() {
     [uploadSpeech],
   );
 
+  const prefetchAiAffRebuttal = useCallback(async (): Promise<string> => {
+    if (!topic || !affTranscript || !negTokens.trim()) return "";
+    if (affTwoTranscript?.trim()) return affTwoTranscript;
+    if (affTwoPromiseRef.current) return affTwoPromiseRef.current;
+
+    setAffTwoError(null);
+    setAffTwoLoading(true);
+    const promise = apiFetch<AiSpeechResponse>("/api/ai/aff-rebuttal", {
+        method: "POST",
+        body: JSON.stringify({
+          topic: topic.topic,
+          aff_speech: affTranscript,
+          neg_speech: negTokens,
+        }),
+      })
+      .then((res) => {
+        setAffTwoTranscript(res.speech);
+        return res.speech;
+      })
+      .catch((err) => {
+        setAffTwoError(
+          err instanceof Error ? err.message : "Failed to generate affirmative rebuttal",
+        );
+        throw err;
+      })
+      .finally(() => {
+        setAffTwoLoading(false);
+        affTwoPromiseRef.current = null;
+      });
+
+    affTwoPromiseRef.current = promise;
+    return promise;
+  }, [topic, affTranscript, negTokens, affTwoTranscript]);
+
+  const revealAiAffRebuttal = useCallback(async () => {
+    setAffTwoRequested(true);
+    try {
+      await prefetchAiAffRebuttal();
+    } catch {
+      // Error text is already stored for the UI.
+    }
+  }, [prefetchAiAffRebuttal]);
+
   const prefetchJudgment = useCallback(async (): Promise<JudgmentResponse> => {
     if (!topic || !affTranscript || !affTwoTranscript) {
       throw new Error("Finish the speeches before judging.");
     }
     if (!negTokens.trim()) {
-      throw new Error("Generate Debby's opposition speech before judging.");
+      throw new Error("Finish the negative speech before judging.");
     }
     if (judgment) return judgment;
     if (judgmentPromiseRef.current) return judgmentPromiseRef.current;
@@ -373,6 +554,7 @@ export function RoundRunner() {
 
   useEffect(() => {
     if (
+      userIsAff &&
       step === 3 &&
       topic &&
       affTranscript &&
@@ -383,7 +565,61 @@ export function RoundRunner() {
       negStartedRef.current = true;
       void prefetchAiOpposition().catch(() => undefined);
     }
-  }, [step, topic, affTranscript, negTokens, negLoading, prefetchAiOpposition]);
+  }, [
+    userIsAff,
+    step,
+    topic,
+    affTranscript,
+    negTokens,
+    negLoading,
+    prefetchAiOpposition,
+  ]);
+
+  useEffect(() => {
+    if (
+      !userIsAff &&
+      step === 2 &&
+      topic &&
+      !affTranscript?.trim() &&
+      !affLoading &&
+      !affStartedRef.current
+    ) {
+      affStartedRef.current = true;
+      void prefetchAiAffSpeech().catch(() => undefined);
+    }
+  }, [
+    userIsAff,
+    step,
+    topic,
+    affTranscript,
+    affLoading,
+    prefetchAiAffSpeech,
+  ]);
+
+  useEffect(() => {
+    if (
+      !userIsAff &&
+      step === 4 &&
+      topic &&
+      affTranscript &&
+      negTokens.trim() &&
+      !affTwoTranscript?.trim() &&
+      !affTwoLoading &&
+      !affTwoStartedRef.current
+    ) {
+      affTwoStartedRef.current = true;
+      void prefetchAiAffRebuttal().catch(() => undefined);
+    }
+  }, [
+    userIsAff,
+    step,
+    topic,
+    affTranscript,
+    negTokens,
+    affTwoTranscript,
+    affTwoLoading,
+    prefetchAiAffRebuttal,
+  ]);
 
   useEffect(() => {
     if (
@@ -465,8 +701,21 @@ export function RoundRunner() {
           {topic && (
             <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-medium text-slate-900">{topic.topic}</p>
-              <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+              <p className="sr-only">
                 Side: {topic.side} · {topic.format}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full bg-teal/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-teal-dark">
+                  Your side: {SIDE_LABEL[topic.side]}
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  {topic.format}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                {topic.side === "aff"
+                  ? "You speak first for the affirmative. Debby answers as negative."
+                  : "Debby speaks first for the affirmative. You answer as negative."}
               </p>
               {step === 1 && (
                 <button
@@ -485,7 +734,12 @@ export function RoundRunner() {
       <StepCard step={2} title="Aff speech" active={step === 2} done={step > 2}>
         {step >= 2 ? (
           <div className="flex flex-col gap-3">
-            <RecordButton
+            {userIsAff ? (
+              <>
+                <p className="text-sm font-medium text-slate-700">
+                  You are speaking for the affirmative.
+                </p>
+                <RecordButton
               onComplete={handleAffComplete}
               label="Record Aff speech"
               disabled={step !== 2 || affLoading}
@@ -500,7 +754,46 @@ export function RoundRunner() {
                 {affTranscript}
               </div>
             )}
-            {affWpm.length > 0 && <WpmChart series={affWpm} />}
+                {affWpm.length > 0 && <WpmChart series={affWpm} />}
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-slate-700">
+                  Debby is speaking first for the affirmative.
+                </p>
+                <button
+                  type="button"
+                  onClick={revealAiAffSpeech}
+                  disabled={step !== 2 || (affAiRequested && affLoading)}
+                  className={primaryButtonClass}
+                >
+                  {affAiRequested && affLoading
+                    ? "Generating..."
+                    : "Generate Aff speech"}
+                </button>
+                {affAiError && <p className="text-sm text-red-600">{affAiError}</p>}
+                {step === 2 && affAiRequested && affTranscript && (
+                  <button
+                    type="button"
+                    onClick={() => setStep(3)}
+                    className={secondaryButtonClass}
+                  >
+                    Continue to Neg speech
+                  </button>
+                )}
+                {affTranscript && (
+                  <div
+                    data-testid="aff-transcript"
+                    className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700"
+                  >
+                    <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
+                      Debby's Aff speech
+                    </div>
+                    {affTranscript}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         ) : (
           <p className="text-sm text-slate-500">Complete step 1 first.</p>
@@ -509,19 +802,24 @@ export function RoundRunner() {
 
       <StepCard
         step={3}
-        title="AI opposition"
+        title="Neg speech"
         active={step === 3}
         done={step > 3}
       >
         {step >= 3 ? (
           <div className="flex flex-col gap-3">
+            {userIsAff ? (
+              <>
+                <p className="text-sm font-medium text-slate-700">
+                  Debby answers as the negative.
+                </p>
             <button
               type="button"
               onClick={revealAiOpposition}
               disabled={step !== 3 || (negRequested && negLoading)}
               className={primaryButtonClass}
             >
-              {negRequested && negLoading ? "Generating..." : "Generate response"}
+              {negRequested && negLoading ? "Generating..." : "Generate Neg speech"}
             </button>
             {negError && <p className="text-sm text-red-600">{negError}</p>}
             {negRequested && negTokens && (
@@ -538,8 +836,35 @@ export function RoundRunner() {
                 onClick={() => setStep(4)}
                 className={secondaryButtonClass}
               >
-                Continue to rebuttal
+                Continue to Aff rebuttal
               </button>
+            )}
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-slate-700">
+                  You are speaking for the negative.
+                </p>
+                <RecordButton
+                  onComplete={handleNegComplete}
+                  label="Record Neg speech"
+                  disabled={step !== 3 || negLoading}
+                  maxDurationSeconds={speechDurationSeconds}
+                />
+                {negLoading && <p className="text-sm text-slate-500">Uploading...</p>}
+                {negWpm.length > 0 && <WpmChart series={negWpm} />}
+                {negTokens && (
+                  <div
+                    data-testid="neg-tokens"
+                    className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700"
+                  >
+                    <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
+                      Transcript
+                    </div>
+                    {negTokens}
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (
@@ -547,12 +872,17 @@ export function RoundRunner() {
         )}
       </StepCard>
 
-      <StepCard step={4} title="Rebuttal" active={step === 4} done={step > 4}>
+      <StepCard step={4} title="Aff rebuttal" active={step === 4} done={step > 4}>
         {step >= 4 ? (
           <div className="flex flex-col gap-3">
+            {userIsAff ? (
+              <>
+                <p className="text-sm font-medium text-slate-700">
+                  You close for the affirmative.
+                </p>
             <RecordButton
               onComplete={handleAffTwoComplete}
-              label="Record rebuttal"
+              label="Record Aff rebuttal"
               disabled={step !== 4 || affTwoLoading}
               maxDurationSeconds={speechDurationSeconds}
             />
@@ -566,9 +896,45 @@ export function RoundRunner() {
               </div>
             )}
             {affTwoWpm.length > 0 && <WpmChart series={affTwoWpm} />}
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-slate-700">
+                  Debby gives a short affirmative rebuttal.
+                </p>
+                <button
+                  type="button"
+                  onClick={revealAiAffRebuttal}
+                  disabled={step !== 4 || (affTwoRequested && affTwoLoading)}
+                  className={primaryButtonClass}
+                >
+                  {affTwoRequested && affTwoLoading
+                    ? "Generating..."
+                    : "Generate Aff rebuttal"}
+                </button>
+                {affTwoError && <p className="text-sm text-red-600">{affTwoError}</p>}
+                {affTwoTranscript && (
+                  <div className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+                    <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
+                      Debby's Aff rebuttal
+                    </div>
+                    {affTwoTranscript}
+                  </div>
+                )}
+                {step === 4 && affTwoRequested && affTwoTranscript && (
+                  <button
+                    type="button"
+                    onClick={() => setStep(5)}
+                    className={secondaryButtonClass}
+                  >
+                    Continue to judgment
+                  </button>
+                )}
+              </>
+            )}
           </div>
         ) : (
-          <p className="text-sm text-slate-500">Finish AI opposition first.</p>
+          <p className="text-sm text-slate-500">Finish the Neg speech first.</p>
         )}
       </StepCard>
 
@@ -607,6 +973,7 @@ export function RoundRunner() {
                 <RfdCard
                   rfd={judgment.rfd}
                   winnerSide={judgment.winner_side ?? null}
+                  winnerLabel={winnerLabel(judgment.winner_side, userSide)}
                 />
                 {roundId && (
                   <a
@@ -616,6 +983,13 @@ export function RoundRunner() {
                     round saved as /history/{roundId}
                   </a>
                 )}
+                <button
+                  type="button"
+                  onClick={handlePracticeAgain}
+                  className={secondaryButtonClass}
+                >
+                  Practice again
+                </button>
               </>
             )}
           </div>

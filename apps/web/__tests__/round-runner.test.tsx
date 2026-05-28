@@ -151,7 +151,7 @@ describe("RoundRunner", () => {
     expect(await screen.findByText("hello world")).toBeInTheDocument();
   });
 
-  test("the AI-opposition step preloads but waits for Generate response click", async () => {
+  test("the Neg speech step preloads but waits for Generate Neg speech click", async () => {
     // Sequence: topic -> round -> aff speech
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce(tournamentResponse())
@@ -176,10 +176,82 @@ describe("RoundRunner", () => {
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(5));
     expect(screen.queryByTestId("neg-tokens")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /generate response/i }));
+    fireEvent.click(screen.getByRole("button", { name: /generate neg speech/i }));
 
     const tokens = await screen.findByTestId("neg-tokens");
     expect(tokens).toHaveTextContent("Hello world");
+  });
+
+  test("negative side flips the flow: Debby aff, user neg, Debby aff rebuttal", async () => {
+    const flow = {
+      aff: [],
+      neg: [],
+      ballot: { winner: "neg", explanation: "Neg wins." },
+    };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(tournamentResponse())
+      .mockResolvedValueOnce(
+        jsonResponse({ topic: "T", side: "neg", format: "parli" }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ id: "r-neg" }))
+      .mockResolvedValueOnce(jsonResponse({ speech: "ai aff" }))
+      .mockResolvedValueOnce(
+        jsonResponse({ transcript: "user neg", wpm_series: [] }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ speech: "ai aff rebuttal" }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          rfd: "Negative wins on defense and turns.",
+          winner_side: "neg",
+          flow,
+        }),
+      );
+
+    render(<RoundRunner />);
+    fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
+    await screen.findByText("T");
+    expect(screen.getByText("Your side: Negative")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /accept topic/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+    fireEvent.click(screen.getByRole("button", { name: /generate aff speech/i }));
+    expect(await screen.findByText("ai aff")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /continue to neg speech/i }));
+    const negBtn = await screen.findByTestId("record-record-neg-speech");
+    await act(async () => {
+      fireEvent.click(negBtn);
+    });
+    expect(await screen.findByText("user neg")).toBeInTheDocument();
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(6));
+    fireEvent.click(screen.getByRole("button", { name: /generate aff rebuttal/i }));
+    expect(await screen.findByText("ai aff rebuttal")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /continue to judgment/i }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(7));
+    fireEvent.click(screen.getByRole("button", { name: /judge debate/i }));
+    expect(await screen.findByText("Negative wins on defense and turns.")).toBeInTheDocument();
+    expect(screen.getByText("Winner: You (Negative)")).toBeInTheDocument();
+
+    const [, speechInit] = (global.fetch as jest.Mock).mock.calls[3] as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(speechInit.body as string)).toMatchObject({
+      side: "aff",
+    });
+    const [, judgmentInit] = (global.fetch as jest.Mock).mock.calls[6] as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(judgmentInit.body as string)).toMatchObject({
+      round_id: "r-neg",
+      aff_speech: "ai aff",
+      neg_speech: "user neg",
+      aff_two_speech: "ai aff rebuttal",
+    });
   });
 
   test("final judgment renders RfdCard and history link without the full flow", async () => {
@@ -220,15 +292,15 @@ describe("RoundRunner", () => {
     });
     await screen.findByText("aff one");
 
-    fireEvent.click(screen.getByRole("button", { name: /generate response/i }));
+    fireEvent.click(screen.getByRole("button", { name: /generate neg speech/i }));
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: /continue to rebuttal/i }),
+        screen.getByRole("button", { name: /continue to aff rebuttal/i }),
       ).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole("button", { name: /continue to rebuttal/i }));
+    fireEvent.click(screen.getByRole("button", { name: /continue to aff rebuttal/i }));
 
-    const rebuttalBtn = await screen.findByTestId("record-record-rebuttal");
+    const rebuttalBtn = await screen.findByTestId("record-record-aff-rebuttal");
     await act(async () => {
       fireEvent.click(rebuttalBtn);
     });
@@ -255,5 +327,11 @@ describe("RoundRunner", () => {
     expect(screen.queryByText("growth good")).not.toBeInTheDocument();
     expect(screen.queryByText("Env")).not.toBeInTheDocument();
     expect(screen.getByText(/round saved as \/history\/r1/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /practice again/i }));
+
+    expect(screen.getByRole("button", { name: /get topic/i })).toBeEnabled();
+    expect(screen.queryByText("Aff wins because of clear impact comparison.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/round saved as \/history\/r1/)).not.toBeInTheDocument();
   });
 });

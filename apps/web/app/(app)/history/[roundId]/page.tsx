@@ -7,6 +7,11 @@ import { FlowSheet, type FlowSheetData } from "@/components/FlowSheet";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+const SIDE_LABEL: Record<"aff" | "neg", string> = {
+  aff: "Affirmative",
+  neg: "Negative",
+};
+
 interface Round {
   id: string;
   topic: string;
@@ -43,6 +48,15 @@ function NotFound() {
 function winnerFromFlow(flow: FlowSheetData | null): "aff" | "neg" | null {
   const winner = typeof flow?.ballot === "object" ? flow.ballot.winner : null;
   return winner === "aff" || winner === "neg" ? winner : null;
+}
+
+function winnerLabel(
+  winner: "aff" | "neg" | null,
+  userSide: "aff" | "neg" | null,
+): string | null {
+  if (!winner) return null;
+  const person = winner === userSide ? "You" : "Debby";
+  return `${person} (${SIDE_LABEL[winner]})`;
 }
 
 function speechSeries(
@@ -93,6 +107,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
   }
 
   const round = (await res.json()) as Round;
+  const winner = round.winner_side ?? winnerFromFlow(round.flow);
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 px-4 py-10">
@@ -107,7 +122,8 @@ export default async function HistoryDetailPage({ params }: PageProps) {
       {round.rfd && (
         <RfdCard
           rfd={round.rfd}
-          winnerSide={round.winner_side ?? winnerFromFlow(round.flow)}
+          winnerSide={winner}
+          winnerLabel={winnerLabel(winner, round.side)}
         />
       )}
 
@@ -134,7 +150,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
         {round.aff_speech && (
           <details className="rounded-md border border-slate-200 bg-white p-4">
             <summary className="cursor-pointer text-sm font-medium text-slate-700">
-              Affirmative speech
+              {round.side === "aff" ? "Your" : "Debby's"} affirmative speech
             </summary>
             <div className="mt-4">
               <WpmChart series={speechSeries(round.wpm_series, "aff")} />
@@ -147,7 +163,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
         {round.neg_speech && (
           <details className="rounded-md border border-slate-200 bg-white p-4">
             <summary className="cursor-pointer text-sm font-medium text-slate-700">
-              AI opposition speech
+              {round.side === "neg" ? "Your" : "Debby's"} negative speech
             </summary>
             <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
               {round.neg_speech}
@@ -157,7 +173,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
         {round.aff_two_speech && (
           <details className="rounded-md border border-slate-200 bg-white p-4">
             <summary className="cursor-pointer text-sm font-medium text-slate-700">
-              Rebuttal
+              {round.side === "aff" ? "Your" : "Debby's"} affirmative rebuttal
             </summary>
             <div className="mt-4">
               <WpmChart series={speechSeries(round.wpm_series, "aff_two")} />

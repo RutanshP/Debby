@@ -8,6 +8,11 @@ export interface HistoryRound {
   format: string;
   side: "aff" | "neg";
   winner_side: "aff" | "neg" | null;
+  flow?: {
+    ballot?: {
+      winner?: "aff" | "neg" | string | null;
+    } | string | null;
+  } | null;
   created_at: string;
 }
 
@@ -26,13 +31,33 @@ function formatDate(value: string): string {
   return d.toLocaleString();
 }
 
+function resolvedWinner(round: HistoryRound): "aff" | "neg" | null {
+  if (round.winner_side === "aff" || round.winner_side === "neg") {
+    return round.winner_side;
+  }
+  const flowWinner =
+    typeof round.flow?.ballot === "object" && round.flow.ballot !== null
+      ? round.flow.ballot.winner
+      : null;
+  return flowWinner === "aff" || flowWinner === "neg" ? flowWinner : null;
+}
+
+function winnerLabel(round: HistoryRound): string {
+  const winner = resolvedWinner(round);
+  if (!winner) return "N/A";
+  return winner === round.side ? "You" : "Debby";
+}
+
 export function HistoryList({ rounds }: HistoryListProps) {
   const total = rounds.length;
   const userWins = rounds.filter(
-    (r) => r.winner_side && r.winner_side === r.side,
+    (r) => resolvedWinner(r) === r.side,
   ).length;
   const debbyWins = rounds.filter(
-    (r) => r.winner_side && r.winner_side !== r.side,
+    (r) => {
+      const winner = resolvedWinner(r);
+      return winner !== null && winner !== r.side;
+    },
   ).length;
   const winRate = total > 0 ? Math.round((userWins / total) * 1000) / 10 : 0;
 
@@ -81,7 +106,8 @@ export function HistoryList({ rounds }: HistoryListProps) {
 
       <ul className="space-y-3">
         {rounds.map((r) => {
-          const userWon = r.winner_side && r.winner_side === r.side;
+          const winner = resolvedWinner(r);
+          const userWon = winner === r.side;
           return (
             <li key={r.id}>
               <Link
@@ -102,13 +128,13 @@ export function HistoryList({ rounds }: HistoryListProps) {
                     className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
                       userWon
                         ? "bg-teal/10 text-teal"
-                        : r.winner_side
+                        : winner
                           ? "bg-slate-100 text-slate-600"
                           : "bg-slate-50 text-slate-400"
                     }`}
                   >
                     Winner:{" "}
-                    {r.winner_side ? (SIDE_LABEL[r.winner_side] ?? r.winner_side) : "N/A"}
+                    {winnerLabel(r)}
                   </span>
                 </div>
               </Link>

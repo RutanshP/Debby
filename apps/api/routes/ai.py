@@ -13,6 +13,7 @@ which matches the contract closely enough for boot checks and unit tests
 
 from __future__ import annotations
 
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -39,6 +40,7 @@ except Exception:  # A1 not merged yet
 
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+logger = logging.getLogger(__name__)
 
 
 Side = Literal["aff", "neg"]
@@ -59,6 +61,12 @@ class SpeechResponse(BaseModel):
 class ResponseBody(BaseModel):
     topic: str = Field(..., min_length=1)
     first_speech: str = Field(..., min_length=1)
+
+
+class AffRebuttalBody(BaseModel):
+    topic: str = Field(..., min_length=1)
+    aff_speech: str = Field(..., min_length=1)
+    neg_speech: str = Field(..., min_length=1)
 
 
 class JudgmentBody(BaseModel):
@@ -118,6 +126,22 @@ async def post_response(
     return SpeechResponse(speech=text)
 
 
+@router.post("/aff-rebuttal", response_model=SpeechResponse)
+async def post_aff_rebuttal(
+    body: AffRebuttalBody,
+    user: User = Depends(get_current_user),
+) -> SpeechResponse:
+    try:
+        text = await ai_service.ai_aff_rebuttal(
+            body.topic,
+            body.aff_speech,
+            body.neg_speech,
+        )
+    except (RateLimitError, APIStatusError, ValueError) as exc:
+        raise _translate_openai_error(exc) from exc
+    return SpeechResponse(speech=text)
+
+
 @router.post("/response-stream")
 async def post_response_stream(
     body: ResponseBody,
@@ -162,15 +186,28 @@ async def post_judgment(
             verdict.rfd,
         )
         if body.round_id:
-            await rounds_service.update_round(
-                user.id,
-                body.round_id,
-                {
-                    "neg_speech": body.neg_speech,
-                    "rfd": verdict.rfd,
-                    "flow": flow.model_dump(mode="json"),
-                },
-            )
+            update_fields = {
+                "neg_speech": body.neg_speech,
+                "rfd": verdict.rfd,
+                "winner_side": verdict.winner_side,
+                "flow": flow.model_dump(mode="json"),
+            }
+            try:
+                await rounds_service.update_round(
+                    user.id,
+                    body.round_id,
+                    dict(update_fields),
+                )
+            except Exception as exc:
+                # Older local/Supabase schemas may not have winner_side yet. The
+                # flow ballot still stores the winning side, so save the judgment
+                # instead of failing the whole request in the browser.
+                logger.warning(
+                    "Round update with winner_side failed; retrying without it",
+                    exc_info=exc,
+                )
+                update_fields.pop("winner_side", None)
+                await rounds_service.update_round(user.id, body.round_id, update_fields)
     except (RateLimitError, APIStatusError, ValueError) as exc:
         raise _translate_openai_error(exc) from exc
 
