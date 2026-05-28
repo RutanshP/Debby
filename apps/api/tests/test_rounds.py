@@ -323,6 +323,58 @@ def test_speeches_happy_path(
     assert row["average_wpm"] == 7
     assert row["first_speech_wpm"] == 7
     assert row["wpm_series"]["aff"] == body["wpm_series"]
+    assert row["total_speech_time"] == "00:01:00"
+
+
+@respx.mock
+def test_speeches_accumulates_total_speech_time(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+    auth_user_a: _FakeUser,
+) -> None:
+    round_id = str(uuid.uuid4())
+    table = fake_supabase.tables.setdefault("rounds", _FakeTable())
+    table.rows.append(
+        {
+            "id": round_id,
+            "user_id": USER_A.id,
+            "format": "parli",
+            "topic": "test",
+            "side": "aff",
+            "total_speech_time": "00:01:30",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
+
+    respx.post("https://api.assemblyai.com/v2/upload").mock(
+        return_value=httpx.Response(200, json={"upload_url": "https://cdn/foo"})
+    )
+    respx.post("https://api.assemblyai.com/v2/transcript").mock(
+        return_value=httpx.Response(200, json={"id": "tid-2", "status": "queued"})
+    )
+    respx.get("https://api.assemblyai.com/v2/transcript/tid-2").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "tid-2",
+                "status": "completed",
+                "text": "short speech",
+                "audio_duration": 45.0,
+                "words": [],
+            },
+        )
+    )
+
+    files = {"audio": ("speech.webm", io.BytesIO(b"\x00\x01webmbytes"), "audio/webm")}
+    resp = client.post(
+        f"/api/rounds/{round_id}/speeches",
+        files=files,
+        data={"speech_type": "aff_two"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    row = next(r for r in table.rows if r["id"] == round_id)
+    assert row["total_speech_time"] == "00:02:15"
 
 
 def test_merge_wpm_series_preserves_both_recorded_speeches() -> None:
