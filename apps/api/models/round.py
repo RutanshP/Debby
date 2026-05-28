@@ -37,6 +37,7 @@ class Round(BaseModel):
     neg_speech: str | None = None
     aff_two_speech: str | None = None
     rfd: str | None = None
+    winner_side: Side | None = None
     flow: Any | None = None
     first_speech_wpm: int | None = None
     second_speech_wpm: int | None = None

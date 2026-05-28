@@ -346,6 +346,45 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
     return message.choices[0].message.content or ""
 
 
+async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
+    """Short affirmative rebuttal after the human gives the NEG speech."""
+
+    if not topic or not aff_speech or not neg_speech:
+        raise ValueError("Topic, affirmative speech, and negative speech are required")
+
+    message = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=450,
+        temperature=0.0,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an affirmative parliamentary debater by the name of "
+                    "Debby. You are giving a short rebuttal-only speech. Do not "
+                    "introduce a new constructive case."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Given the following topic:\n"
+                    + topic
+                    + "\n\nGiven Debby's affirmative constructive speech:\n"
+                    + aff_speech
+                    + "\n\nGiven the negative speech:\n"
+                    + neg_speech
+                    + "\n\nWrite a concise affirmative rebuttal speech that answers "
+                    "the negative's strongest arguments, extends the affirmative's "
+                    "best offense, and does clear impact comparison. This should be "
+                    "rebuttal-only, not a new case."
+                ),
+            },
+        ],
+    )
+    return message.choices[0].message.content or ""
+
+
 async def ai_response_stream(
     topic: str, first_speech_transcription: str
 ) -> AsyncIterator[str]:

@@ -80,6 +80,19 @@ async def test_ai_response_prompt_prioritizes_case_then_refutation(
     assert "cross-apply" in user_prompt
 
 
+async def test_ai_aff_rebuttal_returns_short_rebuttal_only_prompt(
+    patched_client: AsyncMock,
+):
+    patched_client.return_value = _chat_completion("aff rebuttal")
+    out = await ai_service.ai_aff_rebuttal("topic", "aff speech", "neg speech")
+    assert out == "aff rebuttal"
+
+    messages = patched_client.await_args.kwargs["messages"]
+    assert "short rebuttal-only speech" in messages[0]["content"]
+    assert "Do not introduce a new constructive case" in messages[0]["content"]
+    assert "rebuttal-only, not a new case" in messages[1]["content"]
+
+
 async def test_ai_response_stream_yields_chunks(patched_client: AsyncMock):
     patched_client.return_value = _AsyncStream(["Hello ", "my name ", "is Debby."])
     tokens = [t async for t in ai_service.ai_response_stream("t", "speech")]
@@ -327,6 +340,14 @@ def test_judgment_route_requires_auth(client_unauthed: TestClient):
     assert r.status_code == 401
 
 
+def test_aff_rebuttal_route_requires_auth(client_unauthed: TestClient):
+    r = client_unauthed.post(
+        "/api/ai/aff-rebuttal",
+        json={"topic": "x", "aff_speech": "a", "neg_speech": "n"},
+    )
+    assert r.status_code == 401
+
+
 def test_speech_route_happy_path(
     client_authed: TestClient, patched_client: AsyncMock
 ):
@@ -347,6 +368,18 @@ def test_response_route_happy_path(
     assert r.json() == {"speech": "neg"}
 
 
+def test_aff_rebuttal_route_happy_path(
+    client_authed: TestClient, patched_client: AsyncMock
+):
+    patched_client.return_value = _chat_completion("aff rebuttal")
+    r = client_authed.post(
+        "/api/ai/aff-rebuttal",
+        json={"topic": "x", "aff_speech": "a", "neg_speech": "n"},
+    )
+    assert r.status_code == 200
+    assert r.json() == {"speech": "aff rebuttal"}
+
+
 def test_response_stream_route(
     client_authed: TestClient, patched_client: AsyncMock
 ):
@@ -364,8 +397,10 @@ def test_response_stream_route(
 
 
 def test_judgment_route_happy_path(
-    client_authed: TestClient, patched_client: AsyncMock
+    client_authed: TestClient, patched_client: AsyncMock, monkeypatch: pytest.MonkeyPatch
 ):
+    update_round = AsyncMock()
+    monkeypatch.setattr(ai_route.rounds_service, "update_round", update_round)
     flow_payload = {
         "aff_sheet": [],
         "neg_sheet": [],
@@ -380,13 +415,65 @@ def test_judgment_route_happy_path(
     ]
     r = client_authed.post(
         "/api/ai/judgment",
-        json={"topic": "x", "aff_speech": "a", "neg_speech": "n", "aff_two_speech": "a2"},
+        json={
+            "round_id": "round-1",
+            "topic": "x",
+            "aff_speech": "a",
+            "neg_speech": "n",
+            "aff_two_speech": "a2",
+        },
     )
     assert r.status_code == 200
     data = r.json()
     assert data["winner_side"] == "neg"
     assert data["rfd"] == "neg wins"
     assert data["flow"]["ballot"]["winner"] == "neg"
+    update_round.assert_awaited_once()
+    assert update_round.await_args.args[:2] == ("user-1", "round-1")
+    assert update_round.await_args.args[2]["winner_side"] == "neg"
+
+
+def test_judgment_route_retries_save_without_winner_side(
+    client_authed: TestClient, patched_client: AsyncMock, monkeypatch: pytest.MonkeyPatch
+):
+    update_round = AsyncMock(side_effect=[RuntimeError("winner_side missing"), None])
+    monkeypatch.setattr(ai_route.rounds_service, "update_round", update_round)
+    flow_payload = {
+        "aff_sheet": [],
+        "neg_sheet": [],
+        "ballot": {
+            "aff_unrefuted": 0,
+            "neg_unrefuted": 0,
+            "winner": "aff",
+            "explanation": "aff wins",
+        },
+        "dropped": [],
+        "voters": [],
+        "recommended_drills": [],
+    }
+    patched_client.side_effect = [
+        _chat_completion(json.dumps({"winner_side": "aff", "rfd": "aff wins"})),
+        _chat_completion(json.dumps(flow_payload)),
+    ]
+
+    r = client_authed.post(
+        "/api/ai/judgment",
+        json={
+            "round_id": "round-1",
+            "topic": "x",
+            "aff_speech": "a",
+            "neg_speech": "n",
+            "aff_two_speech": "a2",
+        },
+    )
+
+    assert r.status_code == 200
+    assert update_round.await_count == 2
+    first_fields = update_round.await_args_list[0].args[2]
+    second_fields = update_round.await_args_list[1].args[2]
+    assert first_fields["winner_side"] == "aff"
+    assert "winner_side" not in second_fields
+    assert second_fields["rfd"] == "aff wins"
 
 
 def test_judgment_route_malformed_flow_returns_502(

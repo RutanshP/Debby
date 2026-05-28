@@ -13,6 +13,7 @@ create table public.rounds (
     neg_speech          text,
     aff_two_speech      text,
     rfd                 text,
+    winner_side         text check (winner_side in ('aff', 'neg')),
     flow                jsonb,
     first_speech_wpm    int,
     second_speech_wpm   int,

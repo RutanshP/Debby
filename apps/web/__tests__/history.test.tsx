@@ -21,7 +21,7 @@ const ROUNDS: HistoryRound[] = [
     topic: "Phones",
     format: "mspdp",
     side: "neg",
-    winner_side: "aff",
+    winner_side: "neg",
     created_at: "2026-05-02T00:00:00Z",
   },
   {
@@ -30,6 +30,7 @@ const ROUNDS: HistoryRound[] = [
     format: "parli",
     side: "aff",
     winner_side: null,
+    flow: { ballot: { winner: "neg" } },
     created_at: "2026-05-03T00:00:00Z",
   },
 ];
@@ -48,8 +49,14 @@ describe("HistoryList", () => {
     // Round r1: user is aff and winner is aff → user win.
     // Round r2: user is neg and winner is aff → debby win.
     // Round r3: no winner_side → counted as neither.
-    expect(screen.getByTestId("stat-user-wins").textContent).toBe("1");
+    expect(screen.getByTestId("stat-user-wins").textContent).toBe("2");
     expect(screen.getByTestId("stat-debby-wins").textContent).toBe("1");
+  });
+
+  it("shows winner pills as You or Debby", () => {
+    render(<HistoryList rounds={ROUNDS} />);
+    expect(screen.getAllByText("Winner: You")).toHaveLength(2);
+    expect(screen.getByText("Winner: Debby")).toBeInTheDocument();
   });
 
   it("shows the empty state when the list is empty", () => {
@@ -182,6 +189,7 @@ describe("HistoryDetailPage (server component)", () => {
     render(await Page({ params: Promise.resolve({ roundId: "r1" }) }));
 
     expect(screen.getByRole("heading", { name: "UBI" })).toBeInTheDocument();
+    expect(screen.getByText("Winner: You (Affirmative)")).toBeInTheDocument();
     expect(screen.getByText("Aff wins.")).toBeInTheDocument();
     expect(screen.getByText(/speech statistics/i)).toBeInTheDocument();
     expect(screen.getByText("1st speech WPM")).toBeInTheDocument();
