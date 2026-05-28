@@ -30,19 +30,21 @@ def _get_service_client() -> Any:
     if _supabase_client is not None:
         return _supabase_client
 
-    try:  # Prefer the shared wrapper if A4 has landed it.
-        from services.supabase_client import get_service_client  # type: ignore
+    try:  # Prefer the shared wrapper.
+        from services.supabase_client import get_supabase
 
-        _supabase_client = get_service_client()
+        _supabase_client = get_supabase()
         return _supabase_client
     except ImportError:
         pass
 
     url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    key = os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get(
+        "SUPABASE_SERVICE_ROLE_KEY"
+    )
     if not url or not key:
         raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set "
+            "SUPABASE_URL and SUPABASE_SECRET_KEY must be set "
             "to query speed_passages."
         )
 
@@ -131,6 +133,50 @@ async def get_passage(target_words: int) -> str | None:
     text = best.get("text")
     _cache_set(target_words, text)
     return text
+
+
+async def count_passages() -> int:
+    """Return the number of stored speed passages."""
+
+    client = _get_service_client()
+
+    def _query() -> list[dict[str, Any]]:
+        response = client.table("speed_passages").select("id").execute()
+        return getattr(response, "data", None) or []
+
+    rows = await asyncio.to_thread(_query)
+    return len(rows)
+
+
+async def save_passage(target_words: int, text: str) -> bool:
+    """Store a generated passage if it is non-empty and not already present."""
+
+    text = (text or "").strip()
+    if not text:
+        return False
+
+    client = _get_service_client()
+
+    def _insert() -> bool:
+        existing = (
+            client.table("speed_passages")
+            .select("id")
+            .eq("text", text)
+            .limit(1)
+            .execute()
+        )
+        if getattr(existing, "data", None):
+            return False
+
+        client.table("speed_passages").insert(
+            {"target_words": int(target_words), "text": text}
+        ).execute()
+        return True
+
+    inserted = await asyncio.to_thread(_insert)
+    if inserted:
+        clear_cache()
+    return inserted
 
 
 async def list_passages() -> list[Passage]:

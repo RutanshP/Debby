@@ -110,13 +110,66 @@ async def test_generate_drill_speed_respects_timer():
         "timer_seconds": 60,
     }
     mock = AsyncMock(return_value=_mock_chat_completion(payload))
-    with patch.object(drills_service._openai_client.chat.completions, "create", mock):
+    with patch.object(drills_service.speed_passages, "count_passages", AsyncMock(return_value=0)), \
+        patch.object(drills_service.speed_passages, "save_passage", AsyncMock()), \
+        patch.object(drills_service._openai_client.chat.completions, "create", mock):
         prompt = await drills_service.generate_drill("speed", timer_seconds=60)
 
     target = drills_service.speed_passage_word_target(60)
     actual = drills_service._word_count(prompt.prompt)
     # Trim leaves us close to the target (within 5 words).
     assert abs(actual - target) <= 5
+
+
+async def test_generate_drill_speed_saves_generated_passage_until_threshold():
+    passage = " ".join(["debate"] * 180) + "."
+    payload = {
+        "title": "Speed Reading",
+        "topic": "Speed",
+        "prompt": passage,
+        "task": "Read aloud.",
+        "timer_seconds": 30,
+    }
+    mock = AsyncMock(return_value=_mock_chat_completion(payload))
+    save_mock = AsyncMock()
+
+    with patch.object(drills_service.speed_passages, "count_passages", AsyncMock(return_value=3)), \
+        patch.object(drills_service.speed_passages, "save_passage", save_mock), \
+        patch.object(drills_service._openai_client.chat.completions, "create", mock):
+        prompt = await drills_service.generate_drill("speed", timer_seconds=30)
+
+    target = drills_service.speed_passage_word_target(30)
+    mock.assert_awaited_once()
+    save_mock.assert_awaited_once_with(target, prompt.prompt)
+
+
+async def test_generate_drill_speed_reuses_passage_after_threshold():
+    cached = " ".join(["cached"] * 180) + "."
+    openai_mock = AsyncMock()
+    save_mock = AsyncMock()
+
+    with patch.object(
+        drills_service.speed_passages,
+        "count_passages",
+        AsyncMock(return_value=drills_service.SPEED_PASSAGE_REUSE_THRESHOLD),
+    ), patch.object(
+        drills_service.speed_passages,
+        "get_passage",
+        AsyncMock(return_value=cached),
+    ), patch.object(
+        drills_service.speed_passages,
+        "save_passage",
+        save_mock,
+    ), patch.object(
+        drills_service._openai_client.chat.completions,
+        "create",
+        openai_mock,
+    ):
+        prompt = await drills_service.generate_drill("speed", timer_seconds=30)
+
+    assert "cached cached" in prompt.prompt
+    openai_mock.assert_not_awaited()
+    save_mock.assert_not_awaited()
 
 
 async def test_generate_drill_unknown_type_raises():

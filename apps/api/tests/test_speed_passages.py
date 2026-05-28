@@ -22,16 +22,35 @@ class _FakeQuery:
     def __init__(self, rows: list[dict[str, Any]], counter: dict[str, int]):
         self._rows = rows
         self._counter = counter
+        self._result_rows = rows
+        self._insert_payload: dict[str, Any] | None = None
 
     def select(self, *_a, **_kw) -> "_FakeQuery":
+        return self
+
+    def eq(self, column: str, value: Any) -> "_FakeQuery":
+        self._result_rows = [
+            row for row in self._result_rows if row.get(column) == value
+        ]
+        return self
+
+    def limit(self, count: int) -> "_FakeQuery":
+        self._result_rows = self._result_rows[:count]
         return self
 
     def order(self, *_a, **_kw) -> "_FakeQuery":
         return self
 
+    def insert(self, payload: dict[str, Any]) -> "_FakeQuery":
+        self._insert_payload = dict(payload)
+        return self
+
     def execute(self) -> Any:
         self._counter["calls"] += 1
-        return SimpleNamespace(data=list(self._rows))
+        if self._insert_payload is not None:
+            self._rows.append({"id": str(len(self._rows) + 1), **self._insert_payload})
+            return SimpleNamespace(data=[self._insert_payload])
+        return SimpleNamespace(data=list(self._result_rows))
 
 
 class _FakeSupabase:
@@ -153,6 +172,42 @@ async def test_list_passages(install_fake_client):
     assert passages[1].id == "b"
 
 
+@pytest.mark.asyncio
+async def test_count_passages(install_fake_client):
+    install_fake_client(
+        [
+            {"id": "a", "target_words": 100, "text": "first"},
+            {"id": "b", "target_words": 200, "text": "second"},
+        ]
+    )
+
+    assert await svc.count_passages() == 2
+
+
+@pytest.mark.asyncio
+async def test_save_passage_inserts_new_text(install_fake_client):
+    fake = install_fake_client([])
+
+    inserted = await svc.save_passage(150, "new speed passage")
+
+    assert inserted is True
+    assert fake.rows == [
+        {"id": "1", "target_words": 150, "text": "new speed passage"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_save_passage_skips_duplicate_text(install_fake_client):
+    fake = install_fake_client(
+        [{"id": "1", "target_words": 150, "text": "already stored"}]
+    )
+
+    inserted = await svc.save_passage(150, "already stored")
+
+    assert inserted is False
+    assert len(fake.rows) == 1
+
+
 # ---------------------------------------------------------------------------
 # Migration tests.
 # ---------------------------------------------------------------------------
@@ -164,7 +219,7 @@ _MIGRATION_PATH = (
     / "0002_seed_speed_passages.sql"
 )
 _SOURCE_JSON = (
-    Path(__file__).resolve().parents[3]
+    Path(__file__).resolve().parents[1]
     / "data"
     / "speed_passages.json"
 )
