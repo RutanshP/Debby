@@ -3,13 +3,13 @@
 # Recommended deployment: in Railway's service settings set
 #   Root Directory: apps/api
 # so NIXPACKS auto-detects the Python project from apps/api/pyproject.toml.
-# This root-level file is a fallback for the repo-root deployment style.
+# This root-level file intentionally avoids a buildCommand override so Railway
+# can let Nixpacks install the Python runtime and dependencies.
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "pip install -e apps/api"
 
 [deploy]
-startCommand = "cd apps/api && uvicorn main:app --host 0.0.0.0 --port $PORT"
+startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
