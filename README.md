@@ -1,6 +1,6 @@
 # Debby
 
-> **Refactor in progress.** Debby is being rewritten from Flask + vanilla JS to **FastAPI (`apps/api/`)** and **Next.js (`apps/web/`)** with Supabase auth/DB. The legacy Flask app under `backend/`, `static/`, `templates/`, and `main.py` continues to run until cutover. See `apps/api/` and `apps/web/` for the new code and `apps/api/migrations/0001_init.sql` for the new schema.
+> Debby now runs on **FastAPI (`apps/api/`)** and **Next.js (`apps/web/`)** with Supabase auth/DB. The old Flask + vanilla JS app has been removed from `main`; use the `legacy-flask` tag if you need to inspect the former implementation.
 
 Debby is a full-stack web application for independent debate practice. It lets students generate debate topics, record speeches, receive an AI opponent response, deliver a rebuttal, and review a judge-style reason for decision with speech statistics, flow sheets, and personalized drill feedback.
 
@@ -77,7 +77,7 @@ Debby/
 - Browser microphone permissions must be enabled for recording features.
 - Supabase environment variables are required for authentication and persisted round history.
 - `OPENAI_API_KEY` and `ASSEMBLYAI_API_KEY` are required for AI generation and speech transcription.
-- The legacy Flask files remain in the repository for reference, but the active application stack lives in `apps/api` and `apps/web`.
+- The active application stack lives in `apps/api` and `apps/web`.
 
 ## License
 

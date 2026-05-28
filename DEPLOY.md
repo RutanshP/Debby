@@ -1,6 +1,6 @@
-# Debby v2 — Deploy Runbook
+# Debby v2 Deploy Runbook
 
-This is the cutover from the legacy Flask + vanilla JS app to the new
+Debby runs on the
 **FastAPI (apps/api) on Railway** + **Next.js (apps/web) on Vercel** stack
 backed by Supabase. Follow it in order; each step is idempotent.
 
@@ -10,8 +10,8 @@ Prerequisites you control:
 - A Vercel account
 - An OpenAI API key and an AssemblyAI API key
 
-Repo state: this lives on `main` once integration/v2 is merged. The last
-Flask-only revision is tagged `legacy-flask`.
+Repo state: the active stack lives on `main`. The last Flask-only revision is
+tagged `legacy-flask`.
 
 ---
 
@@ -32,7 +32,7 @@ Flask-only revision is tagged `legacy-flask`.
 
 1. New project → Deploy from GitHub repo → pick `gurnoorssandhu/Debby`.
 2. In service **Settings → Service**:
-   - **Root Directory**: `apps/api`  ← important; otherwise Railway tries to build the Flask app
+   - **Root Directory**: `apps/api`
    - Builder: NIXPACKS (default; auto-detected from `pyproject.toml`)
    - Start Command (if not auto-detected): `uvicorn main:app --host 0.0.0.0 --port $PORT`
 3. **Variables** (Settings → Variables → Raw editor):
@@ -73,26 +73,9 @@ This is the multi-user isolation regression test for the global-state bug the re
 
 If any of those steps fail with 401: re-check that `SUPABASE_URL` on Railway points at the right project so the backend can fetch the JWKS, and that Railway has the **secret** key (`sb_secret_…`) — not the publishable one.
 
-## 5. Decommission the Flask app
-
-The legacy code under `backend/`, `static/`, `templates/`, `main.py`, `data/` (CSVs + speed_passages.json) stays in the repo for now.
-
-- The `legacy-flask` tag points at the last Flask-only commit (`3580ad6`). You can always check it out with `git checkout legacy-flask`.
-- If you had a separate Railway service running the Flask app, pause or delete it.
-- Once you're satisfied v2 is stable in production for ~1 week, you can remove the legacy directories in a follow-up cleanup PR. Suggested deletions:
-  ```
-  backend/
-  static/
-  templates/
-  main.py
-  Procfile         # only the root one; apps/api/Procfile stays
-  requirements.txt # legacy Flask deps
-  data/parlires.csv data/msres.csv data/speed_passages.json  # now bundled in apps/api/data/
-  ```
-
-## 6. Operational notes
+## 5. Operational notes
 
 - **Railway logs** are the first place to look on a 5xx. AssemblyAI rate-limit errors surface as 502 from `/api/rounds/<id>/speeches`.
 - **Cost knobs**: OpenAI is the biggest line item. The shared `AsyncOpenAI` client in `apps/api/services/openai_client.py` is the only place credentials are read.
 - **CORS**: any new Vercel preview URL needs to be in `ALLOWED_ORIGINS`. The simplest pattern is to add `*.vercel.app` if you trust your team; otherwise pin specific deploys.
-- **Rolling back**: revert the latest commit on `main` and re-deploy. The legacy Flask app is also reachable via `git checkout legacy-flask` if you ever need the old behaviour standalone.
+- **Rolling back**: revert the latest commit on `main` and re-deploy. The old Flask app is still inspectable via `git checkout legacy-flask` if you ever need the former behavior standalone.

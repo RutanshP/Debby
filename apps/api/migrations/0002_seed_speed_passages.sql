@@ -1,4 +1,4 @@
--- Seed public.speed_passages from data/speed_passages.json.
+-- Seed public.speed_passages from apps/api/data/speed_passages.json.
 -- Each row's target_words is derived from the passage's actual whitespace-tokenised
 -- word count so the lookup service can pick the closest match for any request.
 -- Dollar-quoted strings ($p$...$p$) avoid hand-escaping single quotes.
