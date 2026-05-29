@@ -83,6 +83,46 @@ def _looks_like_speed_passage(text: str | None) -> bool:
     return len(re.findall(r"\b[\w']+\b", text)) >= 30
 
 
+def _looks_like_rebuttal_argument(text: str | None) -> bool:
+    text = (text or "").strip()
+    if not text:
+        return False
+    lower = text.lower()
+    blocked_phrases = (
+        "you are given",
+        "your task",
+        "rebut this",
+        "rebut the",
+        "respond to",
+        "write a",
+        "provide a",
+    )
+    if any(phrase in lower for phrase in blocked_phrases):
+        return False
+    return _word_count(text) >= 8
+
+
+def _looks_like_impact_argument(text: str | None) -> bool:
+    text = (text or "").strip()
+    if not text:
+        return False
+    lower = text.lower()
+    blocked_phrases = (
+        "you will present",
+        "your task",
+        "fully develop",
+        "four components",
+        "magnitude",
+        "probability",
+        "timeframe",
+        "weighing",
+        "structure your response",
+    )
+    if any(phrase in lower for phrase in blocked_phrases):
+        return False
+    return 6 <= _word_count(text) <= 70
+
+
 _FALLBACK_SENTENCES = [
     "On a spring afternoon, a small basketball team changed its season by changing the way it practiced.",
     "Instead of running the same drills every day, the players studied spacing, watched film, and learned how to pass before the defense could settle.",
@@ -278,12 +318,19 @@ def calculate_reading_accuracy(reference_text: str, spoken_text: str) -> float:
 
 _DRILL_GUIDANCE = {
     "rebuttal": (
-        "Create a compact debate argument for the user to rebut. Include a topic, side, "
-        "and one paragraph argument with claim, warrant, and impact."
+        "Create a compact opponent debate argument for the user to rebut. The JSON prompt "
+        "must be only the argument itself: one paragraph with a clear claim, a little "
+        "reasoning/warrant, and an impact. Do not include phrases like 'you are given', "
+        "'your task', 'rebut this', or any instructions in the prompt. Put user instructions "
+        "only in the task field."
     ),
     "impact": (
-        "Create one underdeveloped debate argument. The user must impact it out fully "
-        "by explaining magnitude, probability, timeframe, and weighing."
+        "Create one short underdeveloped debate argument for the user to impact out. "
+        "The JSON prompt must be only the argument itself: one or two sentences with "
+        "a claim and brief warrant, but a weak or missing impact. Do not include phrases "
+        "like 'you will present', 'your task', 'explain four components', 'magnitude', "
+        "'probability', 'timeframe', or 'weighing' in the prompt. Put those user "
+        "instructions only in the task field."
     ),
     "contention": (
         "Use the provided debate resolution and side. The user must brainstorm as many "
@@ -419,7 +466,10 @@ async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None
                     "You create concise high school debate practice drills. Return only JSON "
                     "with keys: title, topic, prompt, task, timer_seconds. Make prompts specific, "
                     "clear, and useful for practice. For Speed Reading, prompt must be a read-aloud "
-                    "passage, not an instruction or discussion question."
+                    "passage, not an instruction or discussion question. For Rebuttal, prompt must "
+                    "be the opponent's argument paragraph only, not instructions to the user. "
+                    "For Impact Extension, prompt must be only a short underdeveloped argument, "
+                    "not instructions to the user."
                 ),
             },
             {"role": "user", "content": guidance},
@@ -442,6 +492,12 @@ async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None
         except Exception:
             # A failed cache write should not make the user wait or fail the drill.
             pass
+    elif drill_type == "rebuttal":
+        if not _looks_like_rebuttal_argument(prompt_text):
+            prompt_text = fallback_prompt
+    elif drill_type == "impact":
+        if not _looks_like_impact_argument(prompt_text):
+            prompt_text = fallback_prompt
 
     return DrillPrompt(
         title=title,

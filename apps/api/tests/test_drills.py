@@ -111,6 +111,47 @@ async def test_generate_drill_uses_hardcoded_fallback_when_nano_fails():
     assert mock.await_args_list[0].kwargs["model"] == "gpt-5-nano"
 
 
+async def test_generate_rebuttal_rejects_instruction_prompt():
+    payload = {
+        "title": "Rebuttal Speech",
+        "topic": "Education funding",
+        "prompt": (
+            "You are given a concise proponent paragraph arguing for increased funding "
+            "to public schools. Your task is to rebut this argument persuasively."
+        ),
+        "task": "Respond aloud.",
+        "timer_seconds": 60,
+    }
+    mock = AsyncMock(return_value=_mock_chat_completion(payload))
+    with patch.object(drills_service._openai_client.chat.completions, "create", mock):
+        prompt = await drills_service.generate_drill("rebuttal")
+
+    assert "Your task" not in prompt.prompt
+    assert "financial literacy" in prompt.prompt
+
+
+async def test_generate_impact_rejects_instruction_prompt():
+    payload = {
+        "title": "Impact Extension",
+        "topic": "Climate change policy and economic impacts",
+        "prompt": (
+            "You will present an underdeveloped argument asserting that implemented "
+            "climate policies will harm the economy. Your task is to fully develop "
+            "the argument by explaining four components: magnitude, probability, "
+            "timeframe, and weighing."
+        ),
+        "task": "Impact out.",
+        "timer_seconds": 60,
+    }
+    mock = AsyncMock(return_value=_mock_chat_completion(payload))
+    with patch.object(drills_service._openai_client.chat.completions, "create", mock):
+        prompt = await drills_service.generate_drill("impact")
+
+    assert "Your task" not in prompt.prompt
+    assert "magnitude" not in prompt.prompt.lower()
+    assert "financial literacy" in prompt.prompt
+
+
 async def test_generate_drill_contention_no_openai():
     # contention drills are deterministic — no OpenAI call needed.
     prompt = await drills_service.generate_drill("contention", timer_seconds=45)
