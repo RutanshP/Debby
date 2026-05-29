@@ -96,8 +96,31 @@ async def test_generate_drill_uses_gpt5_compatible_generation_options():
     kwargs = mock.await_args.kwargs
     assert kwargs["model"] == "gpt-5-nano"
     assert kwargs["max_completion_tokens"] == 700
+    assert kwargs["reasoning_effort"] == "minimal"
     assert "max_tokens" not in kwargs
     assert "temperature" not in kwargs
+
+
+async def test_generate_drill_retries_old_generation_model_before_hardcoded_fallback():
+    payload = {
+        "title": "Impact Extension",
+        "topic": "Topic",
+        "prompt": "School buses reduce neighborhood traffic.",
+        "task": "Impact out.",
+        "timer_seconds": 60,
+    }
+    mock = AsyncMock(
+        side_effect=[
+            RuntimeError("nano unavailable"),
+            _mock_chat_completion(payload),
+        ]
+    )
+    with patch.object(drills_service._openai_client.chat.completions, "create", mock):
+        prompt = await drills_service.generate_drill("impact")
+
+    assert prompt.prompt == "School buses reduce neighborhood traffic."
+    assert mock.await_args_list[0].kwargs["model"] == "gpt-5-nano"
+    assert mock.await_args_list[1].kwargs["model"] == "gpt-4o-mini-2024-07-18"
 
 
 async def test_generate_drill_contention_no_openai():

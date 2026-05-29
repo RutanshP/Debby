@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import random
 import re
 from difflib import SequenceMatcher
@@ -40,6 +41,7 @@ OPENAI_MODEL = "gpt-4o-mini-2024-07-18"
 DRILL_GENERATION_MODEL = "gpt-5-nano"
 ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com/v2"
 SPEED_PASSAGE_CATEGORY_LIMIT = 20
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +321,7 @@ async def _choose_speed_topic() -> dict[str, str | list[str]]:
 
 def _generation_request_options(max_tokens: int) -> dict[str, Any]:
     if DRILL_GENERATION_MODEL.startswith("gpt-5"):
-        return {"max_completion_tokens": max_tokens}
+        return {"max_completion_tokens": max_tokens, "reasoning_effort": "minimal"}
     return {"max_tokens": max_tokens, "temperature": 0.7}
 
 
@@ -332,7 +334,20 @@ async def _json_from_model(messages: list[dict[str, str]], fallback: dict, max_t
             messages=messages,
         )
         return json.loads(response.choices[0].message.content)
-    except (json.JSONDecodeError, Exception):
+    except Exception as exc:
+        logger.warning("Drill generation model failed; retrying with fallback model.", exc_info=exc)
+
+    try:
+        response = await _openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            max_tokens=max_tokens,
+            temperature=0.7,
+            response_format={"type": "json_object"},
+            messages=messages,
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as exc:
+        logger.warning("Fallback drill generation model failed.", exc_info=exc)
         return fallback
 
 
