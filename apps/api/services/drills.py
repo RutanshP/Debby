@@ -317,12 +317,17 @@ async def _choose_speed_topic() -> dict[str, str | list[str]]:
     return random.choice(_SPEED_TOPIC_AREAS)
 
 
+def _generation_request_options(max_tokens: int) -> dict[str, Any]:
+    if DRILL_GENERATION_MODEL.startswith("gpt-5"):
+        return {"max_completion_tokens": max_tokens}
+    return {"max_tokens": max_tokens, "temperature": 0.7}
+
+
 async def _json_from_model(messages: list[dict[str, str]], fallback: dict, max_tokens: int = 700) -> dict:
     try:
         response = await _openai_client.chat.completions.create(
             model=DRILL_GENERATION_MODEL,
-            max_tokens=max_tokens,
-            temperature=0.7,
+            **_generation_request_options(max_tokens),
             response_format={"type": "json_object"},
             messages=messages,
         )

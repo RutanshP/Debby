@@ -81,6 +81,25 @@ async def test_generate_drill_text_types(drill_type, payload):
     assert prompt.title
 
 
+async def test_generate_drill_uses_gpt5_compatible_generation_options():
+    payload = {
+        "title": "Impact Extension",
+        "topic": "Topic",
+        "prompt": "Transit delays reduce job access.",
+        "task": "Impact out.",
+        "timer_seconds": 60,
+    }
+    mock = AsyncMock(return_value=_mock_chat_completion(payload))
+    with patch.object(drills_service._openai_client.chat.completions, "create", mock):
+        await drills_service.generate_drill("impact")
+
+    kwargs = mock.await_args.kwargs
+    assert kwargs["model"] == "gpt-5-nano"
+    assert kwargs["max_completion_tokens"] == 700
+    assert "max_tokens" not in kwargs
+    assert "temperature" not in kwargs
+
+
 async def test_generate_drill_contention_no_openai():
     # contention drills are deterministic — no OpenAI call needed.
     prompt = await drills_service.generate_drill("contention", timer_seconds=45)
