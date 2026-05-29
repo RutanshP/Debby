@@ -35,6 +35,7 @@ interface AssemblyTurnWord {
 interface AssemblyTurnMessage {
   type?: string;
   turn_order?: number;
+  end_of_turn?: boolean;
   transcript?: string;
   words?: AssemblyTurnWord[];
   audio_duration_seconds?: number;
@@ -101,6 +102,7 @@ export function useRealtimeTranscription(): UseRealtimeTranscriptionResult {
   const gainRef = useRef<GainNode | null>(null);
   const turnsRef = useRef<Map<number, string>>(new Map());
   const wordsRef = useRef<Map<string, RealtimeWord>>(new Map());
+  const messageCountRef = useRef<number>(0);
   const startedAtRef = useRef<number | null>(null);
   const durationRef = useRef<number>(0);
   const closingPromiseRef = useRef<Promise<RealtimeTranscriptResult | null> | null>(null);
@@ -141,7 +143,14 @@ export function useRealtimeTranscription(): UseRealtimeTranscriptionResult {
         return;
       }
 
-      if (message.type === "Turn") {
+      messageCountRef.current += 1;
+
+      const isTurn =
+        message.type === "Turn" ||
+        message.turn_order !== undefined ||
+        message.transcript !== undefined;
+
+      if (isTurn) {
         const order = message.turn_order ?? 0;
         if (message.transcript) {
           turnsRef.current.set(order, message.transcript);
@@ -173,6 +182,7 @@ export function useRealtimeTranscription(): UseRealtimeTranscriptionResult {
       turnsRef.current.clear();
       wordsRef.current.clear();
       durationRef.current = 0;
+      messageCountRef.current = 0;
       startedAtRef.current = performance.now();
       closingPromiseRef.current = null;
 
@@ -266,7 +276,7 @@ export function useRealtimeTranscription(): UseRealtimeTranscriptionResult {
           ws.close();
         }
         settle();
-      }, 1500);
+      }, 5000);
 
       ws.addEventListener(
         "message",

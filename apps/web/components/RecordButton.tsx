@@ -42,7 +42,9 @@ export function RecordButton({
       const realtimeResult = realtimeTranscription ? await realtime.stop() : null;
       const blob = await stop();
       if (realtimeTranscription && !realtimeResult?.transcript.trim()) {
-        setRealtimeError("Realtime transcription did not return a transcript.");
+        setRealtimeError(
+          "Realtime transcription connected but returned no transcript. Check the browser console Network tab for the AssemblyAI websocket messages.",
+        );
         return;
       }
       await onComplete(blob, realtimeResult);
