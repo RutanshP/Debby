@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 from openai import APIStatusError, RateLimitError
 from pydantic import BaseModel, Field
@@ -24,6 +24,8 @@ from pydantic import BaseModel, Field
 from models.flow import FlowBallot, WinnerVerdict
 from services import ai as ai_service
 from services import rounds as rounds_service
+from services import tts as tts_service
+from services.tts import TTSError
 
 try:  # pragma: no cover — import-time fallback
     from deps.auth import User, get_current_user  # type: ignore
@@ -81,6 +83,11 @@ class JudgmentResponse(BaseModel):
     rfd: str
     winner_side: Side
     flow: FlowBallot
+
+
+class TtsBody(BaseModel):
+    text: str = Field(..., min_length=1)
+    voice: str | None = None
 
 
 # --- error translation --------------------------------------------------------
@@ -216,3 +223,17 @@ async def post_judgment(
         winner_side=verdict.winner_side,
         flow=flow,
     )
+
+
+@router.post("/tts")
+async def post_tts(
+    body: TtsBody,
+    user: User = Depends(get_current_user),
+) -> Response:
+    try:
+        audio = await tts_service.synthesize(
+            body.text, body.voice or tts_service.DEFAULT_VOICE
+        )
+    except TTSError as exc:
+        raise HTTPException(status_code=502, detail=f"TTS failed: {exc}") from exc
+    return Response(content=audio, media_type="audio/mpeg")
