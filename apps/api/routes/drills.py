@@ -141,8 +141,13 @@ def _row_to_drill(row: dict[str, Any]) -> Drill:
         import json
 
         score_data = json.loads(score_data)
-    parsed_score: DrillScore | None = None
-    if isinstance(score_data, dict) and "score" in score_data:
+    parsed_score: DrillScore | SpeedScore | None = None
+    if isinstance(score_data, dict) and "wpm" in score_data:
+        try:
+            parsed_score = SpeedScore(**score_data)
+        except Exception:
+            parsed_score = None
+    elif isinstance(score_data, dict) and "score" in score_data:
         try:
             parsed_score = DrillScore(**score_data)
         except Exception:
@@ -265,6 +270,7 @@ async def score_speed_route(
     completion = min(matched_words / passage_words, 1.0) if passage_words else 0.0
     wpm = compute_wpm(transcript, duration)
     wpm_series = _compute_speed_wpm_series(words, transcript, duration)
+    derived_score = _speed_score_to_ten(wpm=wpm, accuracy=accuracy, completion=completion)
 
     _update_drill(
         drill_id,
@@ -277,6 +283,7 @@ async def score_speed_route(
                 "duration_seconds": duration,
                 "wpm": wpm,
                 "wpm_series": [point.model_dump() for point in wpm_series],
+                "score": derived_score,
             },
         },
     )
@@ -286,6 +293,7 @@ async def score_speed_route(
         duration_seconds=duration,
         wpm=wpm,
         wpm_series=wpm_series,
+        score=derived_score,
     )
 
 
@@ -359,3 +367,13 @@ def _compute_speed_wpm_series(
             WpmPoint(t=float(start_second), wpm=round((count / bucket_seconds) * 60))
         )
     return series
+
+
+def _speed_score_to_ten(wpm: int, accuracy: float, completion: float) -> int:
+    """Convert speed-reading metrics into a simple 0-10 progress score."""
+
+    pace_score = min(max(float(wpm), 0.0) / 220.0, 1.0)
+    quality_score = (max(min(accuracy, 1.0), 0.0) * 0.65) + (
+        max(min(completion, 1.0), 0.0) * 0.35
+    )
+    return round(((pace_score * 0.45) + (quality_score * 0.55)) * 10)

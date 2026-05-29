@@ -339,6 +339,31 @@ describe("DrillsClient", () => {
     });
   });
 
+  it("does not allow recording while redo is generating a fresh prompt", async () => {
+    const user = userEvent.setup();
+    mockFetchOnce({ id: 42, drill_type: "rebuttal", prompt: "Old drill." });
+    render(<DrillsClient />);
+
+    await user.click(screen.getByRole("button", { name: /Generate Drill/i }));
+    await screen.findByText("Old drill.");
+
+    mockFetchOnce({
+      score: 7,
+      feedback: "Done.",
+      strengths: [],
+      improvements: [],
+    });
+    await user.click(screen.getByTestId("record-Record Response"));
+    await screen.findByText("Done.");
+
+    mockPendingFetchOnce();
+    await user.click(screen.getByRole("button", { name: /Redo Drill/i }));
+
+    expect(screen.getByRole("button", { name: /Generating/i })).toBeDisabled();
+    expect(screen.queryByText("Old drill.")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("record-Record Response")).not.toBeInTheDocument();
+  });
+
   it("clears the current drill when switching drill type", async () => {
     const user = userEvent.setup();
     mockFetchOnce({ id: 42, drill_type: "rebuttal", prompt: "Old drill." });

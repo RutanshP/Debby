@@ -1,4 +1,9 @@
-import { headlineStats, type ProgressDrill, type ProgressRound } from "@/lib/progress";
+import {
+  drillScoreTrend,
+  headlineStats,
+  type ProgressDrill,
+  type ProgressRound,
+} from "@/lib/progress";
 
 describe("headlineStats", () => {
   it("counts round speech time and drill practice time", () => {
@@ -45,5 +50,22 @@ describe("headlineStats", () => {
     ];
 
     expect(headlineStats(rounds, drills).totalPracticeMinutes).toBe(6);
+  });
+});
+
+describe("drillScoreTrend", () => {
+  it("includes speed drill scores when the backend returns a derived score", () => {
+    const drills: ProgressDrill[] = [
+      {
+        id: "d1",
+        drill_type: "speed",
+        score: { score: 8, duration_seconds: 42 },
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+
+    expect(drillScoreTrend(drills).speed).toEqual([
+      { date: "2026-01-01T00:00:00Z", score: 8 },
+    ]);
   });
 });

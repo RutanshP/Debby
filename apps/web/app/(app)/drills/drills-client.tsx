@@ -174,6 +174,9 @@ export function DrillsClient() {
     setScore(null);
     setSpeedScore(null);
     setResponse("");
+    setDrill(null);
+    setRemainingSeconds(null);
+    autoSubmittedRef.current = false;
     setGenerating(true);
     try {
       const body: Record<string, unknown> = { drill_type: drillType };

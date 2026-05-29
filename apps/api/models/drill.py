@@ -62,6 +62,7 @@ class SpeedScore(BaseModel):
     duration_seconds: float
     wpm: int
     wpm_series: list[WpmPoint] = Field(default_factory=list)
+    score: int | None = Field(default=None, ge=0, le=10)
 
 
 class Drill(BaseModel):
@@ -72,6 +73,6 @@ class Drill(BaseModel):
     drill_type: DrillType
     prompt: DrillPrompt
     response: str | None = None
-    score: DrillScore | None = None
+    score: DrillScore | SpeedScore | None = None
     timer_seconds: int | None = None
     created_at: datetime | None = None
