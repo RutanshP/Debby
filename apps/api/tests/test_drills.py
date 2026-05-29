@@ -90,6 +90,35 @@ async def test_generate_drill_contention_no_openai():
     assert prompt.timer_seconds == 45
 
 
+async def test_generate_drill_contention_uses_parli_pool_without_openai():
+    openai_mock = AsyncMock()
+    with patch.object(drills_service.random, "choice", side_effect=["parli", "affirmative"]), \
+        patch.object(drills_service.topics, "get_parli_topic", return_value="Resolved: Parli topic."), \
+        patch.object(drills_service._openai_client.chat.completions, "create", openai_mock):
+        prompt = await drills_service.generate_drill("contention", timer_seconds=45)
+
+    assert prompt.topic == "Parli: Resolved: Parli topic."
+    assert prompt.prompt == (
+        "Format: Parli\n"
+        "Side: affirmative\n"
+        "Resolution: Resolved: Parli topic."
+    )
+    openai_mock.assert_not_awaited()
+
+
+async def test_generate_drill_contention_can_use_mspdp_pool():
+    with patch.object(drills_service.random, "choice", side_effect=["mspdp", "negation"]), \
+        patch.object(drills_service.topics, "get_mspdp_topic", return_value="MSPDP topic."):
+        prompt = await drills_service.generate_drill("contention", timer_seconds=30)
+
+    assert prompt.topic == "MSPDP: MSPDP topic."
+    assert prompt.prompt == (
+        "Format: MSPDP\n"
+        "Side: negation\n"
+        "Resolution: MSPDP topic."
+    )
+
+
 async def test_generate_drill_speed_respects_timer():
     target_120 = drills_service.speed_passage_word_target(120)
     target_30 = drills_service.speed_passage_word_target(30)

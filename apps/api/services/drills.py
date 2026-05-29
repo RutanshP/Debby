@@ -34,6 +34,7 @@ from models.drill import (
     _LEGACY_TYPE,
 )
 from services import speed_passages
+from services import topics
 
 OPENAI_MODEL = "gpt-4o-mini-2024-07-18"
 ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com/v2"
@@ -329,12 +330,11 @@ async def _json_from_model(messages: list[dict[str, str]], fallback: dict, max_t
         return fallback
 
 
-_CONTENTION_TOPICS = [
-    "Resolved: Schools should require financial literacy classes.",
-    "Resolved: The federal government should ban single-use plastics.",
-    "Resolved: Social media has done more harm than good.",
-    "Resolved: Standardized testing should be abolished.",
-]
+def _contention_topic() -> tuple[str, str]:
+    topic_format = random.choice(["parli", "mspdp"])
+    if topic_format == "parli":
+        return "Parli", topics.get_parli_topic(None)
+    return "MSPDP", topics.get_mspdp_topic()
 
 
 async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None) -> DrillPrompt:
@@ -344,12 +344,12 @@ async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None
     timer = timer_seconds or 60
 
     if drill_type == "contention":
-        topic = random.choice(_CONTENTION_TOPICS)
+        topic_format, topic = _contention_topic()
         side = random.choice(["affirmative", "negation"])
         return DrillPrompt(
             title=DRILL_TITLES["contention"],
-            topic=topic,
-            prompt=f"Side: {side}\nResolution: {topic}",
+            topic=f"{topic_format}: {topic}",
+            prompt=f"Format: {topic_format}\nSide: {side}\nResolution: {topic}",
             task="List as many distinct contention taglines as you can. Do not write full warrants.",
             timer_seconds=timer,
         )
