@@ -2,7 +2,6 @@
 
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -49,42 +48,39 @@ export function DrillScoreTrendChart({ trend }: { trend: DrillScoreTrend }) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 56, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis
-          dataKey="index"
-          stroke="#64748b"
-          height={48}
-          label={{
-            value: "Attempt",
-            position: "bottom",
-            offset: 12,
-            fill: "#64748b",
-            fontSize: 12,
-          }}
-        />
-        <YAxis domain={[0, 10]} stroke="#64748b" />
-        <Tooltip />
-        <Legend
-          verticalAlign="bottom"
-          height={32}
-          wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
-        />
+    <div className="space-y-3">
+      <ResponsiveContainer width="100%" height={210}>
+        <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="index" stroke="#64748b" />
+          <YAxis domain={[0, 10]} stroke="#64748b" />
+          <Tooltip />
+          {SERIES.map((s) => (
+            <Line
+              key={s.key}
+              type="monotone"
+              dataKey={s.key}
+              name={s.label}
+              stroke={s.color}
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              connectNulls
+              isAnimationActive={false}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
         {SERIES.map((s) => (
-          <Line
-            key={s.key}
-            type="monotone"
-            dataKey={s.key}
-            name={s.label}
-            stroke={s.color}
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            connectNulls
-            isAnimationActive={false}
-          />
+          <div key={s.key} className="flex items-center gap-1.5">
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: s.color }}
+            />
+            <span>{s.label}</span>
+          </div>
         ))}
-      </LineChart>
-    </ResponsiveContainer>
+      </div>
+    </div>
   );
 }
