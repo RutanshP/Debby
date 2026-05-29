@@ -66,9 +66,9 @@ get_current_user = _get_current_user_dep()
 
 def _supabase_client():
     try:
-        from services.supabase import service_role_client  # type: ignore
+        from services.supabase_client import get_supabase
 
-        return service_role_client()
+        return get_supabase()
     except Exception:
         return None
 
