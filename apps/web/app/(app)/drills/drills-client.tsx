@@ -243,33 +243,32 @@ export function DrillsClient() {
       return next;
     };
 
-    if (updateRemaining() <= 0) {
+    const submitIfExpired = () => {
       const responseText = responseRef.current;
       if (responseText.trim() && !submittingRef.current && !autoSubmittedRef.current) {
         autoSubmittedRef.current = true;
         void handleSubmitText(responseText);
       }
+    };
+
+    if (updateRemaining() <= 0) {
+      submitIfExpired();
       return;
     }
 
-    const timer = window.setTimeout(() => {
+    const timer = window.setInterval(() => {
       const next = updateRemaining();
       if (next <= 0) {
-        const responseText = responseRef.current;
-        if (responseText.trim() && !submittingRef.current && !autoSubmittedRef.current) {
-          autoSubmittedRef.current = true;
-          void handleSubmitText(responseText);
-        }
+        submitIfExpired();
       }
     }, 250);
 
-    return () => window.clearTimeout(timer);
+    return () => window.clearInterval(timer);
   }, [
     isContention,
     drill,
     typingStarted,
     drillComplete,
-    remainingSeconds,
     handleSubmitText,
   ]);
 
