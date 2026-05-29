@@ -270,6 +270,41 @@ def test_compute_speed_wpm_series_uses_word_timestamps():
     assert [point.wpm for point in series] == [60, 30]
 
 
+@pytest.mark.parametrize(
+    "wpm,accuracy,expected",
+    [
+        (310, 0.96, 10),
+        (300, 0.91, 9),
+        (250, 0.96, 9),
+        (180, 0.95, 8),
+        (320, 0.80, 7),
+        (220, 0.70, 5),
+        (350, 0.58, 0),
+    ],
+)
+def test_speed_score_to_ten_balances_accuracy_and_speed(wpm, accuracy, expected):
+    assert drills_route._speed_score_to_ten(
+        wpm=wpm,
+        accuracy=accuracy,
+        completion=0.10,
+    ) == expected
+
+
+def test_speed_score_ignores_completion():
+    high_completion = drills_route._speed_score_to_ten(
+        wpm=260,
+        accuracy=0.95,
+        completion=1.0,
+    )
+    low_completion = drills_route._speed_score_to_ten(
+        wpm=260,
+        accuracy=0.95,
+        completion=0.01,
+    )
+
+    assert high_completion == low_completion
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_transcribe_audio_uses_current_assemblyai_speech_models():

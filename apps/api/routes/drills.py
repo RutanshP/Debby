@@ -369,11 +369,75 @@ def _compute_speed_wpm_series(
     return series
 
 
-def _speed_score_to_ten(wpm: int, accuracy: float, completion: float) -> int:
-    """Convert speed-reading metrics into a simple 0-10 progress score."""
+def _component_from_thresholds(
+    value: float,
+    thresholds: list[tuple[float, float]],
+) -> float:
+    """Linearly interpolate a 0-10 component from ascending thresholds."""
 
-    pace_score = min(max(float(wpm), 0.0) / 220.0, 1.0)
-    quality_score = (max(min(accuracy, 1.0), 0.0) * 0.65) + (
-        max(min(completion, 1.0), 0.0) * 0.35
+    if value <= thresholds[0][0]:
+        return thresholds[0][1]
+    for (low_value, low_score), (high_value, high_score) in zip(
+        thresholds, thresholds[1:]
+    ):
+        if value <= high_value:
+            span = high_value - low_value
+            if span <= 0:
+                return high_score
+            ratio = (value - low_value) / span
+            return low_score + (ratio * (high_score - low_score))
+    return thresholds[-1][1]
+
+
+def _speed_score_to_ten(wpm: int, accuracy: float, completion: float) -> int:
+    """Convert speed-reading metrics into an accuracy-weighted 0-10 score.
+
+    Completion is intentionally ignored: speed drills score how fast and
+    accurately the attempted reading was, not whether the user reached the end.
+    """
+
+    del completion
+
+    accuracy_pct = max(min(float(accuracy), 1.0), 0.0) * 100.0
+    if accuracy_pct < 60.0:
+        return 0
+
+    speed_component = _component_from_thresholds(
+        max(float(wpm), 0.0),
+        [
+            (0.0, 1.0),
+            (100.0, 1.0),
+            (140.0, 3.0),
+            (180.0, 5.0),
+            (220.0, 7.0),
+            (260.0, 8.5),
+            (300.0, 10.0),
+        ],
     )
-    return round(((pace_score * 0.45) + (quality_score * 0.55)) * 10)
+    accuracy_component = _component_from_thresholds(
+        accuracy_pct,
+        [
+            (60.0, 1.0),
+            (70.0, 3.0),
+            (80.0, 5.5),
+            (85.0, 7.0),
+            (90.0, 8.5),
+            (95.0, 10.0),
+            (100.0, 10.0),
+        ],
+    )
+
+    score = round((accuracy_component * 0.55) + (speed_component * 0.45))
+
+    if accuracy_pct < 75.0:
+        score = min(score, 5)
+    elif accuracy_pct < 85.0:
+        score = min(score, 7)
+    elif accuracy_pct < 90.0:
+        score = min(score, 8)
+    elif accuracy_pct < 95.0:
+        score = min(score, 9)
+
+    if wpm >= 300 and accuracy_pct >= 95.0:
+        return 10
+    return max(0, min(score, 10))
