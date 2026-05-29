@@ -335,19 +335,7 @@ async def _json_from_model(messages: list[dict[str, str]], fallback: dict, max_t
         )
         return json.loads(response.choices[0].message.content)
     except Exception as exc:
-        logger.warning("Drill generation model failed; retrying with fallback model.", exc_info=exc)
-
-    try:
-        response = await _openai_client.chat.completions.create(
-            model=OPENAI_MODEL,
-            max_tokens=max_tokens,
-            temperature=0.7,
-            response_format={"type": "json_object"},
-            messages=messages,
-        )
-        return json.loads(response.choices[0].message.content)
-    except Exception as exc:
-        logger.warning("Fallback drill generation model failed.", exc_info=exc)
+        logger.warning("Drill generation model failed.", exc_info=exc)
         return fallback
 
 
