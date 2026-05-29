@@ -164,6 +164,10 @@ async def test_generate_drill_speed_reuses_passage_after_threshold():
         drills_service._openai_client.chat.completions,
         "create",
         openai_mock,
+    ), patch.object(
+        drills_service.random,
+        "random",
+        return_value=0.0,
     ):
         prompt = await drills_service.generate_drill("speed", timer_seconds=30)
 

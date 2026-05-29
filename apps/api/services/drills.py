@@ -38,6 +38,7 @@ from services import speed_passages
 OPENAI_MODEL = "gpt-4o-mini-2024-07-18"
 ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com/v2"
 SPEED_PASSAGE_REUSE_THRESHOLD = 20
+SPEED_PASSAGE_REUSE_RATE = 0.2
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +220,11 @@ async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None
     if drill_type == "speed":
         word_target = speed_passage_word_target(timer)
         try:
-            if await speed_passages.count_passages() >= SPEED_PASSAGE_REUSE_THRESHOLD:
+            should_reuse = random.random() < SPEED_PASSAGE_REUSE_RATE
+            if (
+                should_reuse
+                and await speed_passages.count_passages() >= SPEED_PASSAGE_REUSE_THRESHOLD
+            ):
                 cached_prompt = await speed_passages.get_passage(word_target)
                 if cached_prompt and _looks_like_speed_passage(cached_prompt):
                     return DrillPrompt(
