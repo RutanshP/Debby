@@ -433,6 +433,50 @@ def test_judgment_route_happy_path(
     assert update_round.await_args.args[2]["winner_side"] == "neg"
 
 
+def test_judgment_route_reuses_cached_round_judgment(
+    client_authed: TestClient, patched_client: AsyncMock, monkeypatch: pytest.MonkeyPatch
+):
+    flow_payload = {
+        "aff_sheet": [],
+        "neg_sheet": [],
+        "ballot": {
+            "aff_unrefuted": 0,
+            "neg_unrefuted": 0,
+            "winner": "aff",
+            "explanation": "aff wins",
+        },
+        "dropped": [],
+        "voters": [],
+        "recommended_drills": [],
+    }
+    cached_round = SimpleNamespace(
+        rfd="cached aff wins",
+        winner_side="aff",
+        flow=flow_payload,
+    )
+    get_round = AsyncMock(return_value=cached_round)
+    update_round = AsyncMock()
+    monkeypatch.setattr(ai_route.rounds_service, "get_round", get_round)
+    monkeypatch.setattr(ai_route.rounds_service, "update_round", update_round)
+
+    r = client_authed.post(
+        "/api/ai/judgment",
+        json={
+            "round_id": "round-1",
+            "topic": "x",
+            "aff_speech": "a",
+            "neg_speech": "n",
+            "aff_two_speech": "a2",
+        },
+    )
+
+    assert r.status_code == 200
+    assert r.json()["rfd"] == "cached aff wins"
+    assert r.json()["winner_side"] == "aff"
+    patched_client.assert_not_awaited()
+    update_round.assert_not_awaited()
+
+
 def test_judgment_route_retries_save_without_winner_side(
     client_authed: TestClient, patched_client: AsyncMock, monkeypatch: pytest.MonkeyPatch
 ):

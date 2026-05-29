@@ -83,6 +83,29 @@ class JudgmentResponse(BaseModel):
     flow: FlowBallot
 
 
+def _cached_judgment_response(round_row: object | None) -> JudgmentResponse | None:
+    if round_row is None:
+        return None
+
+    rfd = getattr(round_row, "rfd", None)
+    flow_data = getattr(round_row, "flow", None)
+    winner_side = getattr(round_row, "winner_side", None)
+    if not rfd or not flow_data:
+        return None
+
+    try:
+        flow = FlowBallot.model_validate(flow_data)
+    except Exception:
+        return None
+
+    if winner_side not in {"aff", "neg"}:
+        winner_side = flow.ballot.winner
+    if winner_side not in {"aff", "neg"}:
+        return None
+
+    return JudgmentResponse(rfd=rfd, winner_side=winner_side, flow=flow)
+
+
 # --- error translation --------------------------------------------------------
 
 
@@ -172,6 +195,16 @@ async def post_judgment(
     user: User = Depends(get_current_user),
 ) -> JudgmentResponse:
     try:
+        if body.round_id:
+            try:
+                cached_round = await rounds_service.get_round(user.id, body.round_id)
+            except Exception as exc:
+                logger.warning("Cached judgment lookup failed; judging round normally.", exc_info=exc)
+                cached_round = None
+            cached_response = _cached_judgment_response(cached_round)
+            if cached_response is not None:
+                return cached_response
+
         verdict: WinnerVerdict = await ai_service.winner(
             body.aff_speech,
             body.neg_speech,

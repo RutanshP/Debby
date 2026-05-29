@@ -623,7 +623,6 @@ export function RoundRunner() {
 
   useEffect(() => {
     if (
-      step === 5 &&
       topic &&
       affTranscript &&
       affTwoTranscript &&
@@ -635,7 +634,6 @@ export function RoundRunner() {
       void prefetchJudgment().catch(() => undefined);
     }
   }, [
-    step,
     topic,
     affTranscript,
     affTwoTranscript,
