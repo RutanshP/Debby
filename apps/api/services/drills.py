@@ -37,6 +37,7 @@ from services import speed_passages
 from services import topics
 
 OPENAI_MODEL = "gpt-4o-mini-2024-07-18"
+DRILL_GENERATION_MODEL = "gpt-5-nano"
 ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com/v2"
 SPEED_PASSAGE_CATEGORY_LIMIT = 20
 
@@ -319,7 +320,7 @@ async def _choose_speed_topic() -> dict[str, str | list[str]]:
 async def _json_from_model(messages: list[dict[str, str]], fallback: dict, max_tokens: int = 700) -> dict:
     try:
         response = await _openai_client.chat.completions.create(
-            model=OPENAI_MODEL,
+            model=DRILL_GENERATION_MODEL,
             max_tokens=max_tokens,
             temperature=0.7,
             response_format={"type": "json_object"},
