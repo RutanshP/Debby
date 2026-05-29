@@ -32,6 +32,11 @@ export interface ProgressDrill {
   drill_type: DrillType | string;
   prompt?: { timer_seconds?: number | null } | null;
   score?: { score?: number | null; duration_seconds?: number | null } | null;
+  numeric_score?: number | null;
+  duration_seconds?: number | null;
+  wpm?: number | null;
+  accuracy?: number | null;
+  completion?: number | null;
   timer_seconds?: number | null;
   created_at?: string | null;
 }
@@ -120,6 +125,7 @@ function parseIntervalSeconds(value: ProgressRound["total_speech_time"]): number
 
 function drillPracticeSeconds(drill: ProgressDrill): number {
   return (
+    positiveNumber(drill.duration_seconds) ||
     positiveNumber(drill.score?.duration_seconds) ||
     positiveNumber(drill.timer_seconds) ||
     positiveNumber(drill.prompt?.timer_seconds)
@@ -189,7 +195,7 @@ export function drillScoreTrend(drills: ProgressDrill[]): DrillScoreTrend {
   });
   for (const d of sorted) {
     if (!DRILL_TYPES.includes(d.drill_type as DrillType)) continue;
-    const score = d.score?.score;
+    const score = d.numeric_score ?? d.score?.score;
     if (typeof score !== "number") continue;
     out[d.drill_type as DrillType].push({
       date: d.created_at ?? "",

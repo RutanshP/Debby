@@ -75,6 +75,13 @@ def _supabase_client():
 
 # In-memory fallback store so the unit is testable without Supabase.
 _FALLBACK_STORE: dict[str, dict[str, Any]] = {}
+_COMPUTED_SCORE_COLUMNS = {
+    "numeric_score",
+    "duration_seconds",
+    "wpm",
+    "accuracy",
+    "completion",
+}
 
 
 def _persist_drill(row: dict[str, Any]) -> dict[str, Any]:
@@ -126,8 +133,61 @@ def _update_drill(drill_id: str, user_id: str, patch: dict[str, Any]) -> None:
     try:
         sb.table("drills").update(patch).eq("id", drill_id).eq("user_id", user_id).execute()
     except Exception:
+        legacy_patch = {
+            key: value
+            for key, value in patch.items()
+            if key not in _COMPUTED_SCORE_COLUMNS
+        }
+        if legacy_patch != patch:
+            try:
+                sb.table("drills").update(legacy_patch).eq("id", drill_id).eq("user_id", user_id).execute()
+                return
+            except Exception:
+                pass
         if drill_id in _FALLBACK_STORE:
             _FALLBACK_STORE[drill_id].update(patch)
+
+
+def _merge_score_columns(
+    drill_type: str,
+    score_data: Any,
+    row: dict[str, Any],
+) -> dict[str, Any] | Any:
+    if not isinstance(score_data, dict):
+        score_data = {}
+
+    merged = dict(score_data)
+    if row.get("numeric_score") is not None:
+        merged["score"] = row.get("numeric_score")
+
+    if drill_type == "speed":
+        for key in ("duration_seconds", "wpm", "accuracy", "completion"):
+            if row.get(key) is not None:
+                merged[key] = row.get(key)
+    elif row.get("duration_seconds") is not None:
+        merged["duration_seconds"] = row.get("duration_seconds")
+
+    return merged
+
+
+def _score_column_patch(
+    score: DrillScore | SpeedScore,
+    duration_seconds: float | None = None,
+) -> dict[str, Any]:
+    data = score.model_dump()
+    patch: dict[str, Any] = {"numeric_score": data.get("score")}
+    if duration_seconds is not None:
+        patch["duration_seconds"] = duration_seconds
+    if isinstance(score, SpeedScore):
+        patch.update(
+            {
+                "duration_seconds": score.duration_seconds,
+                "wpm": score.wpm,
+                "accuracy": score.accuracy,
+                "completion": score.completion,
+            }
+        )
+    return patch
 
 
 def _row_to_drill(row: dict[str, Any]) -> Drill:
@@ -141,6 +201,7 @@ def _row_to_drill(row: dict[str, Any]) -> Drill:
         import json
 
         score_data = json.loads(score_data)
+    score_data = _merge_score_columns(str(row.get("drill_type") or ""), score_data, row)
     parsed_score: DrillScore | SpeedScore | None = None
     if isinstance(score_data, dict) and "wpm" in score_data:
         try:
@@ -159,6 +220,11 @@ def _row_to_drill(row: dict[str, Any]) -> Drill:
         prompt=DrillPrompt(**prompt_data),
         response=row.get("response"),
         score=parsed_score,
+        numeric_score=row.get("numeric_score"),
+        duration_seconds=row.get("duration_seconds"),
+        wpm=row.get("wpm"),
+        accuracy=row.get("accuracy"),
+        completion=row.get("completion"),
         timer_seconds=row.get("timer_seconds"),
         created_at=row.get("created_at"),
     )
@@ -235,7 +301,15 @@ async def score_drill_route(
 
     drill = _row_to_drill(row)
     score = await score_drill(drill.drill_type, drill.prompt, body.response)
-    _update_drill(drill_id, user.id, {"response": body.response, "score": score.model_dump()})
+    _update_drill(
+        drill_id,
+        user.id,
+        {
+            "response": body.response,
+            "score": score.model_dump(),
+            **_score_column_patch(score),
+        },
+    )
     return score
 
 
@@ -285,6 +359,16 @@ async def score_speed_route(
                 "wpm_series": [point.model_dump() for point in wpm_series],
                 "score": derived_score,
             },
+            **_score_column_patch(
+                SpeedScore(
+                    accuracy=accuracy,
+                    completion=completion,
+                    duration_seconds=duration,
+                    wpm=wpm,
+                    wpm_series=wpm_series,
+                    score=derived_score,
+                )
+            ),
         },
     )
     return SpeedScore(
@@ -319,7 +403,7 @@ async def score_audio_route(
 
     audio_bytes = await audio.read()
     try:
-        transcript, _duration = await transcribe_audio(audio_bytes, api_key)
+        transcript, duration = await transcribe_audio(audio_bytes, api_key)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Transcription failed: {exc}") from exc
 
@@ -327,7 +411,15 @@ async def score_audio_route(
         raise HTTPException(status_code=400, detail="No speech was detected in the recording.")
 
     score = await score_drill(drill.drill_type, drill.prompt, transcript)
-    _update_drill(drill_id, user.id, {"response": transcript, "score": score.model_dump()})
+    _update_drill(
+        drill_id,
+        user.id,
+        {
+            "response": transcript,
+            "score": score.model_dump(),
+            **_score_column_patch(score, duration_seconds=duration),
+        },
+    )
     return score
 
 

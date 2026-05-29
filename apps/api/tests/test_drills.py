@@ -560,6 +560,8 @@ def test_score_route_uses_stored_drill(authed_user):
         )
     assert scored.status_code == 200, scored.text
     assert scored.json()["score"] == 8
+    stored = drills_route._FALLBACK_STORE[created["id"]]
+    assert stored["numeric_score"] == 8
 
 
 def test_row_to_drill_preserves_speed_score_payload():
@@ -589,6 +591,48 @@ def test_row_to_drill_preserves_speed_score_payload():
 
     drill = drills_route._row_to_drill(row)
 
+    assert drill.score is not None
+    assert drill.score.model_dump()["duration_seconds"] == 42
+    assert drill.score.model_dump()["score"] == 8
+
+
+def test_row_to_drill_uses_computed_score_columns_when_present():
+    row = {
+        "id": "speed-1",
+        "user_id": "user-1",
+        "drill_type": "speed",
+        "prompt": {
+            "title": "Speed Reading",
+            "topic": "Sports",
+            "prompt": "Read this sports passage aloud.",
+            "task": "Read the passage aloud.",
+            "timer_seconds": 60,
+        },
+        "response": "Read this sports passage aloud.",
+        "score": {
+            "accuracy": 0.1,
+            "completion": 0.2,
+            "duration_seconds": 10,
+            "wpm": 90,
+            "wpm_series": [],
+            "score": 2,
+        },
+        "numeric_score": 8,
+        "duration_seconds": 42,
+        "wpm": 180,
+        "accuracy": 0.9,
+        "completion": 0.8,
+        "timer_seconds": 60,
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+
+    drill = drills_route._row_to_drill(row)
+
+    assert drill.numeric_score == 8
+    assert drill.duration_seconds == 42
+    assert drill.wpm == 180
+    assert drill.accuracy == 0.9
+    assert drill.completion == 0.8
     assert drill.score is not None
     assert drill.score.model_dump()["duration_seconds"] == 42
     assert drill.score.model_dump()["score"] == 8

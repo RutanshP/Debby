@@ -74,5 +74,10 @@ class Drill(BaseModel):
     prompt: DrillPrompt
     response: str | None = None
     score: DrillScore | SpeedScore | None = None
+    numeric_score: int | None = None
+    duration_seconds: float | None = None
+    wpm: int | None = None
+    accuracy: float | None = None
+    completion: float | None = None
     timer_seconds: int | None = None
     created_at: datetime | None = None

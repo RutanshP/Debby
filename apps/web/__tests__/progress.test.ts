@@ -37,6 +37,7 @@ describe("headlineStats", () => {
       {
         id: "d2",
         drill_type: "speed",
+        duration_seconds: 50,
         score: { duration_seconds: 45 },
         timer_seconds: 120,
         created_at: "2026-01-04T00:00:00Z",
@@ -66,6 +67,22 @@ describe("drillScoreTrend", () => {
 
     expect(drillScoreTrend(drills).speed).toEqual([
       { date: "2026-01-01T00:00:00Z", score: 8 },
+    ]);
+  });
+
+  it("prefers computed score columns over nested JSON score payloads", () => {
+    const drills: ProgressDrill[] = [
+      {
+        id: "d1",
+        drill_type: "impact",
+        numeric_score: 9,
+        score: { score: 4 },
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+
+    expect(drillScoreTrend(drills).impact).toEqual([
+      { date: "2026-01-01T00:00:00Z", score: 9 },
     ]);
   });
 });
