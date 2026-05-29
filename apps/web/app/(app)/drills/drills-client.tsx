@@ -60,6 +60,7 @@ interface DrillScore {
 }
 
 interface SpeedScore {
+  score?: number;
   accuracy?: number;
   completion?: number;
   duration_seconds?: number;
@@ -478,6 +479,11 @@ export function DrillsClient() {
         >
           <div className="flex flex-col items-start gap-2">
             <h2 className="text-2xl font-bold text-teal-dark">Feedback</h2>
+            {typeof speedScore.score === "number" && (
+              <p className="text-3xl font-bold text-teal-dark">
+                {speedScore.score}/10
+              </p>
+            )}
             {typeof speedScore.wpm === "number" && (
               <div className="rounded-full bg-teal/10 px-3 py-1 text-sm font-bold text-teal-dark">
                 {Math.round(speedScore.wpm)} WPM

@@ -286,6 +286,7 @@ describe("DrillsClient", () => {
     await screen.findByText("Quick brown fox jumps over the lazy dog.");
 
     mockFetchOnce({
+      score: 8,
       accuracy: 0.9,
       completion: 0.75,
       duration_seconds: 30,
@@ -299,6 +300,7 @@ describe("DrillsClient", () => {
     await user.click(screen.getByTestId("record-Record Reading"));
 
     expect(await screen.findByText("Feedback")).toBeInTheDocument();
+    expect(screen.getByText("8/10")).toBeInTheDocument();
     expect(screen.getByText("180 WPM")).toBeInTheDocument();
     expect(screen.getByText(/90% of attempted words/)).toBeInTheDocument();
     expect(screen.getByText(/75% of the passage/)).toBeInTheDocument();
