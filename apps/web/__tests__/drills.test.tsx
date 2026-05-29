@@ -113,6 +113,9 @@ describe("DrillsClient", () => {
       drill_type: "contention",
       timer_seconds: 60,
     });
+    expect(screen.queryByText(/Time left:/i)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/Your response goes here/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Start Typing/i }));
     expect(screen.getByText(/Time left:/i)).toBeInTheDocument();
 
     mockFetchOnce({
@@ -149,6 +152,7 @@ describe("DrillsClient", () => {
     mockFetchOnce({ id: 42, drill_type: "contention", prompt: "Brainstorm contentions." });
     await user.click(screen.getByRole("button", { name: /Generate Drill/i }));
     await screen.findByText("Brainstorm contentions.");
+    await user.click(screen.getByRole("button", { name: /Start Typing/i }));
 
     mockPendingFetchOnce();
     await user.type(screen.getByPlaceholderText(/Your response goes here/i), "One tagline");
@@ -191,7 +195,7 @@ describe("DrillsClient", () => {
   });
 
   it("auto-submits contention storm when the timer runs out", async () => {
-    jest.useFakeTimers();
+    jest.useFakeTimers({ now: 0 });
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     render(<DrillsClient />);
 
@@ -200,6 +204,7 @@ describe("DrillsClient", () => {
     mockFetchOnce({ id: 42, drill_type: "contention", prompt: "Brainstorm contentions." });
     await user.click(screen.getByRole("button", { name: /Generate Drill/i }));
     await screen.findByText("Brainstorm contentions.");
+    await user.click(screen.getByRole("button", { name: /Start Typing/i }));
 
     mockFetchOnce({
       score: 8,
@@ -209,11 +214,10 @@ describe("DrillsClient", () => {
     });
     await user.type(screen.getByPlaceholderText(/Your response goes here/i), "One tagline");
 
-    for (let i = 0; i < 30; i += 1) {
-      await act(async () => {
-        jest.advanceTimersByTime(1000);
-      });
-    }
+    await act(async () => {
+      jest.setSystemTime(30000);
+      jest.advanceTimersByTime(250);
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(2);
@@ -225,7 +229,7 @@ describe("DrillsClient", () => {
   });
 
   it("keeps the contention storm timer moving while typing", async () => {
-    jest.useFakeTimers();
+    jest.useFakeTimers({ now: 0 });
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     render(<DrillsClient />);
 
@@ -233,16 +237,58 @@ describe("DrillsClient", () => {
     mockFetchOnce({ id: 42, drill_type: "contention", prompt: "Brainstorm contentions." });
     await user.click(screen.getByRole("button", { name: /Generate Drill/i }));
     await screen.findByText("Brainstorm contentions.");
+    await user.click(screen.getByRole("button", { name: /Start Typing/i }));
 
     await act(async () => {
-      jest.advanceTimersByTime(900);
+      jest.setSystemTime(900);
+      jest.advanceTimersByTime(250);
     });
     await user.type(screen.getByPlaceholderText(/Your response goes here/i), "abc");
     await act(async () => {
-      jest.advanceTimersByTime(100);
+      jest.setSystemTime(1000);
+      jest.advanceTimersByTime(250);
     });
 
     expect(screen.getByText(/Time left: 59s/i)).toBeInTheDocument();
+  });
+
+  it("stops the contention storm timer immediately when submitting", async () => {
+    jest.useFakeTimers({ now: 0 });
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(<DrillsClient />);
+
+    await user.click(screen.getByRole("button", { name: /Contention Storm/i }));
+    mockFetchOnce({ id: 42, drill_type: "contention", prompt: "Brainstorm contentions." });
+    await user.click(screen.getByRole("button", { name: /Generate Drill/i }));
+    await screen.findByText("Brainstorm contentions.");
+    await user.click(screen.getByRole("button", { name: /Start Typing/i }));
+
+    mockPendingFetchOnce();
+    await user.type(screen.getByPlaceholderText(/Your response goes here/i), "One tagline");
+    await user.click(screen.getByRole("button", { name: /Submit Response/i }));
+
+    expect(screen.queryByText(/Time left:/i)).not.toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent("Scoring your drill...");
+  });
+
+  it("keeps contention timing accurate after timer throttling", async () => {
+    jest.useFakeTimers({ now: 0 });
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(<DrillsClient />);
+
+    await user.click(screen.getByRole("button", { name: /Contention Storm/i }));
+    await user.selectOptions(screen.getByLabelText(/timer/i), "30");
+    mockFetchOnce({ id: 42, drill_type: "contention", prompt: "Brainstorm contentions." });
+    await user.click(screen.getByRole("button", { name: /Generate Drill/i }));
+    await screen.findByText("Brainstorm contentions.");
+    await user.click(screen.getByRole("button", { name: /Start Typing/i }));
+
+    await act(async () => {
+      jest.setSystemTime(10000);
+      jest.advanceTimersByTime(250);
+    });
+
+    expect(screen.getByText(/Time left: 20s/i)).toBeInTheDocument();
   });
 
   it("shows passage and record button for speed drill", async () => {

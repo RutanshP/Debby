@@ -49,23 +49,28 @@ export function DrillScoreTrendChart({ trend }: { trend: DrillScoreTrend }) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 24, left: 0 }}>
+    <ResponsiveContainer width="100%" height={280}>
+      <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 56, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis
           dataKey="index"
           stroke="#64748b"
+          height={48}
           label={{
             value: "Attempt",
-            position: "insideBottom",
-            offset: -10,
+            position: "bottom",
+            offset: 12,
             fill: "#64748b",
             fontSize: 12,
           }}
         />
         <YAxis domain={[0, 10]} stroke="#64748b" />
         <Tooltip />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Legend
+          verticalAlign="bottom"
+          height={32}
+          wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
+        />
         {SERIES.map((s) => (
           <Line
             key={s.key}

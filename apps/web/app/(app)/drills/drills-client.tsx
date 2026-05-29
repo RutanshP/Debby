@@ -133,19 +133,21 @@ export function DrillsClient() {
   const [score, setScore] = useState<DrillScore | null>(null);
   const [speedScore, setSpeedScore] = useState<SpeedScore | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [typingStarted, setTypingStarted] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoSubmittedRef = useRef(false);
   const responseRef = useRef("");
   const submittingRef = useRef(false);
+  const typingDeadlineRef = useRef<number | null>(null);
 
   const isSpeed = drillType === "speed";
   const isContention = drillType === "contention";
   const usesAudio = !isContention;
   const drillComplete = Boolean(score || speedScore);
   const typingTimerExpired =
-    isContention && remainingSeconds !== null && remainingSeconds <= 0;
+    isContention && typingStarted && remainingSeconds !== null && remainingSeconds <= 0;
 
   useEffect(() => {
     responseRef.current = response;
@@ -161,8 +163,10 @@ export function DrillsClient() {
     setScore(null);
     setSpeedScore(null);
     setRemainingSeconds(null);
+    setTypingStarted(false);
     setError(null);
     autoSubmittedRef.current = false;
+    typingDeadlineRef.current = null;
   }
 
   function handleDrillTypeChange(nextType: DrillType) {
@@ -177,7 +181,9 @@ export function DrillsClient() {
     setResponse("");
     setDrill(null);
     setRemainingSeconds(null);
+    setTypingStarted(false);
     autoSubmittedRef.current = false;
+    typingDeadlineRef.current = null;
     setGenerating(true);
     try {
       const body: Record<string, unknown> = { drill_type: drillType };
@@ -187,7 +193,11 @@ export function DrillsClient() {
         body: JSON.stringify(body),
       });
       setDrill(data);
-      setRemainingSeconds(promptBody(data).timer_seconds ?? timerSeconds);
+      if (drillType === "contention") {
+        setRemainingSeconds(null);
+      } else {
+        setRemainingSeconds(promptBody(data).timer_seconds ?? timerSeconds);
+      }
       autoSubmittedRef.current = false;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate drill");
@@ -202,6 +212,9 @@ export function DrillsClient() {
     setError(null);
     setScore(null);
     setSpeedScore(null);
+    setTypingStarted(false);
+    setRemainingSeconds(null);
+    typingDeadlineRef.current = null;
     setSubmitting(true);
     try {
       const data = await apiFetch<DrillScore>(
@@ -220,8 +233,17 @@ export function DrillsClient() {
   }, [drill]);
 
   useEffect(() => {
-    if (!isContention || !drill || drillComplete || remainingSeconds === null) return;
-    if (remainingSeconds <= 0) {
+    if (!isContention || !drill || !typingStarted || drillComplete) return;
+
+    const updateRemaining = () => {
+      const deadline = typingDeadlineRef.current;
+      if (deadline === null) return 0;
+      const next = Math.max(Math.ceil((deadline - Date.now()) / 1000), 0);
+      setRemainingSeconds(next);
+      return next;
+    };
+
+    if (updateRemaining() <= 0) {
       const responseText = responseRef.current;
       if (responseText.trim() && !submittingRef.current && !autoSubmittedRef.current) {
         autoSubmittedRef.current = true;
@@ -231,19 +253,34 @@ export function DrillsClient() {
     }
 
     const timer = window.setTimeout(() => {
-      setRemainingSeconds((current) =>
-        current === null ? current : Math.max(current - 1, 0),
-      );
-    }, 1000);
+      const next = updateRemaining();
+      if (next <= 0) {
+        const responseText = responseRef.current;
+        if (responseText.trim() && !submittingRef.current && !autoSubmittedRef.current) {
+          autoSubmittedRef.current = true;
+          void handleSubmitText(responseText);
+        }
+      }
+    }, 250);
 
     return () => window.clearTimeout(timer);
   }, [
     isContention,
     drill,
+    typingStarted,
     drillComplete,
     remainingSeconds,
     handleSubmitText,
   ]);
+
+  function handleStartTyping() {
+    if (!drill || submitting) return;
+    const duration = promptBody(drill).timer_seconds ?? timerSeconds;
+    typingDeadlineRef.current = Date.now() + duration * 1000;
+    autoSubmittedRef.current = false;
+    setRemainingSeconds(duration);
+    setTypingStarted(true);
+  }
 
   async function handleSubmitSpeed(blob: Blob) {
     if (!drill) return;
@@ -379,7 +416,7 @@ export function DrillsClient() {
           {drillTask(drill) && (
             <p className="text-sm font-medium text-slate-600">{drillTask(drill)}</p>
           )}
-          {isContention && remainingSeconds !== null && !drillComplete && (
+          {isContention && typingStarted && remainingSeconds !== null && !drillComplete && (
             <div className="w-fit rounded-md bg-teal/10 px-4 py-2 text-sm font-semibold text-teal-dark">
               Time left: {remainingSeconds}s
             </div>
@@ -404,6 +441,17 @@ export function DrillsClient() {
                 disabled={submitting}
                 maxDurationSeconds={timerSeconds}
               />
+            </div>
+          ) : !typingStarted ? (
+            <div>
+              <button
+                type="button"
+                onClick={handleStartTyping}
+                disabled={submitting}
+                className="rounded-md bg-teal px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Start Typing
+              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
