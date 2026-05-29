@@ -377,6 +377,70 @@ def test_speeches_accumulates_total_speech_time(
     assert row["total_speech_time"] == "00:02:15"
 
 
+def test_text_speech_route_saves_realtime_transcript(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+    auth_user_a: _FakeUser,
+) -> None:
+    round_id = str(uuid.uuid4())
+    table = fake_supabase.tables.setdefault("rounds", _FakeTable())
+    table.rows.append(
+        {
+            "id": round_id,
+            "user_id": USER_A.id,
+            "format": "parli",
+            "topic": "test",
+            "side": "aff",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
+
+    resp = client.post(
+        f"/api/rounds/{round_id}/speeches/text",
+        json={
+            "speech_type": "aff",
+            "transcript": "streamed speech text",
+            "duration_seconds": 30,
+            "words": [
+                {"text": "streamed", "start": 0, "end": 500},
+                {"text": "speech", "start": 500, "end": 1000},
+                {"text": "text", "start": 1000, "end": 1500},
+            ],
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["transcript"] == "streamed speech text"
+    assert body["wpm"] == 6
+    row = next(r for r in table.rows if r["id"] == round_id)
+    assert row["aff_speech"] == "streamed speech text"
+    assert row["total_speech_time"] == "00:00:30"
+
+
+@respx.mock
+def test_streaming_token_route_uses_assemblyai_v3_token(
+    client: TestClient,
+    auth_user_a: _FakeUser,
+) -> None:
+    route = respx.get("https://streaming.assemblyai.com/v3/token").mock(
+        return_value=httpx.Response(
+            200,
+            json={"token": "temporary-token", "expires_in_seconds": 60},
+        )
+    )
+
+    resp = client.get("/api/transcription/stream-token")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"token": "temporary-token", "expires_in_seconds": 60}
+    assert route.called
+    request = route.calls[0].request
+    assert request.headers["authorization"] == "test-key"
+    assert "expires_in_seconds=60" in str(request.url)
+    assert "max_session_duration_seconds=600" in str(request.url)
+
+
 def test_merge_wpm_series_preserves_both_recorded_speeches() -> None:
     existing = {"aff": [{"t": 0, "wpm": 120}]}
     merged = rounds_route._merge_wpm_series(

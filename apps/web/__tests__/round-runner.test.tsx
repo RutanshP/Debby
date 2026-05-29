@@ -17,7 +17,14 @@ jest.mock("../components/RecordButton", () => ({
     label,
     disabled,
   }: {
-    onComplete: (b: Blob) => void | Promise<void>;
+    onComplete: (
+      b: Blob,
+      realtimeTranscript?: {
+        transcript: string;
+        durationSeconds: number;
+        words: unknown[];
+      },
+    ) => void | Promise<void>;
     label?: string;
     disabled?: boolean;
   }) => (
@@ -25,7 +32,13 @@ jest.mock("../components/RecordButton", () => ({
       type="button"
       data-testid={`record-${(label ?? "rec").replace(/\s+/g, "-").toLowerCase()}`}
       disabled={disabled}
-      onClick={() => onComplete(new Blob(["audio"], { type: "audio/webm" }))}
+      onClick={() =>
+        onComplete(new Blob(["audio"], { type: "audio/webm" }), {
+          transcript: `realtime ${label ?? "speech"}`,
+          durationSeconds: 60,
+          words: [],
+        })
+      }
     >
       {label ?? "Record"}
     </button>
@@ -111,7 +124,7 @@ describe("RoundRunner", () => {
     expect(url).toContain("tournament=Bargain+Belt");
   });
 
-  test("after recording the aff speech, fetch is called with FormData to /api/rounds/<id>/speeches", async () => {
+  test("after recording the aff speech, fetch saves the realtime transcript", async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce(tournamentResponse())
       // GET topic
@@ -141,12 +154,13 @@ describe("RoundRunner", () => {
       expect(global.fetch).toHaveBeenCalledTimes(5);
     });
     const [url, init] = (global.fetch as jest.Mock).mock.calls[3];
-    expect(url).toContain("/api/rounds/round-123/speeches");
+    expect(url).toContain("/api/rounds/round-123/speeches/text");
     expect((init as RequestInit).method).toBe("POST");
-    expect((init as RequestInit).body).toBeInstanceOf(FormData);
-    const fd = (init as RequestInit).body as FormData;
-    expect(fd.get("speech_type")).toBe("aff");
-    expect(fd.get("audio")).toBeInstanceOf(Blob);
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
+      speech_type: "aff",
+      transcript: "realtime Record Aff speech",
+      duration_seconds: 60,
+    });
 
     expect(await screen.findByText("hello world")).toBeInTheDocument();
   });
@@ -225,7 +239,10 @@ describe("RoundRunner", () => {
     });
     expect(await screen.findByText("user neg")).toBeInTheDocument();
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(6));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/ai/aff-rebuttal"),
+      expect.anything(),
+    ));
     fireEvent.click(screen.getByRole("button", { name: /generate aff rebuttal/i }));
     expect(await screen.findByText("ai aff rebuttal")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /continue to judgment/i }));

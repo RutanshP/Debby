@@ -24,10 +24,16 @@ from models.round import (
     CreateRoundRequest,
     Round,
     SpeechResponse,
+    StreamingTokenResponse,
+    TextSpeechRequest,
     WpmPoint,
 )
 from services import rounds as rounds_service
-from services.transcription import TranscriptionError, transcribe
+from services.transcription import (
+    TranscriptionError,
+    create_streaming_token,
+    transcribe,
+)
 
 router = APIRouter(tags=["rounds"])
 
@@ -95,9 +101,67 @@ async def add_speech_route(
     except TranscriptionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    duration_seconds = max(result.audio_duration_seconds, 0.0)
-    words = result.words or []
-    wpm = _compute_wpm(result.text, duration_seconds)
+    return await _save_speech_transcript(
+        user=user,
+        round_id=round_id,
+        round_row=round_row,
+        speech_type=speech_type,
+        transcript=result.text,
+        duration_seconds=max(result.audio_duration_seconds, 0.0),
+        words=result.words or [],
+    )
+
+
+@router.post("/rounds/{round_id}/speeches/text", response_model=SpeechResponse)
+async def add_text_speech_route(
+    round_id: str,
+    payload: TextSpeechRequest,
+    user: User = Depends(get_current_user),
+) -> SpeechResponse:
+    if payload.speech_type not in _ALLOWED_SPEECH_TYPES:
+        raise HTTPException(status_code=400, detail="invalid speech_type")
+
+    round_row = await rounds_service.get_round(user.id, round_id)
+    if round_row is None:
+        raise HTTPException(status_code=404, detail="Round not found")
+
+    return await _save_speech_transcript(
+        user=user,
+        round_id=round_id,
+        round_row=round_row,
+        speech_type=payload.speech_type,
+        transcript=payload.transcript,
+        duration_seconds=max(payload.duration_seconds, 0.0),
+        words=payload.words or [],
+    )
+
+
+@router.get("/transcription/stream-token", response_model=StreamingTokenResponse)
+async def streaming_token_route(
+    user: User = Depends(get_current_user),
+) -> StreamingTokenResponse:
+    try:
+        token = await create_streaming_token()
+    except TranscriptionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return StreamingTokenResponse.model_validate(token)
+
+
+async def _save_speech_transcript(
+    *,
+    user: User,
+    round_id: str,
+    round_row: Round,
+    speech_type: str,
+    transcript: str,
+    duration_seconds: float,
+    words: list,
+) -> SpeechResponse:
+    transcript = transcript.strip()
+    if not transcript:
+        raise HTTPException(status_code=400, detail="transcript is empty")
+
+    wpm = _compute_wpm(transcript, duration_seconds)
     wpm_series = _compute_wpm_series(words, duration_seconds)
     first_wpm = wpm if speech_type == "aff" else round_row.first_speech_wpm
     second_wpm = wpm if speech_type == "aff_two" else round_row.second_speech_wpm
@@ -117,7 +181,7 @@ async def add_speech_route(
     )
 
     update_fields: dict[str, Any] = {
-        _SPEECH_COLUMN[speech_type]: result.text,
+        _SPEECH_COLUMN[speech_type]: transcript,
         "average_wpm": average_wpm,
         "wpm_series": wpm_series_store,
         "total_speech_time": _format_interval_seconds(total_speech_seconds),
@@ -130,7 +194,7 @@ async def add_speech_route(
     await rounds_service.update_round(user.id, round_id, update_fields)
 
     return SpeechResponse(
-        transcript=result.text,
+        transcript=transcript,
         wpm=wpm,
         wpm_series=wpm_series,
         duration_seconds=duration_seconds,

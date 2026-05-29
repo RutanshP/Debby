@@ -5,6 +5,7 @@ import { apiFetch } from "../../lib/api";
 import { getBrowserSupabase } from "../../lib/supabase";
 import { RecordButton } from "../../components/RecordButton";
 import { RfdCard } from "../../components/RfdCard";
+import type { RealtimeTranscriptResult } from "../../hooks/useRealtimeTranscription";
 import type { FlowSheetData } from "../../components/FlowSheet";
 import { WpmChart, type WpmPoint } from "../../components/WpmChart";
 
@@ -304,24 +305,30 @@ export function RoundRunner() {
     async (
       blob: Blob,
       speechType: "aff" | "neg" | "aff_two",
+      realtimeTranscript?: RealtimeTranscriptResult | null,
     ): Promise<SpeechResponse> => {
       if (!roundId) throw new Error("No round id");
-      const form = new FormData();
-      form.append("audio", blob);
-      form.append("speech_type", speechType);
-      return apiFetch<SpeechResponse>(`/api/rounds/${roundId}/speeches`, {
-        method: "POST",
-        body: form,
-      });
+      if (realtimeTranscript?.transcript.trim()) {
+        return apiFetch<SpeechResponse>(`/api/rounds/${roundId}/speeches/text`, {
+          method: "POST",
+          body: JSON.stringify({
+            speech_type: speechType,
+            transcript: realtimeTranscript.transcript,
+            duration_seconds: realtimeTranscript.durationSeconds,
+            words: realtimeTranscript.words,
+          }),
+        });
+      }
+      throw new Error("Realtime transcription failed before the speech could be saved.");
     },
     [roundId],
   );
 
   const handleAffComplete = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, realtimeTranscript?: RealtimeTranscriptResult | null) => {
       setAffLoading(true);
       try {
-        const res = await uploadSpeech(blob, "aff");
+        const res = await uploadSpeech(blob, "aff", realtimeTranscript);
         setAffTranscript(res.transcript);
         setAffWpm(res.wpm_series ?? []);
         negStartedRef.current = false;
@@ -415,10 +422,10 @@ export function RoundRunner() {
   }, [prefetchAiOpposition]);
 
   const handleNegComplete = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, realtimeTranscript?: RealtimeTranscriptResult | null) => {
       setNegLoading(true);
       try {
-        const res = await uploadSpeech(blob, "neg");
+        const res = await uploadSpeech(blob, "neg", realtimeTranscript);
         setNegTokens(res.transcript);
         setNegDone(true);
         setNegWpm(res.wpm_series ?? []);
@@ -435,10 +442,10 @@ export function RoundRunner() {
   );
 
   const handleAffTwoComplete = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, realtimeTranscript?: RealtimeTranscriptResult | null) => {
       setAffTwoLoading(true);
       try {
-        const res = await uploadSpeech(blob, "aff_two");
+        const res = await uploadSpeech(blob, "aff_two", realtimeTranscript);
         setAffTwoTranscript(res.transcript);
         setAffTwoWpm(res.wpm_series ?? []);
         judgmentStartedRef.current = false;
@@ -742,6 +749,7 @@ export function RoundRunner() {
               label="Record Aff speech"
               disabled={step !== 2 || affLoading}
               maxDurationSeconds={speechDurationSeconds}
+              realtimeTranscription
             />
             {affLoading && <p className="text-sm text-slate-500">Uploading…</p>}
             {affTranscript && (
@@ -848,6 +856,7 @@ export function RoundRunner() {
                   label="Record Neg speech"
                   disabled={step !== 3 || negLoading}
                   maxDurationSeconds={speechDurationSeconds}
+                  realtimeTranscription
                 />
                 {negLoading && <p className="text-sm text-slate-500">Uploading...</p>}
                 {negWpm.length > 0 && <WpmChart series={negWpm} />}
@@ -883,6 +892,7 @@ export function RoundRunner() {
               label="Record Aff rebuttal"
               disabled={step !== 4 || affTwoLoading}
               maxDurationSeconds={speechDurationSeconds}
+              realtimeTranscription
             />
             {affTwoLoading && <p className="text-sm text-slate-500">Uploading…</p>}
             {affTwoTranscript && (

@@ -2,13 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMediaRecorder } from "../hooks/useMediaRecorder";
+import {
+  type RealtimeTranscriptResult,
+  useRealtimeTranscription,
+} from "../hooks/useRealtimeTranscription";
 import { WaveformVisualizer } from "./WaveformVisualizer";
 
 interface RecordButtonProps {
-  onComplete: (blob: Blob) => void | Promise<void>;
+  onComplete: (
+    blob: Blob,
+    realtimeTranscript?: RealtimeTranscriptResult | null,
+  ) => void | Promise<void>;
   label?: string;
   disabled?: boolean;
   maxDurationSeconds?: number;
+  realtimeTranscription?: boolean;
 }
 
 export function RecordButton({
@@ -16,9 +24,12 @@ export function RecordButton({
   label = "Record",
   disabled = false,
   maxDurationSeconds,
+  realtimeTranscription = false,
 }: RecordButtonProps) {
   const { state, error, stream, start, stop } = useMediaRecorder();
+  const realtime = useRealtimeTranscription();
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const stoppingRef = useRef(false);
 
   const isRecording = state === "recording";
@@ -28,8 +39,13 @@ export function RecordButton({
     if (stoppingRef.current || !isRecording) return;
     stoppingRef.current = true;
     try {
+      const realtimeResult = realtimeTranscription ? await realtime.stop() : null;
       const blob = await stop();
-      await onComplete(blob);
+      if (realtimeTranscription && !realtimeResult?.transcript.trim()) {
+        setRealtimeError("Realtime transcription did not return a transcript.");
+        return;
+      }
+      await onComplete(blob, realtimeResult);
     } finally {
       setRemainingSeconds(null);
       stoppingRef.current = false;
@@ -43,7 +59,20 @@ export function RecordButton({
       return;
     }
     setRemainingSeconds(maxDurationSeconds ?? null);
-    await start().catch(() => undefined);
+    setRealtimeError(null);
+    const mediaStream = await start().catch(() => null);
+    if (!mediaStream) return;
+    if (realtimeTranscription) {
+      try {
+        await realtime.start(mediaStream);
+      } catch (err) {
+        setRealtimeError(
+          err instanceof Error ? err.message : "Realtime transcription failed",
+        );
+        await stop().catch(() => undefined);
+        setRemainingSeconds(null);
+      }
+    }
   }
 
   useEffect(() => {
@@ -91,6 +120,11 @@ export function RecordButton({
       )}
       {isRecording && <WaveformVisualizer stream={stream} />}
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {realtimeTranscription && (realtime.error || realtimeError) && (
+        <p className="text-sm text-red-600">
+          {realtime.error || realtimeError}
+        </p>
+      )}
     </div>
   );
 }

@@ -16,6 +16,7 @@ from models.round import TranscriptionResult, Word
 ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com/v2"
 _UPLOAD_URL = f"{ASSEMBLYAI_BASE_URL}/upload"
 _TRANSCRIPT_URL = f"{ASSEMBLYAI_BASE_URL}/transcript"
+_STREAMING_TOKEN_URL = "https://streaming.assemblyai.com/v3/token"
 
 # Polling configuration. Start at 1s; exponential backoff capped at 5s.
 _POLL_INITIAL_DELAY = 1.0
@@ -136,3 +137,36 @@ def _build_result(payload: dict, include_words: bool) -> TranscriptionResult:
         audio_duration_seconds=duration,
         words=words,
     )
+
+
+async def create_streaming_token(
+    expires_in_seconds: int = 60,
+    max_session_duration_seconds: int = 600,
+) -> dict:
+    """Create a short-lived AssemblyAI Universal-Streaming token."""
+
+    headers = {"authorization": _api_key()}
+    params = {
+        "expires_in_seconds": max(1, min(expires_in_seconds, 600)),
+        "max_session_duration_seconds": max(
+            60, min(max_session_duration_seconds, 10800)
+        ),
+    }
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            _STREAMING_TOKEN_URL,
+            headers=headers,
+            params=params,
+        )
+    if response.status_code >= 400:
+        raise TranscriptionError(
+            f"AssemblyAI streaming token failed: {response.status_code} {response.text}"
+        )
+    token = response.json().get("token")
+    if not token:
+        raise TranscriptionError("AssemblyAI streaming token response was empty")
+    return {
+        "token": token,
+        "expires_in_seconds": response.json().get("expires_in_seconds")
+        or params["expires_in_seconds"],
+    }

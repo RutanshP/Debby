@@ -58,3 +58,15 @@ class SpeechResponse(BaseModel):
     wpm: int
     wpm_series: list[WpmPoint]
     duration_seconds: float
+
+
+class TextSpeechRequest(BaseModel):
+    speech_type: SpeechType
+    transcript: str = Field(min_length=1)
+    duration_seconds: float = 0.0
+    words: list[Word] | None = None
+
+
+class StreamingTokenResponse(BaseModel):
+    token: str
+    expires_in_seconds: int

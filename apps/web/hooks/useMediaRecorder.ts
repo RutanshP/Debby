@@ -8,7 +8,7 @@ export interface UseMediaRecorderResult {
   state: RecorderState;
   error: string | null;
   stream: MediaStream | null;
-  start: () => Promise<void>;
+  start: () => Promise<MediaStream>;
   stop: () => Promise<Blob>;
 }
 
@@ -43,7 +43,7 @@ export function useMediaRecorder(): UseMediaRecorderResult {
 
   useEffect(() => cleanup, [cleanup]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (): Promise<MediaStream> => {
     setError(null);
     setState("requesting");
     try {
@@ -58,6 +58,7 @@ export function useMediaRecorder(): UseMediaRecorderResult {
       setStream(mediaStream);
       recorder.start(250);
       setState("recording");
+      return mediaStream;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Microphone unavailable");
       setState("idle");
