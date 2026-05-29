@@ -18,10 +18,10 @@ async function authHeader(): Promise<Record<string, string>> {
   return session ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
-export async function apiFetch<T>(
+async function buildRequest(
   path: string,
-  init: RequestInit = {},
-): Promise<T> {
+  init: RequestInit,
+): Promise<Response> {
   const headers = new Headers(init.headers);
   for (const [k, v] of Object.entries(await authHeader())) {
     headers.set(k, v);
@@ -29,14 +29,29 @@ export async function apiFetch<T>(
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-
   const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new ApiError(res.status, text || res.statusText);
   }
+  return res;
+}
+
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const res = await buildRequest(path, init);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+export async function apiFetchBlob(
+  path: string,
+  init: RequestInit = {},
+): Promise<Blob> {
+  const res = await buildRequest(path, init);
+  return res.blob();
 }
 
 export function apiStreamUrl(path: string): string {

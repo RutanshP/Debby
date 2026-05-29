@@ -5,8 +5,10 @@ import { apiFetch } from "../../lib/api";
 import { getBrowserSupabase } from "../../lib/supabase";
 import { RecordButton } from "../../components/RecordButton";
 import { RfdCard } from "../../components/RfdCard";
+import { SpeakButton } from "../../components/SpeakButton";
 import type { FlowSheetData } from "../../components/FlowSheet";
 import { WpmChart, type WpmPoint } from "../../components/WpmChart";
+import { useDebbySpeech } from "../../hooks/useDebbySpeech";
 
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
@@ -162,6 +164,8 @@ export function RoundRunner() {
   const [judgmentRequested, setJudgmentRequested] = useState(false);
   const [judgmentError, setJudgmentError] = useState<string | null>(null);
   const [speechDurationSeconds, setSpeechDurationSeconds] = useState(120);
+
+  const debbySpeech = useDebbySpeech();
 
   const abortRef = useRef<AbortController | null>(null);
   const affStartedRef = useRef(false);
@@ -786,8 +790,15 @@ export function RoundRunner() {
                     data-testid="aff-transcript"
                     className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700"
                   >
-                    <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
+                    <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
                       Debby's Aff speech
+                      <SpeakButton
+                        text={affTranscript}
+                        play={debbySpeech.play}
+                        state={debbySpeech.state}
+                        activeText={debbySpeech.activeText}
+                        error={debbySpeech.error}
+                      />
                     </div>
                     {affTranscript}
                   </div>
@@ -827,6 +838,16 @@ export function RoundRunner() {
                 data-testid="neg-tokens"
                 className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700"
               >
+                <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+                  Transcript
+                  <SpeakButton
+                    text={negTokens}
+                    play={debbySpeech.play}
+                    state={debbySpeech.state}
+                    activeText={debbySpeech.activeText}
+                    error={debbySpeech.error}
+                  />
+                </div>
                 {negTokens}
               </div>
             )}
@@ -915,8 +936,15 @@ export function RoundRunner() {
                 {affTwoError && <p className="text-sm text-red-600">{affTwoError}</p>}
                 {affTwoTranscript && (
                   <div className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">
-                    <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
+                    <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
                       Debby's Aff rebuttal
+                      <SpeakButton
+                        text={affTwoTranscript}
+                        play={debbySpeech.play}
+                        state={debbySpeech.state}
+                        activeText={debbySpeech.activeText}
+                        error={debbySpeech.error}
+                      />
                     </div>
                     {affTwoTranscript}
                   </div>
