@@ -77,6 +77,7 @@ Debby/
 - Browser microphone permissions must be enabled for recording features.
 - Supabase environment variables are required for authentication and persisted round history.
 - `OPENAI_API_KEY` and `ASSEMBLYAI_API_KEY` are required for AI generation and speech transcription.
+- `DEEPGRAM_KEY` is optional — it enables Deepgram Aura-2 text-to-speech so Debby's speeches play as audio. When unset, speeches still generate and display as text (audio is simply unavailable).
 - The active application stack lives in `apps/api` and `apps/web`.
 
 ## License

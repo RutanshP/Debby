@@ -80,6 +80,38 @@ async def test_ai_response_prompt_prioritizes_case_then_refutation(
     assert "cross-apply" in user_prompt
 
 
+async def test_ai_neg_framework_topic_only_prompt(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("neg contentions")
+    out = await ai_service.ai_neg_framework("topic")
+    assert out == "neg contentions"
+
+    messages = patched_client.await_args.kwargs["messages"]
+    user_prompt = messages[1]["content"]
+    # Framework presents own contentions only, with no affirmative refutation yet.
+    assert "negative contentions only" in user_prompt
+    assert "do NOT yet" in user_prompt
+
+
+async def test_ai_neg_augment_uses_framework_and_aff_speech(
+    patched_client: AsyncMock,
+):
+    patched_client.return_value = _chat_completion("full neg speech")
+    out = await ai_service.ai_neg_augment(
+        "the topic", "prepared case", "aff speech text"
+    )
+    assert out == "full neg speech"
+
+    user_prompt = patched_client.await_args.kwargs["messages"][1]["content"]
+    assert "prepared case" in user_prompt
+    assert "aff speech text" in user_prompt
+    assert "cross-apply" in user_prompt
+
+
+async def test_ai_neg_augment_missing_inputs_raises(patched_client: AsyncMock):
+    with pytest.raises(ValueError):
+        await ai_service.ai_neg_augment("topic", "", "aff speech")
+
+
 async def test_ai_aff_rebuttal_returns_short_rebuttal_only_prompt(
     patched_client: AsyncMock,
 ):
@@ -378,6 +410,40 @@ def test_aff_rebuttal_route_happy_path(
     )
     assert r.status_code == 200
     assert r.json() == {"speech": "aff rebuttal"}
+
+
+def test_neg_framework_route_requires_auth(client_unauthed: TestClient):
+    r = client_unauthed.post("/api/ai/neg-framework", json={"topic": "x"})
+    assert r.status_code == 401
+
+
+def test_neg_augment_route_requires_auth(client_unauthed: TestClient):
+    r = client_unauthed.post(
+        "/api/ai/neg-augment",
+        json={"topic": "x", "framework": "f", "aff_speech": "a"},
+    )
+    assert r.status_code == 401
+
+
+def test_neg_framework_route_happy_path(
+    client_authed: TestClient, patched_client: AsyncMock
+):
+    patched_client.return_value = _chat_completion("neg framework")
+    r = client_authed.post("/api/ai/neg-framework", json={"topic": "x"})
+    assert r.status_code == 200
+    assert r.json() == {"speech": "neg framework"}
+
+
+def test_neg_augment_route_happy_path(
+    client_authed: TestClient, patched_client: AsyncMock
+):
+    patched_client.return_value = _chat_completion("neg augmented")
+    r = client_authed.post(
+        "/api/ai/neg-augment",
+        json={"topic": "x", "framework": "f", "aff_speech": "a"},
+    )
+    assert r.status_code == 200
+    assert r.json() == {"speech": "neg augmented"}
 
 
 def test_response_stream_route(

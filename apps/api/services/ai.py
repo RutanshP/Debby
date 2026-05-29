@@ -346,6 +346,94 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
     return message.choices[0].message.content or ""
 
 
+async def ai_neg_framework(topic: str) -> str:
+    """Phase 1 of the two-phase NEG speech: Debby's own negative contentions.
+
+    Topic-only, so it can run before the affirmative speech exists (kicked off
+    at accept-topic, overlapping the user's ~2-minute speech). Produces just the
+    constructive case; `ai_neg_augment` later layers refutations on top.
+    """
+
+    message = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=500,
+        temperature=0.0,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a negation parliamentary debater by the name of "
+                    "Debby. Your job is to build the negative constructive case "
+                    "on the topic you are given."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Given the following topic: \n" + topic
+                    + "\nwrite the constructive portion of a high school "
+                    "parliamentary debate negation case at average speaking "
+                    "pace, with evidence. Present Debby's own negative "
+                    "contentions only, with clear signposting — do NOT yet "
+                    "refute any affirmative arguments (those will be added "
+                    "later). In the start of your speech, you must say: "
+                    "\"Hello my name is Debby.\""
+                ),
+            },
+        ],
+    )
+    return message.choices[0].message.content or ""
+
+
+async def ai_neg_augment(topic: str, framework: str, aff_speech: str) -> str:
+    """Phase 2 of the two-phase NEG speech: augment the pre-generated framework.
+
+    Takes the contentions produced by `ai_neg_framework` plus the transcribed
+    affirmative speech and weaves in refutations, yielding the final NEG speech.
+    This is the smaller, faster call that runs once the AFF transcript lands.
+    """
+
+    if not topic or not framework or not aff_speech:
+        raise ValueError("Topic, framework, and affirmative speech are required")
+
+    message = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=700,
+        temperature=0.0,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a negation parliamentary debater by the name of "
+                    "Debby. You have already prepared your negative constructive "
+                    "case and now need to deliver the full negation speech."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Given the following topic: \n" + topic
+                    + "\n\nGiven Debby's prepared negative constructive case: \n"
+                    + framework
+                    + "\n\nGiven the following affirmative speech: \n"
+                    + aff_speech
+                    + "\n\nWrite the complete two-minute negation speech at "
+                    "average speaking pace. First, present Debby's own negative "
+                    "contentions from the prepared case above; second, refute the "
+                    "affirmative's major contentions. When one of Debby's own "
+                    "contentions answers an affirmative point, explicitly "
+                    "cross-apply it as a refutation. For example, say that your "
+                    "money tradeoff contention also refutes their innovation point "
+                    "because that money can fund innovation elsewhere. Keep the "
+                    "prepared contentions intact and use clear signposting. In the "
+                    "start of your speech, you must say: \"Hello my name is Debby.\""
+                ),
+            },
+        ],
+    )
+    return message.choices[0].message.content or ""
+
+
 async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
     """Short affirmative rebuttal after the human gives the NEG speech."""
 

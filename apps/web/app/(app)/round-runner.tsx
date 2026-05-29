@@ -7,6 +7,10 @@ import { RecordButton } from "../../components/RecordButton";
 import { RfdCard } from "../../components/RfdCard";
 import type { FlowSheetData } from "../../components/FlowSheet";
 import { WpmChart, type WpmPoint } from "../../components/WpmChart";
+import {
+  useDebbySpeech,
+  type UseDebbySpeechResult,
+} from "../../hooks/useDebbySpeech";
 
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
@@ -122,6 +126,35 @@ function StepCard({
   );
 }
 
+function DebbyAudioButton({
+  text,
+  speech,
+}: {
+  text: string | null;
+  speech: UseDebbySpeechResult;
+}) {
+  if (!text?.trim()) return null;
+  const isThis = speech.activeText === text;
+  const loading = isThis && speech.state === "loading";
+  const playing = isThis && speech.state === "playing";
+  const errored = isThis && speech.state === "error";
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => void speech.play(text)}
+        disabled={loading}
+        className={secondaryButtonClass}
+      >
+        {loading ? "Loading audio…" : playing ? "■ Stop" : "▶ Play audio"}
+      </button>
+      {errored && speech.error && (
+        <span className="text-xs text-red-600">{speech.error}</span>
+      )}
+    </div>
+  );
+}
+
 export function RoundRunner() {
   const [step, setStep] = useState<Step>(1);
 
@@ -165,13 +198,19 @@ export function RoundRunner() {
 
   const abortRef = useRef<AbortController | null>(null);
   const affStartedRef = useRef(false);
+  const negFrameworkStartedRef = useRef(false);
   const negStartedRef = useRef(false);
   const affTwoStartedRef = useRef(false);
   const judgmentStartedRef = useRef(false);
   const affPromiseRef = useRef<Promise<string> | null>(null);
+  const negFrameworkRef = useRef<Promise<string> | null>(null);
   const negPromiseRef = useRef<Promise<string> | null>(null);
   const affTwoPromiseRef = useRef<Promise<string> | null>(null);
   const judgmentPromiseRef = useRef<Promise<JudgmentResponse> | null>(null);
+  const debbySpeech = useDebbySpeech();
+  // `prefetch` is stable across renders; pull it out so the prefetch callbacks
+  // below don't re-create on every playback state change.
+  const { prefetch: prefetchTts, stop: stopAudio } = debbySpeech;
   const userSide = topic?.side ?? "aff";
   const userIsAff = userSide === "aff";
   useEffect(() => {
@@ -234,11 +273,14 @@ export function RoundRunner() {
       });
       setRoundId(round.id);
       setStep(2);
+      stopAudio();
       affStartedRef.current = false;
+      negFrameworkStartedRef.current = false;
       negStartedRef.current = false;
       affTwoStartedRef.current = false;
       judgmentStartedRef.current = false;
       affPromiseRef.current = null;
+      negFrameworkRef.current = null;
       negPromiseRef.current = null;
       affTwoPromiseRef.current = null;
       judgmentPromiseRef.current = null;
@@ -261,16 +303,19 @@ export function RoundRunner() {
     } catch (err) {
       setTopicError(err instanceof Error ? err.message : "Failed to start round");
     }
-  }, [topic]);
+  }, [topic, stopAudio]);
 
   const handlePracticeAgain = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    stopAudio();
     affStartedRef.current = false;
+    negFrameworkStartedRef.current = false;
     negStartedRef.current = false;
     affTwoStartedRef.current = false;
     judgmentStartedRef.current = false;
     affPromiseRef.current = null;
+    negFrameworkRef.current = null;
     negPromiseRef.current = null;
     affTwoPromiseRef.current = null;
     judgmentPromiseRef.current = null;
@@ -298,7 +343,7 @@ export function RoundRunner() {
     setJudgmentLoading(false);
     setJudgmentRequested(false);
     setJudgmentError(null);
-  }, []);
+  }, [stopAudio]);
 
   const uploadSpeech = useCallback(
     async (
@@ -348,6 +393,7 @@ export function RoundRunner() {
       })
       .then((res) => {
         setAffTranscript(res.speech);
+        void prefetchTts(res.speech);
         return res.speech;
       })
       .catch((err) => {
@@ -363,7 +409,29 @@ export function RoundRunner() {
 
     affPromiseRef.current = promise;
     return promise;
-  }, [topic, affTranscript]);
+  }, [topic, affTranscript, prefetchTts]);
+
+  // Phase 1 of the NEG speech: generate Debby's own contentions from the topic
+  // alone. Kicked off at step 2 (right after accept-topic) so it overlaps the
+  // user's affirmative speech. The promise is held for `prefetchAiOpposition`.
+  const prefetchNegFramework = useCallback((): Promise<string> => {
+    if (!topic) return Promise.resolve("");
+    if (negFrameworkRef.current) return negFrameworkRef.current;
+
+    const promise = apiFetch<AiSpeechResponse>("/api/ai/neg-framework", {
+      method: "POST",
+      body: JSON.stringify({ topic: topic.topic }),
+    })
+      .then((res) => res.speech)
+      .catch((err) => {
+        // Drop the ref so a later augment call can retry the framework.
+        negFrameworkRef.current = null;
+        throw err;
+      });
+
+    negFrameworkRef.current = promise;
+    return promise;
+  }, [topic]);
 
   const revealAiAffSpeech = useCallback(async () => {
     setAffAiRequested(true);
@@ -374,6 +442,10 @@ export function RoundRunner() {
     }
   }, [prefetchAiAffSpeech]);
 
+  // Phase 2 of the NEG speech: await the pre-generated framework, then augment
+  // it with refutations of the (now transcribed) affirmative speech. Fires the
+  // instant the AFF transcript is available so the text + audio are ready by
+  // the time the user clicks "Generate Neg speech".
   const prefetchAiOpposition = useCallback(async (): Promise<string> => {
     if (!topic || !affTranscript) return "";
     if (negTokens.trim()) return negTokens;
@@ -383,13 +455,21 @@ export function RoundRunner() {
     setNegDone(false);
     setNegError(null);
     setNegLoading(true);
-    const promise = apiFetch<AiSpeechResponse>("/api/ai/response", {
-        method: "POST",
-        body: JSON.stringify({ topic: topic.topic, first_speech: affTranscript }),
-      })
+    const promise = (negFrameworkRef.current ?? prefetchNegFramework())
+      .then((framework) =>
+        apiFetch<AiSpeechResponse>("/api/ai/neg-augment", {
+          method: "POST",
+          body: JSON.stringify({
+            topic: topic.topic,
+            framework,
+            aff_speech: affTranscript,
+          }),
+        }),
+      )
       .then((res) => {
         setNegTokens(res.speech);
         setNegDone(true);
+        void prefetchTts(res.speech);
         return res.speech;
       })
       .catch((err) => {
@@ -403,7 +483,7 @@ export function RoundRunner() {
 
     negPromiseRef.current = promise;
     return promise;
-  }, [topic, affTranscript, negTokens]);
+  }, [topic, affTranscript, negTokens, prefetchNegFramework, prefetchTts]);
 
   const revealAiOpposition = useCallback(async () => {
     setNegRequested(true);
@@ -469,6 +549,7 @@ export function RoundRunner() {
       })
       .then((res) => {
         setAffTwoTranscript(res.speech);
+        void prefetchTts(res.speech);
         return res.speech;
       })
       .catch((err) => {
@@ -484,7 +565,7 @@ export function RoundRunner() {
 
     affTwoPromiseRef.current = promise;
     return promise;
-  }, [topic, affTranscript, negTokens, affTwoTranscript]);
+  }, [topic, affTranscript, negTokens, affTwoTranscript, prefetchTts]);
 
   const revealAiAffRebuttal = useCallback(async () => {
     setAffTwoRequested(true);
@@ -551,6 +632,20 @@ export function RoundRunner() {
   const handleJudgment = useCallback(async () => {
     await revealJudgment();
   }, [revealJudgment]);
+
+  // Debby is NEG (user is AFF): start the contention framework as soon as the
+  // round begins (step 2), so it generates while the user gives their speech.
+  useEffect(() => {
+    if (
+      userIsAff &&
+      step === 2 &&
+      topic &&
+      !negFrameworkStartedRef.current
+    ) {
+      negFrameworkStartedRef.current = true;
+      void prefetchNegFramework().catch(() => undefined);
+    }
+  }, [userIsAff, step, topic, prefetchNegFramework]);
 
   useEffect(() => {
     if (
@@ -772,6 +867,9 @@ export function RoundRunner() {
                     : "Generate Aff speech"}
                 </button>
                 {affAiError && <p className="text-sm text-red-600">{affAiError}</p>}
+                {affAiRequested && affTranscript && (
+                  <DebbyAudioButton text={affTranscript} speech={debbySpeech} />
+                )}
                 {step === 2 && affAiRequested && affTranscript && (
                   <button
                     type="button"
@@ -822,6 +920,9 @@ export function RoundRunner() {
               {negRequested && negLoading ? "Generating..." : "Generate Neg speech"}
             </button>
             {negError && <p className="text-sm text-red-600">{negError}</p>}
+            {negRequested && negDone && negTokens && (
+              <DebbyAudioButton text={negTokens} speech={debbySpeech} />
+            )}
             {negRequested && negTokens && (
               <div
                 data-testid="neg-tokens"
@@ -913,6 +1014,9 @@ export function RoundRunner() {
                     : "Generate Aff rebuttal"}
                 </button>
                 {affTwoError && <p className="text-sm text-red-600">{affTwoError}</p>}
+                {affTwoRequested && affTwoTranscript && (
+                  <DebbyAudioButton text={affTwoTranscript} speech={debbySpeech} />
+                )}
                 {affTwoTranscript && (
                   <div className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                     <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
