@@ -80,16 +80,16 @@ def _looks_like_speed_passage(text: str | None) -> bool:
 
 
 _FALLBACK_SENTENCES = [
-    "Debate rewards students who can read quickly, listen carefully, and make clear decisions under pressure.",
-    "A strong speaker does not simply move fast; they choose words with purpose and keep every claim connected to a reason.",
-    "When a round becomes complicated, the best debaters slow their thinking down even while their voice stays energetic.",
-    "They identify the main conflict, explain why it matters, and compare impacts in language the judge can follow.",
-    "Speed reading practice builds that control because it forces the speaker to balance pace, breathing, and accuracy.",
-    "The goal is not noise or panic; the goal is efficient communication.",
-    "Good practice also teaches recovery.",
-    "Over time, those small recoveries become part of a calm rhythm.",
-    "In tournament rounds, that skill can decide close debates.",
-    "A good speech sounds fast, organized, and intentional at the same time.",
+    "On a spring afternoon, a small basketball team changed its season by changing the way it practiced.",
+    "Instead of running the same drills every day, the players studied spacing, watched film, and learned how to pass before the defense could settle.",
+    "Their best scorer still took difficult shots, but the offense no longer depended on one person solving every problem.",
+    "A quiet forward began setting sharper screens, a freshman guard learned when to slow the tempo, and the bench started treating every rebound like a chance to reset the game.",
+    "By the playoffs, the team looked faster because it was thinking earlier.",
+    "The same pattern shows up in restaurants, science labs, city buses, and school clubs: small systems often matter more than one dramatic talent.",
+    "When people notice the pattern, they can improve without waiting for perfect conditions.",
+    "They adjust the routine, measure what changes, and keep the parts that make the whole group steadier.",
+    "Progress rarely feels cinematic while it is happening.",
+    "It usually sounds like clear instructions, better timing, and a few people deciding to pay attention at the same moment.",
 ]
 
 
@@ -152,12 +152,28 @@ _DRILL_GUIDANCE = {
 
 
 def _speed_guidance(word_target: int) -> str:
+    topic_area = random.choice(
+        [
+            "debate, public speaking, or argument strategy",
+            "sports strategy or athlete training",
+            "music, film, or internet culture",
+            "food, restaurants, or cooking",
+            "science, space, or medicine",
+            "technology and everyday gadgets",
+            "travel, cities, or public transportation",
+            "nature, climate, or animals",
+            "school life, clubs, or student habits",
+            "business, startups, or unusual jobs",
+            "history, architecture, or museums",
+        ]
+    )
     return (
-        "Create a speed-reading passage about debate, sports, school, or technology. "
+        f"Create a short magazine-style speed-reading article about {topic_area}. "
         f"It must be about {word_target} words total, readable aloud, and include "
         "varied punctuation so the user can practice pacing. The prompt must be the exact "
         "words the user should read aloud. The task must only tell the user to read the "
-        "passage aloud; do not ask them to discuss, explain, write, or answer anything."
+        "passage aloud; do not ask them to discuss, explain, write, or answer anything. "
+        "Stay on the selected topic area instead of defaulting to debate or public speaking."
     )
 
 
