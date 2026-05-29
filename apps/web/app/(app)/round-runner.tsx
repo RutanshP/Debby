@@ -779,7 +779,7 @@ export function RoundRunner() {
                     Continue to Neg speech
                   </button>
                 )}
-                {affTranscript && (
+                {affAiRequested && affTranscript && (
                   <div
                     data-testid="aff-transcript"
                     className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700"
@@ -911,7 +911,7 @@ export function RoundRunner() {
                     : "Generate Aff rebuttal"}
                 </button>
                 {affTwoError && <p className="text-sm text-red-600">{affTwoError}</p>}
-                {affTwoTranscript && (
+                {affTwoRequested && affTwoTranscript && (
                   <div className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                     <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
                       Debby's Aff rebuttal
