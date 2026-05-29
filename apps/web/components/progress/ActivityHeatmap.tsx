@@ -18,21 +18,21 @@ export function ActivityHeatmap({ days }: { days: ActivityDay[] }) {
   const activeDays = days.filter((d) => d.count > 0).length;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline justify-between text-sm">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
         <span className="text-slate-500">Last 12 weeks</span>
         <span className="text-slate-700">
           {activeDays} active days · {total} sessions
         </span>
       </div>
-      <div className="flex gap-1 overflow-x-auto">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
         {columns.map((col, ci) => (
-          <div key={ci} className="flex flex-col gap-1">
+          <div key={ci} className="flex flex-col gap-1.5">
             {col.map((day) => (
               <div
                 key={day.date}
                 title={`${day.date} · ${day.count}`}
-                className={`h-3 w-3 rounded-sm ${shade(day.count)}`}
+                className={`h-3.5 w-3.5 shrink-0 rounded-sm ${shade(day.count)}`}
               />
             ))}
           </div>

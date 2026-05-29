@@ -81,7 +81,7 @@ export function ProgressDashboard({
         <SpeechInsightsCard initial={initialInsights} />
       </Section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid items-start gap-6 lg:grid-cols-2">
         <Section title="WPM over time">
           <WpmTrendChart data={trend} />
         </Section>
@@ -94,7 +94,7 @@ export function ProgressDashboard({
         <WeaknessSpotlight weakness={weakness} />
       </Section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid items-start gap-6 lg:grid-cols-2">
         <Section title="Drill scores">
           <DrillScoreTrendChart trend={drillTrend} />
         </Section>
@@ -103,7 +103,7 @@ export function ProgressDashboard({
         </Section>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid items-start gap-6 lg:grid-cols-2">
         <Section title="Recent rounds">
           <RecentRoundsList rounds={recent} />
         </Section>
