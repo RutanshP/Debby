@@ -37,8 +37,7 @@ from services import speed_passages
 
 OPENAI_MODEL = "gpt-4o-mini-2024-07-18"
 ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com/v2"
-SPEED_PASSAGE_REUSE_THRESHOLD = 20
-SPEED_PASSAGE_REUSE_RATE = 0.2
+SPEED_PASSAGE_CATEGORY_LIMIT = 20
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +90,143 @@ _FALLBACK_SENTENCES = [
     "They adjust the routine, measure what changes, and keep the parts that make the whole group steadier.",
     "Progress rarely feels cinematic while it is happening.",
     "It usually sounds like clear instructions, better timing, and a few people deciding to pay attention at the same moment.",
+]
+
+
+_SPEED_TOPIC_AREAS = [
+    {
+        "category": "debate",
+        "label": "debate, public speaking, or argument strategy",
+        "subtopics": [
+            "cross-examination",
+            "judge adaptation",
+            "case construction",
+            "rebuttal strategy",
+            "tournament preparation",
+        ],
+    },
+    {
+        "category": "sports",
+        "label": "sports strategy or athlete training",
+        "subtopics": [
+            "soccer pressing systems",
+            "basketball spacing",
+            "tennis footwork",
+            "baseball pitching routines",
+            "swimming starts",
+            "track relay exchanges",
+            "volleyball rotations",
+            "football play calling",
+        ],
+    },
+    {
+        "category": "culture",
+        "label": "music, film, or internet culture",
+        "subtopics": [
+            "movie soundtracks",
+            "streaming fandoms",
+            "independent music scenes",
+            "animation studios",
+            "short-form video trends",
+            "fashion cycles",
+        ],
+    },
+    {
+        "category": "food",
+        "label": "food, restaurants, or cooking",
+        "subtopics": [
+            "street food markets",
+            "pizza ovens",
+            "school lunch design",
+            "farmers markets",
+            "coffee shops",
+            "home baking",
+        ],
+    },
+    {
+        "category": "science",
+        "label": "science, space, or medicine",
+        "subtopics": [
+            "moon missions",
+            "sleep research",
+            "ocean exploration",
+            "vaccine delivery",
+            "robotic surgery",
+            "weather prediction",
+        ],
+    },
+    {
+        "category": "technology",
+        "label": "technology and everyday gadgets",
+        "subtopics": [
+            "smart watches",
+            "electric bikes",
+            "phone cameras",
+            "home robots",
+            "battery design",
+            "video game engines",
+        ],
+    },
+    {
+        "category": "travel",
+        "label": "travel, cities, or public transportation",
+        "subtopics": [
+            "night trains",
+            "airport design",
+            "bike lanes",
+            "city parks",
+            "museum districts",
+            "bus rapid transit",
+        ],
+    },
+    {
+        "category": "nature",
+        "label": "nature, climate, or animals",
+        "subtopics": [
+            "coral reefs",
+            "urban trees",
+            "bird migration",
+            "wildfire recovery",
+            "rain gardens",
+            "national parks",
+        ],
+    },
+    {
+        "category": "school",
+        "label": "school life, clubs, or student habits",
+        "subtopics": [
+            "study groups",
+            "school newspapers",
+            "robotics clubs",
+            "morning routines",
+            "library design",
+            "student leadership",
+        ],
+    },
+    {
+        "category": "business",
+        "label": "business, startups, or unusual jobs",
+        "subtopics": [
+            "food trucks",
+            "sports analytics firms",
+            "small bookstores",
+            "theme park designers",
+            "sneaker resale shops",
+            "local repair cafes",
+        ],
+    },
+    {
+        "category": "history",
+        "label": "history, architecture, or museums",
+        "subtopics": [
+            "ancient roads",
+            "train stations",
+            "museum restoration",
+            "castles",
+            "public monuments",
+            "historic neighborhoods",
+        ],
+    },
 ]
 
 
@@ -152,30 +288,31 @@ _DRILL_GUIDANCE = {
 }
 
 
-def _speed_guidance(word_target: int) -> str:
-    topic_area = random.choice(
-        [
-            "debate, public speaking, or argument strategy",
-            "sports strategy or athlete training",
-            "music, film, or internet culture",
-            "food, restaurants, or cooking",
-            "science, space, or medicine",
-            "technology and everyday gadgets",
-            "travel, cities, or public transportation",
-            "nature, climate, or animals",
-            "school life, clubs, or student habits",
-            "business, startups, or unusual jobs",
-            "history, architecture, or museums",
-        ]
-    )
+def _speed_guidance(word_target: int, topic_area: str, subtopic: str) -> str:
     return (
-        f"Create a short magazine-style speed-reading article about {topic_area}. "
+        f"Create a short magazine-style speed-reading article about {subtopic} "
+        f"within the broader area of {topic_area}. "
         f"It must be about {word_target} words total, readable aloud, and include "
         "varied punctuation so the user can practice pacing. The prompt must be the exact "
         "words the user should read aloud. The task must only tell the user to read the "
         "passage aloud; do not ask them to discuss, explain, write, or answer anything. "
         "Stay on the selected topic area instead of defaulting to debate or public speaking."
     )
+
+
+async def _choose_speed_topic() -> dict[str, str | list[str]]:
+    shuffled = list(_SPEED_TOPIC_AREAS)
+    random.shuffle(shuffled)
+
+    for topic in shuffled:
+        try:
+            count = await speed_passages.count_passages(str(topic["category"]))
+        except Exception:
+            count = 0
+        if count < SPEED_PASSAGE_CATEGORY_LIMIT:
+            return topic
+
+    return random.choice(_SPEED_TOPIC_AREAS)
 
 
 async def _json_from_model(messages: list[dict[str, str]], fallback: dict, max_tokens: int = 700) -> dict:
@@ -219,17 +356,20 @@ async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None
 
     if drill_type == "speed":
         word_target = speed_passage_word_target(timer)
+        speed_topic = await _choose_speed_topic()
+        speed_category = str(speed_topic["category"])
+        speed_label = str(speed_topic["label"])
+        speed_subtopic = random.choice(list(speed_topic["subtopics"]))
         try:
-            should_reuse = random.random() < SPEED_PASSAGE_REUSE_RATE
-            if (
-                should_reuse
-                and await speed_passages.count_passages() >= SPEED_PASSAGE_REUSE_THRESHOLD
-            ):
-                cached_prompt = await speed_passages.get_passage(word_target)
+            category_count = await speed_passages.count_passages(speed_category)
+            if category_count >= SPEED_PASSAGE_CATEGORY_LIMIT:
+                cached_prompt = await speed_passages.get_passage(
+                    word_target, speed_category
+                )
                 if cached_prompt and _looks_like_speed_passage(cached_prompt):
                     return DrillPrompt(
                         title=DRILL_TITLES["speed"],
-                        topic="Speed Reading",
+                        topic=f"Speed Reading: {speed_label}",
                         prompt=_fit_speed_passage_to_target(cached_prompt, word_target),
                         task="Read the passage aloud, then submit your recording.",
                         timer_seconds=timer,
@@ -238,9 +378,9 @@ async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None
             # Supabase passage reuse should never block drill generation.
             pass
 
-        guidance = _speed_guidance(word_target)
+        guidance = _speed_guidance(word_target, speed_label, str(speed_subtopic))
         fallback_prompt = _speed_fallback_passage(word_target)
-        fallback_topic = "Speed Reading"
+        fallback_topic = f"Speed Reading: {speed_subtopic}"
         task = "Read the passage aloud, then submit your recording."
         max_tokens = 1400
     else:
@@ -287,7 +427,9 @@ async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None
             prompt_text = fallback_prompt
         prompt_text = _fit_speed_passage_to_target(prompt_text, word_target)
         try:
-            await speed_passages.save_passage(word_target, prompt_text)
+            await speed_passages.save_passage(
+                word_target, prompt_text, speed_category, str(speed_subtopic)
+            )
         except Exception:
             # A failed cache write should not make the user wait or fail the drill.
             pass

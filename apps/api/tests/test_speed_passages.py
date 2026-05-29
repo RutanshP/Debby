@@ -185,14 +185,41 @@ async def test_count_passages(install_fake_client):
 
 
 @pytest.mark.asyncio
+async def test_count_passages_treats_uncategorized_as_debate(install_fake_client):
+    install_fake_client(
+        [
+            {"id": "a", "target_words": 100, "text": "old debate"},
+            {
+                "id": "b",
+                "target_words": 100,
+                "text": "new debate",
+                "category": "debate",
+            },
+            {"id": "c", "target_words": 100, "text": "soccer", "category": "sports"},
+        ]
+    )
+
+    assert await svc.count_passages("debate") == 2
+    assert await svc.count_passages("sports") == 1
+
+
+@pytest.mark.asyncio
 async def test_save_passage_inserts_new_text(install_fake_client):
     fake = install_fake_client([])
 
-    inserted = await svc.save_passage(150, "new speed passage")
+    inserted = await svc.save_passage(
+        150, "new speed passage", category="sports", subtopic="soccer"
+    )
 
     assert inserted is True
     assert fake.rows == [
-        {"id": "1", "target_words": 150, "text": "new speed passage"}
+        {
+            "id": "1",
+            "target_words": 150,
+            "text": "new speed passage",
+            "category": "sports",
+            "subtopic": "soccer",
+        }
     ]
 
 

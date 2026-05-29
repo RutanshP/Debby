@@ -44,11 +44,16 @@ create table public.speed_passages (
     id            uuid primary key default gen_random_uuid(),
     target_words  int not null,
     text          text not null,
+    category      text,
+    subtopic      text,
     created_at    timestamptz not null default now()
 );
 
 create index speed_passages_target_words_idx
     on public.speed_passages (target_words);
+
+create index speed_passages_category_target_words_idx
+    on public.speed_passages (category, target_words);
 
 -- Row-level security.
 alter table public.rounds          enable row level security;

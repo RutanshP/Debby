@@ -71,6 +71,8 @@ class Passage:
     id: str
     target_words: int
     text: str
+    category: str | None = None
+    subtopic: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -81,14 +83,14 @@ class Passage:
 # ---------------------------------------------------------------------------
 
 _CACHE_MAXSIZE = 32
-_passage_cache: dict[int, str | None] = {}
+_passage_cache: dict[tuple[int, str | None], str | None] = {}
 
 
 def clear_cache() -> None:
     _passage_cache.clear()
 
 
-def _cache_set(key: int, value: str | None) -> None:
+def _cache_set(key: tuple[int, str | None], value: str | None) -> None:
     if key in _passage_cache:
         return
     if len(_passage_cache) >= _CACHE_MAXSIZE:
@@ -103,14 +105,15 @@ def _cache_set(key: int, value: str | None) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def get_passage(target_words: int) -> str | None:
+async def get_passage(target_words: int, category: str | None = None) -> str | None:
     """Return the passage whose `target_words` is closest to the request.
 
     Results are memoised per `target_words` value.
     """
 
-    if target_words in _passage_cache:
-        return _passage_cache[target_words]
+    cache_key = (target_words, category)
+    if cache_key in _passage_cache:
+        return _passage_cache[cache_key]
 
     client = _get_service_client()
 
@@ -119,36 +122,51 @@ async def get_passage(target_words: int) -> str | None:
         # in Python — PostgREST can't order by `abs(col - $1)` directly.
         response = (
             client.table("speed_passages")
-            .select("id, target_words, text")
+            .select("id, target_words, text, category")
             .execute()
         )
-        return getattr(response, "data", None) or []
+        rows = getattr(response, "data", None) or []
+        if category:
+            rows = [row for row in rows if row.get("category") == category]
+        return rows
 
     rows = await asyncio.to_thread(_query)
     if not rows:
-        _cache_set(target_words, None)
+        _cache_set(cache_key, None)
         return None
 
     best = min(rows, key=lambda r: abs(int(r["target_words"]) - target_words))
     text = best.get("text")
-    _cache_set(target_words, text)
+    _cache_set(cache_key, text)
     return text
 
 
-async def count_passages() -> int:
+async def count_passages(category: str | None = None) -> int:
     """Return the number of stored speed passages."""
 
     client = _get_service_client()
 
     def _query() -> list[dict[str, Any]]:
-        response = client.table("speed_passages").select("id").execute()
+        response = client.table("speed_passages").select("id, category").execute()
         return getattr(response, "data", None) or []
 
     rows = await asyncio.to_thread(_query)
+    if category:
+        rows = [
+            row
+            for row in rows
+            if row.get("category") == category
+            or (category == "debate" and not row.get("category"))
+        ]
     return len(rows)
 
 
-async def save_passage(target_words: int, text: str) -> bool:
+async def save_passage(
+    target_words: int,
+    text: str,
+    category: str | None = None,
+    subtopic: str | None = None,
+) -> bool:
     """Store a generated passage if it is non-empty and not already present."""
 
     text = (text or "").strip()
@@ -168,9 +186,13 @@ async def save_passage(target_words: int, text: str) -> bool:
         if getattr(existing, "data", None):
             return False
 
-        client.table("speed_passages").insert(
-            {"target_words": int(target_words), "text": text}
-        ).execute()
+        payload: dict[str, Any] = {"target_words": int(target_words), "text": text}
+        if category:
+            payload["category"] = category
+        if subtopic:
+            payload["subtopic"] = subtopic
+
+        client.table("speed_passages").insert(payload).execute()
         return True
 
     inserted = await asyncio.to_thread(_insert)
@@ -187,7 +209,7 @@ async def list_passages() -> list[Passage]:
     def _query() -> list[dict[str, Any]]:
         response = (
             client.table("speed_passages")
-            .select("id, target_words, text")
+            .select("id, target_words, text, category, subtopic")
             .order("target_words")
             .execute()
         )
@@ -199,6 +221,8 @@ async def list_passages() -> list[Passage]:
             id=str(row["id"]),
             target_words=int(row["target_words"]),
             text=str(row["text"]),
+            category=row.get("category"),
+            subtopic=row.get("subtopic"),
         )
         for row in rows
     ]

@@ -140,7 +140,9 @@ async def test_generate_drill_speed_saves_generated_passage_until_threshold():
 
     target = drills_service.speed_passage_word_target(30)
     mock.assert_awaited_once()
-    save_mock.assert_awaited_once_with(target, prompt.prompt)
+    save_mock.assert_awaited_once()
+    args = save_mock.await_args.args
+    assert args[:2] == (target, prompt.prompt)
 
 
 async def test_generate_drill_speed_reuses_passage_after_threshold():
@@ -151,7 +153,7 @@ async def test_generate_drill_speed_reuses_passage_after_threshold():
     with patch.object(
         drills_service.speed_passages,
         "count_passages",
-        AsyncMock(return_value=drills_service.SPEED_PASSAGE_REUSE_THRESHOLD),
+        AsyncMock(return_value=drills_service.SPEED_PASSAGE_CATEGORY_LIMIT),
     ), patch.object(
         drills_service.speed_passages,
         "get_passage",
@@ -164,10 +166,6 @@ async def test_generate_drill_speed_reuses_passage_after_threshold():
         drills_service._openai_client.chat.completions,
         "create",
         openai_mock,
-    ), patch.object(
-        drills_service.random,
-        "random",
-        return_value=0.0,
     ):
         prompt = await drills_service.generate_drill("speed", timer_seconds=30)
 
