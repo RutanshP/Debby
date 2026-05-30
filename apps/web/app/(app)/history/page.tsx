@@ -15,7 +15,7 @@ async function fetchRounds(): Promise<HistoryRound[]> {
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}/api/rounds?limit=50`, {
+    res = await fetch(`${API_BASE_URL}/api/rounds/summary?limit=50`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
       cache: "no-store",
     });

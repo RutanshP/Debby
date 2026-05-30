@@ -237,6 +237,38 @@ def test_list_rounds_only_returns_caller_rows(
     assert rows[0]["user_id"] == USER_A.id
 
 
+def test_list_round_summaries_omits_full_speeches(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+    auth_user_a: _FakeUser,
+) -> None:
+    table = fake_supabase.tables.setdefault("rounds", _FakeTable())
+    table.rows.append(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": USER_A.id,
+            "format": "parli",
+            "topic": "summary",
+            "side": "aff",
+            "winner_side": "aff",
+            "aff_speech": "large speech text",
+            "neg_speech": "large speech text",
+            "rfd": "large rfd",
+            "flow": {"ballot": {"winner": "aff"}, "dropped": []},
+            "created_at": "2026-01-02T00:00:00+00:00",
+        }
+    )
+
+    resp = client.get("/api/rounds/summary")
+    assert resp.status_code == 200, resp.text
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["topic"] == "summary"
+    assert "aff_speech" not in rows[0]
+    assert "neg_speech" not in rows[0]
+    assert "rfd" not in rows[0]
+
+
 def test_get_round_other_user_returns_404(
     client: TestClient,
     fake_supabase: _FakeSupabase,

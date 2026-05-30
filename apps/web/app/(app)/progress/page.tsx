@@ -38,8 +38,8 @@ export default async function ProgressPage() {
   }
 
   const [rounds, drills, insights] = await Promise.all([
-    fetchJson<ProgressRound[]>("/api/rounds?limit=100", session.access_token),
-    fetchJson<ProgressDrill[]>("/api/drills?limit=100", session.access_token),
+    fetchJson<ProgressRound[]>("/api/rounds/summary?limit=100", session.access_token),
+    fetchJson<ProgressDrill[]>("/api/drills/summary?limit=100", session.access_token),
     fetchJson<SpeechInsightsResponse>("/api/insights", session.access_token),
   ]);
 

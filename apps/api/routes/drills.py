@@ -15,6 +15,7 @@ from models.drill import (
     DrillPrompt,
     DrillScore,
     DrillScoreRequest,
+    DrillSummary,
     DrillType,
     SpeedScore,
 )
@@ -82,6 +83,10 @@ _COMPUTED_SCORE_COLUMNS = {
     "accuracy",
     "completion",
 }
+_SUMMARY_COLUMNS = (
+    "id,drill_type,prompt,score,numeric_score,duration_seconds,wpm,accuracy,"
+    "completion,timer_seconds,created_at"
+)
 
 
 def _persist_drill(row: dict[str, Any]) -> dict[str, Any]:
@@ -230,12 +235,71 @@ def _row_to_drill(row: dict[str, Any]) -> Drill:
     )
 
 
+def _row_to_drill_summary(row: dict[str, Any]) -> DrillSummary | None:
+    if row.get("prompt") is None:
+        return None
+    prompt_data = row.get("prompt")
+    if isinstance(prompt_data, str):
+        import json
+
+        prompt_data = json.loads(prompt_data)
+    score_data = row.get("score")
+    if isinstance(score_data, str):
+        import json
+
+        score_data = json.loads(score_data)
+    if not isinstance(prompt_data, dict):
+        prompt_data = {}
+    if not isinstance(score_data, dict):
+        score_data = {}
+    score_data = _merge_score_columns(str(row.get("drill_type") or ""), score_data, row)
+    return DrillSummary(
+        id=str(row["id"]),
+        drill_type=row["drill_type"],
+        prompt={"timer_seconds": prompt_data.get("timer_seconds")},
+        score={
+            key: score_data.get(key)
+            for key in ("score", "duration_seconds")
+            if score_data.get(key) is not None
+        },
+        numeric_score=row.get("numeric_score"),
+        duration_seconds=row.get("duration_seconds"),
+        wpm=row.get("wpm"),
+        accuracy=row.get("accuracy"),
+        completion=row.get("completion"),
+        timer_seconds=row.get("timer_seconds"),
+        created_at=row.get("created_at"),
+    )
+
+
 router = APIRouter()
 
 
 def _list_drills(user_id: str, limit: int) -> list[dict[str, Any]]:
     sb = _supabase_client()
     if sb is None:
+        rows = [r for r in _FALLBACK_STORE.values() if r["user_id"] == user_id]
+        rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+        return rows[:limit]
+
+
+def _list_drill_summaries(user_id: str, limit: int) -> list[dict[str, Any]]:
+    sb = _supabase_client()
+    if sb is None:
+        rows = [r for r in _FALLBACK_STORE.values() if r["user_id"] == user_id]
+        rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+        return rows[:limit]
+    try:
+        result = (
+            sb.table("drills")
+            .select(_SUMMARY_COLUMNS)
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return list(getattr(result, "data", None) or [])
+    except Exception:
         rows = [r for r in _FALLBACK_STORE.values() if r["user_id"] == user_id]
         rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
         return rows[:limit]
@@ -263,6 +327,17 @@ async def list_drills_route(
     limit = max(1, min(limit, 200))
     rows = _list_drills(user.id, limit)
     return [_row_to_drill(r) for r in rows if r.get("prompt") is not None]
+
+
+@router.get("/drills/summary", response_model=list[DrillSummary])
+async def list_drill_summaries_route(
+    limit: int = 25,
+    user=Depends(get_current_user),
+) -> list[DrillSummary]:
+    limit = max(1, min(limit, 200))
+    rows = _list_drill_summaries(user.id, limit)
+    summaries = [_row_to_drill_summary(r) for r in rows]
+    return [s for s in summaries if s is not None]
 
 
 @router.post("/drills", response_model=Drill)

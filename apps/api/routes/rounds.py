@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - fallback so this unit boots in isolati
 from models.round import (
     CreateRoundRequest,
     Round,
+    RoundSummary,
     SpeechResponse,
     StreamingTokenResponse,
     TextSpeechRequest,
@@ -65,6 +66,15 @@ async def list_rounds_route(
 ) -> list[Round]:
     limit = max(1, min(limit, 100))
     return await rounds_service.list_rounds(user_id=user.id, limit=limit)
+
+
+@router.get("/rounds/summary", response_model=list[RoundSummary])
+async def list_round_summaries_route(
+    limit: int = 25,
+    user: User = Depends(get_current_user),
+) -> list[RoundSummary]:
+    limit = max(1, min(limit, 100))
+    return await rounds_service.list_round_summaries(user_id=user.id, limit=limit)
 
 
 @router.get("/rounds/{round_id}", response_model=Round)

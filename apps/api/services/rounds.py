@@ -10,14 +10,30 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from models.round import Round
+from models.round import Round, RoundSummary
 from services.supabase_client import get_supabase
 
 _TABLE = "rounds"
+_SUMMARY_COLUMNS = (
+    "id,topic,format,side,winner_side,flow,average_wpm,first_speech_wpm,"
+    "second_speech_wpm,total_speech_time,created_at"
+)
 
 
 def _row_to_round(row: dict[str, Any]) -> Round:
     return Round.model_validate(row)
+
+
+def _row_to_round_summary(row: dict[str, Any]) -> RoundSummary:
+    payload = dict(row)
+    flow = payload.get("flow")
+    if isinstance(flow, dict):
+        payload["flow"] = {
+            key: flow.get(key)
+            for key in ("ballot", "dropped", "recommended_drills")
+            if key in flow
+        }
+    return RoundSummary.model_validate(payload)
 
 
 async def create_round(
@@ -58,6 +74,26 @@ async def list_rounds(user_id: str, limit: int = 25) -> list[Round]:
 
     rows = await asyncio.to_thread(_do)
     return [_row_to_round(r) for r in rows]
+
+
+async def list_round_summaries(
+    user_id: str, limit: int = 25
+) -> list[RoundSummary]:
+    client = get_supabase()
+
+    def _do() -> list[dict[str, Any]]:
+        resp = (
+            client.table(_TABLE)
+            .select(_SUMMARY_COLUMNS)
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return list(getattr(resp, "data", None) or [])
+
+    rows = await asyncio.to_thread(_do)
+    return [_row_to_round_summary(r) for r in rows]
 
 
 async def get_round(user_id: str, round_id: str) -> Round | None:

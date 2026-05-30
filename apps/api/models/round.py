@@ -47,6 +47,20 @@ class Round(BaseModel):
     created_at: str | None = None
 
 
+class RoundSummary(BaseModel):
+    id: str
+    topic: str
+    format: Format
+    side: Side | None = None
+    winner_side: Side | None = None
+    flow: Any | None = None
+    average_wpm: int | None = None
+    first_speech_wpm: int | None = None
+    second_speech_wpm: int | None = None
+    total_speech_time: str | int | float | dict[str, Any] | None = None
+    created_at: str | None = None
+
+
 class CreateRoundRequest(BaseModel):
     format: Format
     topic: str = Field(min_length=1)

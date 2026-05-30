@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -74,6 +75,20 @@ class Drill(BaseModel):
     prompt: DrillPrompt
     response: str | None = None
     score: DrillScore | SpeedScore | None = None
+    numeric_score: int | None = None
+    duration_seconds: float | None = None
+    wpm: int | None = None
+    accuracy: float | None = None
+    completion: float | None = None
+    timer_seconds: int | None = None
+    created_at: datetime | None = None
+
+
+class DrillSummary(BaseModel):
+    id: str
+    drill_type: DrillType
+    prompt: dict[str, Any] | None = None
+    score: dict[str, Any] | None = None
     numeric_score: int | None = None
     duration_seconds: float | None = None
     wpm: int | None = None
