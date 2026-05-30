@@ -54,6 +54,7 @@ class FillerScoreRequest(BaseModel):
     transcript: str = ""
     duration_seconds: float = Field(ge=0)
     filler_word: str | None = None
+    stop_reason: str | None = None
 
 
 class DrillScore(BaseModel):

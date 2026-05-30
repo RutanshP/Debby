@@ -181,6 +181,7 @@ export function DrillsClient() {
   const [error, setError] = useState<string | null>(null);
   const autoSubmittedRef = useRef(false);
   const detectedFillerRef = useRef<string | null>(null);
+  const fillerStopReasonRef = useRef<"filler" | "pause" | null>(null);
   const responseRef = useRef("");
   const submittingRef = useRef(false);
   const typingDeadlineRef = useRef<number | null>(null);
@@ -211,6 +212,7 @@ export function DrillsClient() {
     setError(null);
     autoSubmittedRef.current = false;
     detectedFillerRef.current = null;
+    fillerStopReasonRef.current = null;
     typingDeadlineRef.current = null;
   }
 
@@ -229,6 +231,7 @@ export function DrillsClient() {
     setTypingStarted(false);
     autoSubmittedRef.current = false;
     detectedFillerRef.current = null;
+    fillerStopReasonRef.current = null;
     typingDeadlineRef.current = null;
     setGenerating(true);
     try {
@@ -352,6 +355,7 @@ export function DrillsClient() {
     const filler = detectFiller(result.transcript);
     if (filler) {
       detectedFillerRef.current = filler;
+      fillerStopReasonRef.current = "filler";
     }
   }
 
@@ -359,7 +363,12 @@ export function DrillsClient() {
     const filler = detectFiller(result.transcript);
     if (!filler) return false;
     detectedFillerRef.current = filler;
+    fillerStopReasonRef.current = "filler";
     return true;
+  }
+
+  function handleFillerSilenceStop() {
+    fillerStopReasonRef.current = "pause";
   }
 
   async function handleSubmitFiller(
@@ -382,6 +391,7 @@ export function DrillsClient() {
             filler_word:
               detectedFillerRef.current ??
               detectFiller(realtimeResult?.transcript ?? ""),
+            stop_reason: fillerStopReasonRef.current,
           }),
         },
       );
@@ -546,6 +556,7 @@ export function DrillsClient() {
                 realtimeTranscription={isFiller}
                 onRealtimeTranscript={isFiller ? handleFillerTranscript : undefined}
                 stopWhenRealtimeTranscript={isFiller ? shouldStopFiller : undefined}
+                onRealtimeSilenceStop={isFiller ? handleFillerSilenceStop : undefined}
                 stopAfterRealtimeSilenceSeconds={isFiller ? 3 : undefined}
                 allowEmptyRealtimeTranscript={isFiller}
               />

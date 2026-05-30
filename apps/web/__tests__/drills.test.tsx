@@ -239,6 +239,7 @@ describe("DrillsClient", () => {
       transcript: "",
       duration_seconds: 0,
       filler_word: null,
+      stop_reason: null,
     });
     expect(await screen.findByText("Clean run.")).toBeInTheDocument();
   });

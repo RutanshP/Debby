@@ -4,8 +4,6 @@ import {
   Bar,
   CartesianGrid,
   ComposedChart,
-  Legend,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -60,28 +58,20 @@ export function FillerTrendChart({ data }: { data: FillerTrendPoint[] }) {
         <Tooltip
           formatter={(value: number, name: string) => [
             Math.round(value),
-            name === "fillerCount" ? "Filler words" : "Major pauses",
+            name === "issueCount" ? "Delivery issues" : name,
           ]}
           labelFormatter={(_label: unknown, payload: Array<{ payload?: unknown }>) => {
             const item = payload?.[0]?.payload as FillerTrendPoint | undefined;
-            return item ? `${item.label} · ${shortDate(item.date)}` : "";
+            return item
+              ? `${shortDate(item.date)} · ${item.fillerCount} fillers + ${item.majorPauseCount} pauses`
+              : "";
           }}
         />
-        <Legend verticalAlign="top" height={28} />
         <Bar
-          dataKey="fillerCount"
-          name="Filler words"
+          dataKey="issueCount"
+          name="Delivery issues"
           fill="#be123c"
           radius={[3, 3, 0, 0]}
-          isAnimationActive={false}
-        />
-        <Line
-          type="monotone"
-          dataKey="majorPauseCount"
-          name="Major pauses"
-          stroke="#0f766e"
-          strokeWidth={2}
-          dot={{ r: 3, fill: "#0f766e" }}
           isAnimationActive={false}
         />
       </ComposedChart>

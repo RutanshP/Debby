@@ -633,6 +633,30 @@ def test_score_filler_route_scores_clean_minute(authed_user):
     assert scored.json()["score"] == 10
 
 
+def test_score_filler_route_scores_pause_stop_by_duration(authed_user):
+    created = client.post(
+        "/api/drills",
+        json={"drill_type": "filler"},
+        headers={"authorization": "Bearer fake"},
+    )
+    drill_id = created.json()["id"]
+
+    scored = client.post(
+        f"/api/drills/{drill_id}/score-filler",
+        json={
+            "transcript": "Public transit creates access",
+            "duration_seconds": 24,
+            "stop_reason": "pause",
+        },
+        headers={"authorization": "Bearer fake"},
+    )
+
+    assert scored.status_code == 200, scored.text
+    body = scored.json()
+    assert body["score"] == 4
+    assert "Major pause detected" in body["feedback"]
+
+
 def test_row_to_drill_preserves_speed_score_payload():
     row = {
         "id": "speed-1",

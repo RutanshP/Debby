@@ -19,6 +19,7 @@ interface RecordButtonProps {
   realtimeTranscription?: boolean;
   onRealtimeTranscript?: (result: RealtimeTranscriptResult) => void;
   stopWhenRealtimeTranscript?: (result: RealtimeTranscriptResult) => boolean;
+  onRealtimeSilenceStop?: () => void;
   stopAfterRealtimeSilenceSeconds?: number;
   allowEmptyRealtimeTranscript?: boolean;
 }
@@ -31,6 +32,7 @@ export function RecordButton({
   realtimeTranscription = false,
   onRealtimeTranscript,
   stopWhenRealtimeTranscript,
+  onRealtimeSilenceStop,
   stopAfterRealtimeSilenceSeconds,
   allowEmptyRealtimeTranscript = false,
 }: RecordButtonProps) {
@@ -155,6 +157,7 @@ export function RecordButton({
       }
       if (Date.now() - lastActivity >= stopAfterRealtimeSilenceSeconds * 1000) {
         autoStopRef.current = true;
+        onRealtimeSilenceStop?.();
         void finishRecording();
       }
     }, 250);

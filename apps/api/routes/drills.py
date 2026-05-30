@@ -483,6 +483,7 @@ async def score_filler_route(
     filler = (body.filler_word or "").strip().lower() or first_detected
     duration = max(float(body.duration_seconds or 0), 0.0)
     survival_score = max(0, min(round((duration / 60.0) * 10), 10))
+    stopped_for_pause = (body.stop_reason or "").strip().lower() == "pause"
 
     if not transcript:
         result = DrillScore(
@@ -502,6 +503,18 @@ async def score_filler_route(
             improvements=[
                 "Pause silently instead of filling the gap.",
                 "Restart the sentence with a clean first word.",
+            ],
+        )
+    elif stopped_for_pause:
+        result = DrillScore(
+            score=survival_score,
+            feedback=(
+                f"Major pause detected. You made it {round(duration)} seconds out of 60."
+            ),
+            strengths=[],
+            improvements=[
+                "Keep talking through the next phrase instead of stopping completely.",
+                "Use a short silent breath, then continue before the pause reaches three seconds.",
             ],
         )
     else:
