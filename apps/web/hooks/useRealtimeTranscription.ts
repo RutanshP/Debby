@@ -192,7 +192,7 @@ export function useRealtimeTranscription(): UseRealtimeTranscriptionResult {
         );
         const params = new URLSearchParams({
           token: token.token,
-          speech_model: "universal-streaming-english",
+          speech_model: "u3-rt-pro",
           sample_rate: String(TARGET_SAMPLE_RATE),
           encoding: "pcm_s16le",
           format_turns: "true",
