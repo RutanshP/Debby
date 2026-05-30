@@ -131,11 +131,17 @@ export default function CaseBuilder() {
     URL.revokeObjectURL(url);
   }
 
+  function handlePrintPdf() {
+    window.print();
+  }
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
-      <h1 className="mb-6 text-3xl font-bold text-teal-700">Case Builder</h1>
+    <div className="case-builder-page mx-auto max-w-7xl px-4 py-8">
+      <h1 className="case-builder-heading mb-6 text-3xl font-bold text-teal-700">
+        Case Builder
+      </h1>
       <div className="space-y-6">
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="case-builder-controls rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-4 lg:grid-cols-[160px_1fr_180px_auto_auto] lg:items-end">
             <div>
               <label
@@ -209,7 +215,7 @@ export default function CaseBuilder() {
           </div>
         </section>
 
-        <section className="min-h-[300px] rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="case-builder-output min-h-[300px] rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           {loading && (
             <div
               role="status"
@@ -230,7 +236,7 @@ export default function CaseBuilder() {
           )}
           {!loading && !error && caseText && (
             <div>
-              <div className="mb-5 flex justify-end">
+              <div className="case-builder-actions mb-5 flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
                   onClick={handleDownloadMarkdown}
@@ -238,8 +244,15 @@ export default function CaseBuilder() {
                 >
                   Download .md
                 </button>
+                <button
+                  type="button"
+                  onClick={handlePrintPdf}
+                  className="rounded bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+                >
+                  Print / Save PDF
+                </button>
               </div>
-              <article>
+              <article className="case-print-document">
                 <ReactMarkdown components={markdownComponents}>
                   {caseText}
                 </ReactMarkdown>

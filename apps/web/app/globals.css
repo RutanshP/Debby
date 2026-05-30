@@ -1,3 +1,108 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@media print {
+  @page {
+    margin: 0.65in;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .case-print-document,
+  .case-print-document * {
+    visibility: visible;
+  }
+
+  .case-builder-page {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .case-builder-heading,
+  .case-builder-controls,
+  .case-builder-actions,
+  nav,
+  aside {
+    display: none !important;
+  }
+
+  .case-builder-output {
+    border: 0 !important;
+    box-shadow: none !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
+  .case-print-document {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    max-width: none;
+    background: #ffffff;
+    color: #0f172a;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 11pt;
+    line-height: 1.45;
+  }
+
+  .case-print-document h1 {
+    margin: 0 0 18pt;
+    color: #0f766e !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 20pt;
+    line-height: 1.2;
+    page-break-after: avoid;
+  }
+
+  .case-print-document h2 {
+    margin: 18pt 0 8pt;
+    color: #115e59 !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 15pt;
+    line-height: 1.25;
+    page-break-after: avoid;
+  }
+
+  .case-print-document h3 {
+    margin: 13pt 0 6pt;
+    color: #1e293b !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12.5pt;
+    line-height: 1.25;
+    page-break-after: avoid;
+  }
+
+  .case-print-document p,
+  .case-print-document li {
+    color: #0f172a !important;
+  }
+
+  .case-print-document p {
+    margin: 0 0 8pt;
+  }
+
+  .case-print-document ul,
+  .case-print-document ol {
+    margin: 0 0 9pt 18pt;
+    padding: 0;
+  }
+
+  .case-print-document li {
+    margin: 0 0 4pt;
+    page-break-inside: avoid;
+  }
+
+  .case-print-document strong {
+    color: #020617 !important;
+    font-weight: 700;
+  }
+}
