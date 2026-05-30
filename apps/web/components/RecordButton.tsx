@@ -98,7 +98,7 @@ export function RecordButton({
       return;
     }
     autoStopRef.current = false;
-    lastRealtimeActivityAtRef.current = Date.now();
+    lastRealtimeActivityAtRef.current = null;
     lastRealtimeTranscriptRef.current = "";
     lastRealtimeWordCountRef.current = 0;
     setRemainingSeconds(maxDurationSeconds ?? null);
