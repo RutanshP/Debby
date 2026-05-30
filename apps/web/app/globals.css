@@ -4,7 +4,7 @@
 
 @media print {
   @page {
-    margin: 0.65in;
+    margin: 0.45in;
   }
 
   body {
@@ -50,34 +50,34 @@
     background: #ffffff;
     color: #0f172a;
     font-family: Georgia, "Times New Roman", serif;
-    font-size: 11pt;
-    line-height: 1.45;
+    font-size: 9.5pt;
+    line-height: 1.28;
   }
 
   .case-print-document h1 {
-    margin: 0 0 18pt;
-    color: #0f766e !important;
+    margin: 0 0 10pt;
+    color: #000000 !important;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 20pt;
-    line-height: 1.2;
+    font-size: 15pt;
+    line-height: 1.15;
     page-break-after: avoid;
   }
 
   .case-print-document h2 {
-    margin: 18pt 0 8pt;
-    color: #115e59 !important;
+    margin: 11pt 0 5pt;
+    color: #000000 !important;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 15pt;
-    line-height: 1.25;
+    font-size: 11.5pt;
+    line-height: 1.18;
     page-break-after: avoid;
   }
 
   .case-print-document h3 {
-    margin: 13pt 0 6pt;
-    color: #1e293b !important;
+    margin: 8pt 0 4pt;
+    color: #000000 !important;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 12.5pt;
-    line-height: 1.25;
+    font-size: 10pt;
+    line-height: 1.18;
     page-break-after: avoid;
   }
 
@@ -87,17 +87,17 @@
   }
 
   .case-print-document p {
-    margin: 0 0 8pt;
+    margin: 0 0 4pt;
   }
 
   .case-print-document ul,
   .case-print-document ol {
-    margin: 0 0 9pt 18pt;
+    margin: 0 0 5pt 15pt;
     padding: 0;
   }
 
   .case-print-document li {
-    margin: 0 0 4pt;
+    margin: 0 0 2pt;
     page-break-inside: avoid;
   }
 

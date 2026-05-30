@@ -132,7 +132,15 @@ export default function CaseBuilder() {
   }
 
   function handlePrintPdf() {
+    const originalTitle = document.title;
+    document.title = `${filenamePart(topic)}-${side}`;
+    const restoreTitle = () => {
+      document.title = originalTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+    window.addEventListener("afterprint", restoreTitle);
     window.print();
+    window.setTimeout(restoreTitle, 1000);
   }
 
   return (
@@ -249,7 +257,7 @@ export default function CaseBuilder() {
                   onClick={handlePrintPdf}
                   className="rounded bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
                 >
-                  Print / Save PDF
+                  Save PDF
                 </button>
               </div>
               <article className="case-print-document">
