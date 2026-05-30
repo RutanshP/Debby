@@ -7,17 +7,17 @@ import type { SpeechInsightsResponse } from "@/lib/api";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-async function fetchJson<T>(path: string, token: string): Promise<T | null> {
+async function fetchJson<T>(path: string, token: string): Promise<T | undefined> {
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
-    if (res.status === 204) return null;
-    if (!res.ok) return null;
+    if (res.status === 204) return undefined;
+    if (!res.ok) return undefined;
     return (await res.json()) as T;
   } catch {
-    return null;
+    return undefined;
   }
 }
 
@@ -51,11 +51,22 @@ export default async function ProgressPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
       <h1 className="mb-6 text-2xl font-semibold text-teal-dark">Progress</h1>
-      <ProgressDashboard
-        rounds={summary?.rounds ?? []}
-        drills={summary?.drills ?? []}
-        initialInsights={summary?.insights ?? null}
-      />
+      {summary === undefined ? (
+        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-12 text-center">
+          <h2 className="text-lg font-semibold text-slate-700">
+            Progress could not load
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Refresh the page in a moment. The API may still be waking up.
+          </p>
+        </div>
+      ) : (
+        <ProgressDashboard
+          rounds={summary.rounds}
+          drills={summary.drills}
+          initialInsights={summary?.insights ?? null}
+        />
+      )}
     </main>
   );
 }
