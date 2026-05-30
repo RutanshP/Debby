@@ -13,7 +13,7 @@ from __future__ import annotations
 from services.openai_client import client
 
 _MODEL = "gpt-4o-mini-2024-07-18"
-_MAX_TOKENS = 1000
+_MAX_TOKENS = 2500
 _TEMPERATURE = 0.0
 
 _SYSTEM_PROMPT = (

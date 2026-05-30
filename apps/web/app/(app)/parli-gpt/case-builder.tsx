@@ -108,69 +108,69 @@ export default function CaseBuilder() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div className="mx-auto max-w-7xl px-4 py-8">
       <h1 className="mb-6 text-3xl font-bold text-teal-700">Case Builder</h1>
-      <div className="grid gap-6 md:grid-cols-[280px_1fr]">
-        <aside className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div>
-            <label
-              htmlFor="format"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              Format
-            </label>
-            <select
-              id="format"
-              value={format}
-              onChange={(e) => setFormat(e.target.value as Format)}
-              className="w-full rounded border border-slate-300 px-2 py-1.5"
-            >
-              <option value="parli">Parli</option>
-              <option value="mspdp">MSPDP</option>
-            </select>
-          </div>
+      <div className="space-y-6">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-4 lg:grid-cols-[160px_1fr_180px_auto_auto] lg:items-end">
+            <div>
+              <label
+                htmlFor="format"
+                className="mb-1 block text-sm font-medium text-slate-700"
+              >
+                Format
+              </label>
+              <select
+                id="format"
+                value={format}
+                onChange={(e) => setFormat(e.target.value as Format)}
+                className="w-full rounded border border-slate-300 px-2 py-1.5"
+              >
+                <option value="parli">Parli</option>
+                <option value="mspdp">MSPDP</option>
+              </select>
+            </div>
 
-          <div>
-            <label
-              htmlFor="topic"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              Topic
-            </label>
-            <input
-              id="topic"
-              type="text"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="Enter a topic..."
-              className="w-full rounded border border-slate-300 px-2 py-1.5"
-            />
-          </div>
+            <div>
+              <label
+                htmlFor="topic"
+                className="mb-1 block text-sm font-medium text-slate-700"
+              >
+                Topic
+              </label>
+              <input
+                id="topic"
+                type="text"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="Enter a topic..."
+                className="w-full rounded border border-slate-300 px-2 py-1.5"
+              />
+            </div>
 
-          <div>
-            <label
-              htmlFor="side"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              Side
-            </label>
-            <select
-              id="side"
-              value={side}
-              onChange={(e) => setSide(e.target.value as Side)}
-              className="w-full rounded border border-slate-300 px-2 py-1.5"
-            >
-              <option value="aff">Affirmative</option>
-              <option value="neg">Negation</option>
-            </select>
-          </div>
+            <div>
+              <label
+                htmlFor="side"
+                className="mb-1 block text-sm font-medium text-slate-700"
+              >
+                Side
+              </label>
+              <select
+                id="side"
+                value={side}
+                onChange={(e) => setSide(e.target.value as Side)}
+                className="w-full rounded border border-slate-300 px-2 py-1.5"
+              >
+                <option value="aff">Affirmative</option>
+                <option value="neg">Negation</option>
+              </select>
+            </div>
 
-          <div className="flex flex-col gap-2 pt-2">
             <button
               type="button"
               onClick={handleGenerate}
               disabled={loading || !topic.trim()}
-              className="rounded bg-teal-600 px-4 py-2 font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 rounded bg-teal-600 px-5 font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Generate
             </button>
@@ -178,12 +178,12 @@ export default function CaseBuilder() {
               type="button"
               onClick={handleRandom}
               disabled={loading}
-              className="rounded border border-teal-600 px-4 py-2 font-medium text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 rounded border border-teal-600 px-5 font-medium text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Random topic
             </button>
           </div>
-        </aside>
+        </section>
 
         <section className="min-h-[300px] rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           {loading && (
