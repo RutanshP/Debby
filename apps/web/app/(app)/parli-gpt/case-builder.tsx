@@ -51,6 +51,17 @@ const markdownComponents = {
   ),
 };
 
+function filenamePart(value: string): string {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "case"
+  );
+}
+
 export default function CaseBuilder() {
   const [format, setFormat] = useState<Format>("parli");
   const [topic, setTopic] = useState("");
@@ -105,6 +116,19 @@ export default function CaseBuilder() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleDownloadMarkdown() {
+    if (!caseText.trim()) return;
+    const blob = new Blob([caseText], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${filenamePart(topic)}-${format}-${side}.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -205,11 +229,22 @@ export default function CaseBuilder() {
             </div>
           )}
           {!loading && !error && caseText && (
-            <article>
-              <ReactMarkdown components={markdownComponents}>
-                {caseText}
-              </ReactMarkdown>
-            </article>
+            <div>
+              <div className="mb-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleDownloadMarkdown}
+                  className="rounded border border-teal-600 px-4 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50"
+                >
+                  Download .md
+                </button>
+              </div>
+              <article>
+                <ReactMarkdown components={markdownComponents}>
+                  {caseText}
+                </ReactMarkdown>
+              </article>
+            </div>
           )}
           {!loading && !error && !caseText && (
             <p className="text-slate-500">Debate Case</p>
