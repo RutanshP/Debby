@@ -34,7 +34,17 @@ _PARLI_SYSTEM_PROMPT = (
     "international relations, social policy, development, or actor-based "
     "resolutions, use TULI for each contention: **Tagline**, **Uniqueness**, "
     "**Links**, and **Impacts**. Prefer specific link chains, solvency, "
-    "internal links, and impact calculus over generic explanation."
+    "internal links, and impact calculus over generic explanation. In AFF "
+    "policy rounds, uniqueness proves the status quo is bad and that a plan "
+    "text is needed to change it; links explain how the plan solves that "
+    "status quo harm; internal links are the additional causal steps between "
+    "the solved harm and the terminal impact. In NEG policy rounds, uniqueness "
+    "usually proves the status quo contains valuable things that are working "
+    "or worth preserving; links prove the AFF plan destroys, weakens, trades "
+    "off with, or creates disadvantages to those good status quo conditions. "
+    "If NEG chooses to run a counterplan, it may also include a counterplan "
+    "advantage using AFF-style solvency links, but the counterplan must not "
+    "contradict the NEG disadvantages to the AFF plan."
 )
 
 _PARLI_OUTPUT_RULES = (
@@ -46,9 +56,12 @@ _PARLI_OUTPUT_RULES = (
     "- If the topic is policy-oriented, include a plan text or counterplan when appropriate, plus solvency.\n"
     "- For complex parliamentary topics, write 2-3 contentions/advantages using this TULI structure:\n"
     "  - **Tagline:** one strategic sentence naming the contention.\n"
-    "  - **Uniqueness:** 1-2 status quo facts showing the problem or trend now.\n"
-    "  - **Links:** clear causal chains from the plan/position to the impact. Use L1/L2 when helpful.\n"
+    "  - **Uniqueness:** multiple bullet points or U1/U2/U3 sub-uniquenesses. For AFF policy cases, prove the status quo harm exists now and is bad enough to justify the plan. For NEG policy cases, prove the status quo has good things worth preserving, such as innovation, stability, jobs, effective institutions, markets, deterrence, diplomacy, or existing reforms.\n"
+    "  - **Links:** multiple L1/L2 link chains. For AFF policy cases, explain how the plan directly solves the uniqueness harm. For NEG policy cases, explain how the AFF plan destroys, weakens, trades off with, or creates a disadvantage to the good status quo conditions from uniqueness.\n"
+    "  - **Internal Links:** 2-4 downstream causal steps from the solved harm to the terminal impact. Example: homework increases stress; stress causes worse sleep, mental health decline, lower retention, and family conflict.\n"
     "  - **Impacts:** terminal impact plus magnitude, probability, timeframe, and weighing.\n"
+    "- For NEG disadvantages, model the structure as: U1/U2 good status quo conditions -> L1/L2 ways AFF disrupts them -> internal links -> terminal impact.\n"
+    "- If NEG runs a counterplan, include a short counterplan text, solvency, and optionally one CP advantage. The CP advantage can use AFF-style links showing how the counterplan solves a harm, but keep it logically consistent with the disadvantages against AFF.\n"
     "- For simple topics, each contention may use **Claim**, **Warrant**, and **Impact** instead.\n"
     "- Make the case more developed than a drill prompt: include specific mechanisms, examples, and quantitative estimates when reasonable, but do not fabricate exact citations.\n"
 )

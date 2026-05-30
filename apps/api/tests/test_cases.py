@@ -59,7 +59,13 @@ async def test_make_case_instructs_complex_parli_tuli():
     assert "**Tagline**" in system_prompt
     assert "**Uniqueness:**" in user_prompt
     assert "**Links:**" in user_prompt
+    assert "**Internal Links:**" in user_prompt
     assert "**Impacts:**" in user_prompt
+    assert "status quo harm" in user_prompt
+    assert "good things worth preserving" in user_prompt
+    assert "AFF plan destroys" in user_prompt
+    assert "counterplan" in user_prompt
+    assert "logically consistent" in user_prompt
 
 
 @pytest.mark.parametrize("side", ["aff", "neg"])
