@@ -34,11 +34,10 @@ export function FillerTrendChart({ data }: { data: FillerTrendPoint[] }) {
       <LineChart data={data} margin={{ top: 8, right: 16, bottom: 32, left: 20 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis
-          dataKey="date"
-          tickFormatter={shortDate}
+          dataKey="label"
           stroke="#64748b"
           label={{
-            value: "Round date",
+            value: "Speech",
             position: "insideBottom",
             offset: -18,
             fill: "#64748b",
@@ -49,7 +48,7 @@ export function FillerTrendChart({ data }: { data: FillerTrendPoint[] }) {
           stroke="#64748b"
           allowDecimals={false}
           label={{
-            value: "Fillers/min",
+            value: "Filler words",
             angle: -90,
             position: "insideLeft",
             fill: "#64748b",
@@ -58,16 +57,17 @@ export function FillerTrendChart({ data }: { data: FillerTrendPoint[] }) {
         />
         <Tooltip
           formatter={(value: number, name: string) => [
-            name === "fillerPerMinute"
-              ? `${Number(value).toFixed(1)} / min`
-              : Math.round(value),
-            name === "fillerPerMinute" ? "Fillers per minute" : "Filler count",
+            Math.round(value),
+            name === "fillerCount" ? "Filler words" : name,
           ]}
-          labelFormatter={(label: string) => shortDate(label)}
+          labelFormatter={(_label: string, payload) => {
+            const item = payload?.[0]?.payload as FillerTrendPoint | undefined;
+            return item ? `${item.label} · ${shortDate(item.date)}` : "";
+          }}
         />
         <Line
           type="monotone"
-          dataKey="fillerPerMinute"
+          dataKey="fillerCount"
           stroke="#be123c"
           strokeWidth={2}
           dot={{ r: 3, fill: "#be123c" }}

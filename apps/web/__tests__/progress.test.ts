@@ -56,7 +56,7 @@ describe("headlineStats", () => {
 });
 
 describe("fillerTrend", () => {
-  it("tracks filler words per minute over rounds", () => {
+  it("tracks filler words per recorded speech", () => {
     const rounds: ProgressRound[] = [
       {
         id: "r1",
@@ -64,8 +64,10 @@ describe("fillerTrend", () => {
         format: "parli",
         side: "aff",
         winner_side: "aff",
-        filler_count: 3,
-        filler_per_minute: 4.5,
+        speech_metrics: {
+          aff: { filler_count: 3 },
+          aff_two: { filler_count: 1 },
+        },
         created_at: "2026-01-01T00:00:00Z",
       },
       {
@@ -82,14 +84,19 @@ describe("fillerTrend", () => {
 
     expect(fillerTrend(rounds)).toEqual([
       {
+        label: "Aff",
         date: "2026-01-01T00:00:00Z",
         fillerCount: 3,
-        fillerPerMinute: 4.5,
       },
       {
+        label: "Rebuttal",
+        date: "2026-01-01T00:00:00Z",
+        fillerCount: 1,
+      },
+      {
+        label: "Round",
         date: "2026-01-02T00:00:00Z",
         fillerCount: 1,
-        fillerPerMinute: 1,
       },
     ]);
   });

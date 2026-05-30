@@ -107,7 +107,7 @@ describe("HistoryPage (server component) — list view", () => {
       unknown,
       RequestInit,
     ];
-    expect(String(url)).toContain("/api/rounds?limit=50");
+    expect(String(url)).toContain("/api/rounds/summary?limit=20&offset=0");
     expect(init.headers).toMatchObject({
       Authorization: "Bearer abc123",
     });

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase";
 import { RfdCard } from "@/components/RfdCard";
 import { WpmChart, type WpmPoint } from "@/components/WpmChart";
@@ -149,10 +150,17 @@ export default async function HistoryDetailPage({ params }: PageProps) {
 
   const round = (await res.json()) as Round;
   const winner = round.winner_side ?? winnerFromFlow(round.flow);
+  const isUserNeg = round.side === "neg";
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 px-4 py-10">
       <header>
+        <Link
+          href="/history"
+          className="mb-4 inline-flex text-sm font-medium text-teal transition hover:text-teal-dark"
+        >
+          ← Back to history
+        </Link>
         <h1 className="text-2xl font-semibold text-teal-dark">{round.topic}</h1>
         <p className="mt-1 text-sm text-slate-500">
           {round.format.toUpperCase()} &middot; {round.side ?? "?"} &middot;{" "}
@@ -172,22 +180,23 @@ export default async function HistoryDetailPage({ params }: PageProps) {
         <h2 className="mb-3 text-lg font-semibold text-slate-800">
           Speech statistics
         </h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <StatCard label="1st speech WPM" value={round.first_speech_wpm} />
-          <StatCard label="2nd speech WPM" value={round.second_speech_wpm} />
-          <StatCard label="Average WPM" value={round.average_wpm} />
-        </div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <StatCard label="Filler words" value={round.filler_count} />
-          <StatCard
-            label="Fillers/min"
-            value={
-              typeof round.filler_per_minute === "number"
-                ? Math.round(round.filler_per_minute)
-                : null
-            }
-          />
-        </div>
+        {isUserNeg ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <StatCard label="Your speech WPM" value={round.average_wpm} />
+            <StatCard label="Filler words" value={round.filler_count} />
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatCard label="1st speech WPM" value={round.first_speech_wpm} />
+            <StatCard label="2nd speech WPM" value={round.second_speech_wpm} />
+            <StatCard label="Average WPM" value={round.average_wpm} />
+          </div>
+        )}
+        {!isUserNeg && (
+          <div className="mt-3 grid gap-3 sm:grid-cols-1">
+            <StatCard label="Filler words" value={round.filler_count} />
+          </div>
+        )}
       </section>
 
       {round.flow && (

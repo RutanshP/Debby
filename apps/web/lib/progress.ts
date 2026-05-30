@@ -65,8 +65,8 @@ export interface WpmTrendPoint {
 }
 
 export interface FillerTrendPoint {
+  label: string;
   date: string;
-  fillerPerMinute: number;
   fillerCount: number;
 }
 
@@ -178,14 +178,36 @@ export function wpmTrend(rounds: ProgressRound[]): WpmTrendPoint[] {
 }
 
 export function fillerTrend(rounds: ProgressRound[]): FillerTrendPoint[] {
-  return [...rounds]
-    .filter((r) => typeof r.filler_per_minute === "number")
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-    .map((r) => ({
-      date: r.created_at,
-      fillerPerMinute: Number(r.filler_per_minute ?? 0),
-      fillerCount: Number(r.filler_count ?? 0),
-    }));
+  const labels: Record<string, string> = {
+    aff: "Aff",
+    neg: "Neg",
+    aff_two: "Rebuttal",
+  };
+  const points: FillerTrendPoint[] = [];
+
+  for (const round of rounds) {
+    if (round.speech_metrics && Object.keys(round.speech_metrics).length > 0) {
+      for (const [speechType, metric] of Object.entries(round.speech_metrics)) {
+        if (!metric || typeof metric.filler_count !== "number") continue;
+        points.push({
+          label: labels[speechType] ?? speechType,
+          date: round.created_at,
+          fillerCount: Number(metric.filler_count ?? 0),
+        });
+      }
+      continue;
+    }
+
+    if (typeof round.filler_count === "number") {
+      points.push({
+        label: "Round",
+        date: round.created_at,
+        fillerCount: Number(round.filler_count ?? 0),
+      });
+    }
+  }
+
+  return points.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
 export function winRateBreakdown(rounds: ProgressRound[]): WinRateBreakdown {
