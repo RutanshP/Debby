@@ -57,7 +57,9 @@ async def test_make_case_instructs_complex_parli_tuli():
     system_prompt = kwargs["messages"][0]["content"]
     user_prompt = kwargs["messages"][1]["content"]
     assert "**Tagline**" in system_prompt
-    assert "Always use TULI for policy rounds" in system_prompt
+    assert "classify the round as policy, value, or fact" in system_prompt
+    assert "Always use TULI for policy and value rounds" in system_prompt
+    assert "For fact rounds, use Claim/Warrant/Impact" in system_prompt
     assert "**Uniqueness:**" in user_prompt
     assert "**Links:**" in user_prompt
     assert "**Internal Links:**" in user_prompt
@@ -72,7 +74,8 @@ async def test_make_case_instructs_complex_parli_tuli():
     assert "Each U point must have" in user_prompt
     assert "at least 4 evidence bullets" in user_prompt
     assert "using `->`" in user_prompt
-    assert "Only use **Claim**, **Warrant**, and **Impact**" in user_prompt
+    assert "Do not use Claim/Warrant/Impact headings" in user_prompt
+    assert "For Parli fact rounds, use Claim/Warrant/Impact" in user_prompt
 
 
 @pytest.mark.parametrize("side", ["aff", "neg"])
@@ -81,6 +84,27 @@ async def test_make_mspdp_case_returns_markdown(side: str):
     with patch.object(cases_service.client.chat.completions, "create", mock):
         out = await cases_service.make_mspdp_case("phones", side)
     assert "MSPDP case" in out
+
+
+async def test_mspdp_uses_mspdp_prompt_not_parli_tuli_rules():
+    mock = AsyncMock(return_value=_mock_completion("# MSPDP case\nbody"))
+    with patch.object(cases_service.client.chat.completions, "create", mock):
+        await cases_service.make_mspdp_case(
+            "The United States should substantially increase housing subsidies",
+            "aff",
+        )
+
+    kwargs = mock.await_args.kwargs
+    system_prompt = kwargs["messages"][0]["content"]
+    user_prompt = kwargs["messages"][1]["content"]
+    assert "Always use TULI" not in system_prompt
+    assert "TULI" not in user_prompt
+    assert "ARESI for policy and value rounds" in system_prompt
+    assert "For MSPDP policy and value rounds" in user_prompt
+    assert "For MSPDP fact rounds, use Claim/Warrant/Impact" in user_prompt
+    assert "AFF Contention Template" in user_prompt
+    assert "Below is an MSPDP case template" in user_prompt
+    assert "Below is a parliamentary case template" not in user_prompt
 
 
 # --- Routes ---------------------------------------------------------------
