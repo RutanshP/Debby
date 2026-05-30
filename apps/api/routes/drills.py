@@ -474,6 +474,7 @@ async def score_filler_route(
     transcript = (body.transcript or "").strip()
     filler = (body.filler_word or "").strip().lower() or None
     duration = max(float(body.duration_seconds or 0), 0.0)
+    survival_score = max(0, min(round((duration / 60.0) * 10), 10))
 
     if not transcript:
         result = DrillScore(
@@ -484,8 +485,11 @@ async def score_filler_route(
         )
     elif filler:
         result = DrillScore(
-            score=0,
-            feedback=f"Filler detected: \"{filler}\". The drill ended immediately.",
+            score=survival_score,
+            feedback=(
+                f"Filler detected: \"{filler}\". You made it "
+                f"{round(duration)} seconds out of 60."
+            ),
             strengths=[],
             improvements=[
                 "Pause silently instead of filling the gap.",

@@ -604,10 +604,11 @@ def test_score_filler_route_scores_detected_filler(authed_user):
 
     assert scored.status_code == 200, scored.text
     body = scored.json()
-    assert body["score"] == 0
+    assert body["score"] == 2
     assert "um" in body["feedback"]
+    assert "12 seconds out of 60" in body["feedback"]
     stored = drills_route._FALLBACK_STORE[drill_id]
-    assert stored["numeric_score"] == 0
+    assert stored["numeric_score"] == 2
     assert stored["duration_seconds"] == 12
 
 
