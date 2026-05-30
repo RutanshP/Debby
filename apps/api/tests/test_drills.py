@@ -190,6 +190,17 @@ async def test_generate_drill_contention_can_use_mspdp_pool():
     )
 
 
+async def test_generate_drill_filler_no_openai():
+    openai_mock = AsyncMock()
+    with patch.object(drills_service._openai_client.chat.completions, "create", openai_mock):
+        prompt = await drills_service.generate_drill("filler", timer_seconds=30)
+
+    assert prompt.title == "Filler Detection"
+    assert prompt.timer_seconds == 60
+    assert "filler words" in prompt.prompt.lower()
+    openai_mock.assert_not_awaited()
+
+
 async def test_generate_drill_speed_respects_timer():
     target_120 = drills_service.speed_passage_word_target(120)
     target_30 = drills_service.speed_passage_word_target(30)
@@ -502,6 +513,14 @@ def test_score_audio_requires_auth():
     assert response.status_code == 401
 
 
+def test_score_filler_requires_auth():
+    response = client.post(
+        "/api/drills/some-id/score-filler",
+        json={"transcript": "hello", "duration_seconds": 10},
+    )
+    assert response.status_code == 401
+
+
 # ---------------------------------------------------------------------------
 # Routes: happy path with stubbed auth + OpenAI
 # ---------------------------------------------------------------------------
@@ -562,6 +581,55 @@ def test_score_route_uses_stored_drill(authed_user):
     assert scored.json()["score"] == 8
     stored = drills_route._FALLBACK_STORE[created["id"]]
     assert stored["numeric_score"] == 8
+
+
+def test_score_filler_route_scores_detected_filler(authed_user):
+    created = client.post(
+        "/api/drills",
+        json={"drill_type": "filler"},
+        headers={"authorization": "Bearer fake"},
+    )
+    assert created.status_code == 200, created.text
+    drill_id = created.json()["id"]
+
+    scored = client.post(
+        f"/api/drills/{drill_id}/score-filler",
+        json={
+            "transcript": "I think um public transit matters",
+            "duration_seconds": 12,
+            "filler_word": "um",
+        },
+        headers={"authorization": "Bearer fake"},
+    )
+
+    assert scored.status_code == 200, scored.text
+    body = scored.json()
+    assert body["score"] == 0
+    assert "um" in body["feedback"]
+    stored = drills_route._FALLBACK_STORE[drill_id]
+    assert stored["numeric_score"] == 0
+    assert stored["duration_seconds"] == 12
+
+
+def test_score_filler_route_scores_clean_minute(authed_user):
+    created = client.post(
+        "/api/drills",
+        json={"drill_type": "filler"},
+        headers={"authorization": "Bearer fake"},
+    )
+    drill_id = created.json()["id"]
+
+    scored = client.post(
+        f"/api/drills/{drill_id}/score-filler",
+        json={
+            "transcript": "Public transit matters because it connects workers to jobs",
+            "duration_seconds": 60,
+        },
+        headers={"authorization": "Bearer fake"},
+    )
+
+    assert scored.status_code == 200, scored.text
+    assert scored.json()["score"] == 10
 
 
 def test_row_to_drill_preserves_speed_score_payload():

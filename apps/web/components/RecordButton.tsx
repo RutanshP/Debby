@@ -17,6 +17,8 @@ interface RecordButtonProps {
   disabled?: boolean;
   maxDurationSeconds?: number;
   realtimeTranscription?: boolean;
+  onRealtimeTranscript?: (result: RealtimeTranscriptResult) => void;
+  stopWhenRealtimeTranscript?: (result: RealtimeTranscriptResult) => boolean;
 }
 
 export function RecordButton({
@@ -25,15 +27,31 @@ export function RecordButton({
   disabled = false,
   maxDurationSeconds,
   realtimeTranscription = false,
+  onRealtimeTranscript,
+  stopWhenRealtimeTranscript,
 }: RecordButtonProps) {
   const { state, error, stream, start, stop } = useMediaRecorder();
-  const realtime = useRealtimeTranscription();
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const stoppingRef = useRef(false);
+  const autoStopRef = useRef(false);
 
   const isRecording = state === "recording";
   const isBusy = state === "requesting" || state === "stopping";
+
+  const realtime = useRealtimeTranscription({
+    onTranscript: (result) => {
+      onRealtimeTranscript?.(result);
+      if (
+        stopWhenRealtimeTranscript?.(result) &&
+        !stoppingRef.current &&
+        !autoStopRef.current
+      ) {
+        autoStopRef.current = true;
+        void finishRecording();
+      }
+    },
+  });
 
   async function finishRecording() {
     if (stoppingRef.current || !isRecording) return;
@@ -60,6 +78,7 @@ export function RecordButton({
       await finishRecording();
       return;
     }
+    autoStopRef.current = false;
     setRemainingSeconds(maxDurationSeconds ?? null);
     setRealtimeError(null);
     const mediaStream = await start().catch(() => null);

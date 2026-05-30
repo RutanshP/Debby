@@ -17,6 +17,7 @@ from models.drill import (
     DrillScoreRequest,
     DrillSummary,
     DrillType,
+    FillerScoreRequest,
     SpeedScore,
 )
 from services.drills import (
@@ -454,6 +455,61 @@ async def score_speed_route(
         wpm_series=wpm_series,
         score=derived_score,
     )
+
+
+@router.post("/drills/{drill_id}/score-filler", response_model=DrillScore)
+async def score_filler_route(
+    drill_id: str,
+    body: FillerScoreRequest,
+    user=Depends(get_current_user),
+) -> DrillScore:
+    row = _fetch_drill(drill_id, user.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Drill not found.")
+
+    drill = _row_to_drill(row)
+    if drill.drill_type != "filler":
+        raise HTTPException(status_code=400, detail="This drill is not a filler drill.")
+
+    transcript = (body.transcript or "").strip()
+    filler = (body.filler_word or "").strip().lower() or None
+    duration = max(float(body.duration_seconds or 0), 0.0)
+
+    if not transcript:
+        result = DrillScore(
+            score=0,
+            feedback="No speech was detected. Try again and speak continuously for the minute.",
+            strengths=[],
+            improvements=["Speak clearly enough for the live transcript to register your words."],
+        )
+    elif filler:
+        result = DrillScore(
+            score=0,
+            feedback=f"Filler detected: \"{filler}\". The drill ended immediately.",
+            strengths=[],
+            improvements=[
+                "Pause silently instead of filling the gap.",
+                "Restart the sentence with a clean first word.",
+            ],
+        )
+    else:
+        result = DrillScore(
+            score=10,
+            feedback="Clean run. No filler words were detected during the minute.",
+            strengths=["You stayed composed without verbal filler."],
+            improvements=["Keep practicing with harder topics or longer answers."],
+        )
+
+    _update_drill(
+        drill_id,
+        user.id,
+        {
+            "response": transcript,
+            "score": result.model_dump(),
+            **_score_column_patch(result, duration_seconds=duration),
+        },
+    )
+    return result
 
 
 @router.post("/drills/{drill_id}/score-audio", response_model=DrillScore)

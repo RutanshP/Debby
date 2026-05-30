@@ -16,6 +16,7 @@ const SERIES: { key: DrillType; label: string; color: string }[] = [
   { key: "impact", label: "Impact", color: "#b45309" },
   { key: "contention", label: "Contention", color: "#1d4ed8" },
   { key: "speed", label: "Speed", color: "#9333ea" },
+  { key: "filler", label: "Filler", color: "#be123c" },
 ];
 
 interface Row {
@@ -24,6 +25,7 @@ interface Row {
   impact?: number;
   contention?: number;
   speed?: number;
+  filler?: number;
 }
 
 export function DrillScoreTrendChart({ trend }: { trend: DrillScoreTrend }) {

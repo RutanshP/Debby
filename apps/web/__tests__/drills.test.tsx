@@ -73,6 +73,9 @@ describe("DrillsClient", () => {
     expect(
       screen.getByRole("button", { name: /Contention Storm/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Filler Detection/i }),
+    ).toBeInTheDocument();
   });
 
   it("generates an audio rebuttal drill with correct body", async () => {
@@ -192,6 +195,52 @@ describe("DrillsClient", () => {
     await user.click(screen.getByTestId("record-Record Reading"));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Scoring your drill...");
+  });
+
+  it("creates and scores a filler detection drill through the filler endpoint", async () => {
+    const user = userEvent.setup();
+    render(<DrillsClient />);
+
+    await user.click(screen.getByRole("button", { name: /Filler Detection/i }));
+    mockFetchOnce({
+      id: 55,
+      drill_type: "filler",
+      prompt: {
+        title: "Filler Detection",
+        topic: "Speak about anything.",
+        prompt: "Avoid filler words.",
+        task: "Speak freely.",
+        timer_seconds: 60,
+      },
+    });
+    await user.click(screen.getByRole("button", { name: /Generate Drill/i }));
+
+    await screen.findByText("Avoid filler words.");
+    const [, generateInit] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(generateInit.body as string)).toEqual({
+      drill_type: "filler",
+      timer_seconds: 60,
+    });
+
+    mockFetchOnce({
+      score: 10,
+      feedback: "Clean run.",
+      strengths: ["No filler"],
+      improvements: [],
+    });
+    await user.click(screen.getByTestId("record-Start Filler Drill"));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+    const [scoreUrl, scoreInit] = (global.fetch as jest.Mock).mock.calls[1];
+    expect(String(scoreUrl)).toMatch(/\/api\/drills\/55\/score-filler$/);
+    expect(JSON.parse(scoreInit.body as string)).toEqual({
+      transcript: "",
+      duration_seconds: 0,
+      filler_word: null,
+    });
+    expect(await screen.findByText("Clean run.")).toBeInTheDocument();
   });
 
   it("auto-submits contention storm when the timer runs out", async () => {

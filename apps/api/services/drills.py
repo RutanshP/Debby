@@ -336,6 +336,10 @@ _DRILL_GUIDANCE = {
         "Use the provided debate resolution and side. The user must brainstorm as many "
         "contention taglines as possible, not full arguments."
     ),
+    "filler": (
+        "The user speaks freely for up to one minute. The drill ends immediately if "
+        "they say a filler word."
+    ),
 }
 
 
@@ -408,6 +412,15 @@ async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None
             prompt=f"Format: {topic_format}\nSide: {side}\nResolution: {topic}",
             task="List as many distinct contention taglines as you can. Do not write full warrants.",
             timer_seconds=timer,
+        )
+
+    if drill_type == "filler":
+        return DrillPrompt(
+            title=DRILL_TITLES["filler"],
+            topic="Speak about anything for up to one minute.",
+            prompt="Avoid filler words. The drill ends immediately when one is detected.",
+            task="Start speaking about anything. Avoid filler words like um, uh, like, er, ah, and you know.",
+            timer_seconds=60,
         )
 
     if drill_type == "speed":
@@ -518,6 +531,7 @@ _RUBRIC = {
     "impact": "Judge magnitude, probability, timeframe, weighing, and whether the impact chain is complete.",
     "contention": "Judge number, diversity, strategic usefulness, and whether taglines are distinct.",
     "speed": "Judge clarity and structure of the read-aloud delivery; do not score raw speed here.",
+    "filler": "Judge whether the speaker avoided filler words during the timed free-speech drill.",
 }
 
 

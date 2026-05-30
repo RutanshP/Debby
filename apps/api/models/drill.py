@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from models.round import WpmPoint
 
-DrillType = Literal["rebuttal", "speed", "impact", "contention"]
+DrillType = Literal["rebuttal", "speed", "impact", "contention", "filler"]
 
 # Legacy code used "contentions" (plural); we expose the singular form publicly
 # but translate when calling into the legacy-style prompt builder.
@@ -19,6 +19,7 @@ _LEGACY_TYPE = {
     "speed": "speed",
     "impact": "impact",
     "contention": "contentions",
+    "filler": "filler",
 }
 
 DRILL_TITLES = {
@@ -26,6 +27,7 @@ DRILL_TITLES = {
     "speed": "Speed Reading",
     "impact": "Impact Extension",
     "contention": "Contention Storm",
+    "filler": "Filler Detection",
 }
 
 
@@ -46,6 +48,12 @@ class DrillCreateRequest(BaseModel):
 
 class DrillScoreRequest(BaseModel):
     response: str = Field(min_length=1)
+
+
+class FillerScoreRequest(BaseModel):
+    transcript: str = ""
+    duration_seconds: float = Field(ge=0)
+    filler_word: str | None = None
 
 
 class DrillScore(BaseModel):

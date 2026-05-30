@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { RecordButton } from "@/components/RecordButton";
 import { WpmChart, type WpmPoint } from "@/components/WpmChart";
+import type { RealtimeTranscriptResult } from "@/hooks/useRealtimeTranscription";
 
-export type DrillType = "rebuttal" | "speed" | "impact" | "contention";
+export type DrillType = "rebuttal" | "speed" | "impact" | "contention" | "filler";
 
 interface DrillTypeOption {
   type: DrillType;
@@ -39,9 +40,28 @@ const DRILL_TYPES: DrillTypeOption[] = [
     description: "Generate as many taglines as possible.",
     mode: "Typing",
   },
+  {
+    type: "filler",
+    label: "Filler Detection",
+    description: "Speak freely until a filler word slips out.",
+    mode: "Audio",
+  },
 ];
 
 const TIMER_OPTIONS = [30, 60, 120];
+const FILLER_WORDS = new Set([
+  "um",
+  "uh",
+  "erm",
+  "er",
+  "ah",
+  "hmm",
+  "like",
+  "basically",
+  "literally",
+  "actually",
+]);
+const FILLER_PHRASES = ["you know", "i mean", "sort of", "kind of"];
 
 interface DrillPrompt {
   id: string | number;
@@ -109,6 +129,19 @@ function speedFeedbackLabel(wpm?: number, accuracy?: number): string {
   return "Keep building pace";
 }
 
+function normalizeToken(value: string): string {
+  return value.toLowerCase().replace(/^[^a-z']+|[^a-z']+$/g, "");
+}
+
+function detectFiller(transcript: string): string | null {
+  const words = transcript.split(/\s+/).map(normalizeToken).filter(Boolean);
+  const compact = words.join(" ");
+  for (const phrase of FILLER_PHRASES) {
+    if (compact.includes(phrase)) return phrase;
+  }
+  return words.find((word) => FILLER_WORDS.has(word)) ?? null;
+}
+
 function FeedbackLoading() {
   return (
     <section
@@ -138,12 +171,14 @@ export function DrillsClient() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoSubmittedRef = useRef(false);
+  const detectedFillerRef = useRef<string | null>(null);
   const responseRef = useRef("");
   const submittingRef = useRef(false);
   const typingDeadlineRef = useRef<number | null>(null);
 
   const isSpeed = drillType === "speed";
   const isContention = drillType === "contention";
+  const isFiller = drillType === "filler";
   const usesAudio = !isContention;
   const drillComplete = Boolean(score || speedScore);
   const typingTimerExpired =
@@ -166,6 +201,7 @@ export function DrillsClient() {
     setTypingStarted(false);
     setError(null);
     autoSubmittedRef.current = false;
+    detectedFillerRef.current = null;
     typingDeadlineRef.current = null;
   }
 
@@ -183,11 +219,12 @@ export function DrillsClient() {
     setRemainingSeconds(null);
     setTypingStarted(false);
     autoSubmittedRef.current = false;
+    detectedFillerRef.current = null;
     typingDeadlineRef.current = null;
     setGenerating(true);
     try {
       const body: Record<string, unknown> = { drill_type: drillType };
-      body.timer_seconds = timerSeconds;
+      body.timer_seconds = isFiller ? 60 : timerSeconds;
       const data = await apiFetch<DrillPrompt>("/api/drills", {
         method: "POST",
         body: JSON.stringify(body),
@@ -302,6 +339,51 @@ export function DrillsClient() {
     }
   }
 
+  function handleFillerTranscript(result: RealtimeTranscriptResult) {
+    const filler = detectFiller(result.transcript);
+    if (filler) {
+      detectedFillerRef.current = filler;
+    }
+  }
+
+  function shouldStopFiller(result: RealtimeTranscriptResult): boolean {
+    const filler = detectFiller(result.transcript);
+    if (!filler) return false;
+    detectedFillerRef.current = filler;
+    return true;
+  }
+
+  async function handleSubmitFiller(
+    _blob: Blob,
+    realtimeResult?: RealtimeTranscriptResult | null,
+  ) {
+    if (!drill) return;
+    setError(null);
+    setScore(null);
+    setSpeedScore(null);
+    setSubmitting(true);
+    try {
+      const data = await apiFetch<DrillScore>(
+        `/api/drills/${drill.id}/score-filler`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            transcript: realtimeResult?.transcript ?? "",
+            duration_seconds: realtimeResult?.durationSeconds ?? 0,
+            filler_word:
+              detectedFillerRef.current ??
+              detectFiller(realtimeResult?.transcript ?? ""),
+          }),
+        },
+      );
+      setScore(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to score filler drill");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleSubmitAudio(blob: Blob) {
     if (!drill) return;
     setError(null);
@@ -332,7 +414,7 @@ export function DrillsClient() {
         </p>
       </header>
 
-      <section aria-label="Drill types" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section aria-label="Drill types" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {DRILL_TYPES.map((option) => {
           const active = option.type === drillType;
           return (
@@ -366,6 +448,7 @@ export function DrillsClient() {
             id="timer"
             value={timerSeconds}
             onChange={(e) => setTimerSeconds(Number(e.target.value))}
+            disabled={isFiller}
             className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
           >
             {TIMER_OPTIONS.map((s) => (
@@ -435,10 +518,25 @@ export function DrillsClient() {
           ) : usesAudio ? (
             <div>
               <RecordButton
-                onComplete={isSpeed ? handleSubmitSpeed : handleSubmitAudio}
-                label={isSpeed ? "Record Reading" : "Record Response"}
+                onComplete={
+                  isSpeed
+                    ? handleSubmitSpeed
+                    : isFiller
+                      ? handleSubmitFiller
+                      : handleSubmitAudio
+                }
+                label={
+                  isSpeed
+                    ? "Record Reading"
+                    : isFiller
+                      ? "Start Filler Drill"
+                      : "Record Response"
+                }
                 disabled={submitting}
-                maxDurationSeconds={timerSeconds}
+                maxDurationSeconds={isFiller ? 60 : timerSeconds}
+                realtimeTranscription={isFiller}
+                onRealtimeTranscript={isFiller ? handleFillerTranscript : undefined}
+                stopWhenRealtimeTranscript={isFiller ? shouldStopFiller : undefined}
               />
             </div>
           ) : !typingStarted ? (

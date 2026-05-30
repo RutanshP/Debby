@@ -49,6 +49,10 @@ export interface UseRealtimeTranscriptionResult {
   stop: () => Promise<RealtimeTranscriptResult | null>;
 }
 
+interface UseRealtimeTranscriptionOptions {
+  onTranscript?: (result: RealtimeTranscriptResult) => void;
+}
+
 function downsampleTo16k(input: Float32Array, inputSampleRate: number): Int16Array {
   if (inputSampleRate === TARGET_SAMPLE_RATE) {
     return floatTo16BitPcm(input);
@@ -91,7 +95,9 @@ function buildTranscript(turns: Map<number, string>): string {
     .trim();
 }
 
-export function useRealtimeTranscription(): UseRealtimeTranscriptionResult {
+export function useRealtimeTranscription(
+  options: UseRealtimeTranscriptionOptions = {},
+): UseRealtimeTranscriptionResult {
   const [state, setState] = useState<RealtimeState>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -106,6 +112,11 @@ export function useRealtimeTranscription(): UseRealtimeTranscriptionResult {
   const startedAtRef = useRef<number | null>(null);
   const durationRef = useRef<number>(0);
   const closingPromiseRef = useRef<Promise<RealtimeTranscriptResult | null> | null>(null);
+  const onTranscriptRef = useRef(options.onTranscript);
+
+  useEffect(() => {
+    onTranscriptRef.current = options.onTranscript;
+  }, [options.onTranscript]);
 
   const cleanupAudio = useCallback(() => {
     processorRef.current?.disconnect();
@@ -165,6 +176,10 @@ export function useRealtimeTranscription(): UseRealtimeTranscriptionResult {
             end,
           });
         }
+        const liveResult = buildResult();
+        if (liveResult) {
+          onTranscriptRef.current?.(liveResult);
+        }
       }
 
       if (message.type === "Termination") {
@@ -172,7 +187,7 @@ export function useRealtimeTranscription(): UseRealtimeTranscriptionResult {
           message.audio_duration_seconds ?? message.session_duration_seconds ?? durationRef.current;
       }
     },
-    [],
+    [buildResult],
   );
 
   const start = useCallback(

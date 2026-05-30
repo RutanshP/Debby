@@ -3,7 +3,7 @@
 
 export type Side = "aff" | "neg";
 export type Format = "parli" | "mspdp";
-export type DrillType = "rebuttal" | "speed" | "impact" | "contention";
+export type DrillType = "rebuttal" | "speed" | "impact" | "contention" | "filler";
 
 export interface ProgressRound {
   id: string;
@@ -75,7 +75,7 @@ export interface DroppedPattern {
   count: number;
 }
 
-const DRILL_TYPES: DrillType[] = ["rebuttal", "speed", "impact", "contention"];
+const DRILL_TYPES: DrillType[] = ["rebuttal", "speed", "impact", "contention", "filler"];
 
 function resolvedWinner(r: ProgressRound): Side | null {
   if (r.winner_side === "aff" || r.winner_side === "neg") return r.winner_side;
@@ -187,6 +187,7 @@ export function drillScoreTrend(drills: ProgressDrill[]): DrillScoreTrend {
     speed: [],
     impact: [],
     contention: [],
+    filler: [],
   };
   const sorted = [...drills].sort((a, b) => {
     const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -211,6 +212,7 @@ const WEAKNESS_LABEL: Record<string, { label: string; href: string }> = {
   contentions: { label: "Contention Storm", href: "/drills" },
   contention: { label: "Contention Storm", href: "/drills" },
   speed: { label: "Speed Reading", href: "/drills" },
+  filler: { label: "Filler Detection", href: "/drills" },
 };
 
 export interface Weakness {
