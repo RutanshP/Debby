@@ -29,10 +29,12 @@ interface Round {
       filler_count?: number | null;
       filler_words?: Record<string, number> | null;
       filler_per_minute?: number | null;
+      major_pause_count?: number | null;
     }
   > | null;
   filler_count: number | null;
   filler_per_minute: number | null;
+  major_pause_count: number | null;
   first_speech_wpm: number | null;
   second_speech_wpm: number | null;
   average_wpm: number | null;
@@ -100,12 +102,14 @@ function FillerSummary({
         filler_count?: number | null;
         filler_words?: Record<string, number> | null;
         filler_per_minute?: number | null;
+        major_pause_count?: number | null;
       }
     | null
     | undefined;
 }) {
   if (!metric) return null;
   const count = Number(metric.filler_count ?? 0);
+  const pauses = Number(metric.major_pause_count ?? 0);
   const perMinute = Number(metric.filler_per_minute ?? 0);
   const words = Object.entries(metric.filler_words ?? {})
     .filter(([, value]) => Number(value) > 0)
@@ -115,6 +119,7 @@ function FillerSummary({
     <div className="mt-3 rounded-md bg-rose-50 p-3 text-sm text-slate-700">
       <span className="font-semibold text-rose-700">Filler words: </span>
       {count} total · {perMinute.toFixed(1)}/min
+      <span className="text-slate-500"> · Major pauses: {pauses}</span>
       {words.length > 0 ? (
         <span className="text-slate-500"> · {words.join(", ")}</span>
       ) : null}
@@ -184,6 +189,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
           <div className="grid gap-3 sm:grid-cols-2">
             <StatCard label="Your speech WPM" value={round.average_wpm} />
             <StatCard label="Filler words" value={round.filler_count} />
+            <StatCard label="Major pauses" value={round.major_pause_count} />
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-3">
@@ -195,6 +201,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
         {!isUserNeg && (
           <div className="mt-3 grid gap-3 sm:grid-cols-1">
             <StatCard label="Filler words" value={round.filler_count} />
+            <StatCard label="Major pauses" value={round.major_pause_count} />
           </div>
         )}
       </section>

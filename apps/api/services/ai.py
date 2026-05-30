@@ -276,8 +276,9 @@ def _has_filler_issue(speech_metrics: Any | None) -> bool:
         if not isinstance(value, dict):
             continue
         count = int(value.get("filler_count") or 0)
+        pause_count = int(value.get("major_pause_count") or 0)
         per_minute = float(value.get("filler_per_minute") or 0)
-        if count >= 3 or per_minute >= 4:
+        if count >= 3 or per_minute >= 4 or pause_count >= 2:
             return True
     return False
 
@@ -596,7 +597,7 @@ _FLOW_SYSTEM = (
     "ballot winner must be aff or neg; explanation <= 35 words. "
     "dropped max 4. voters max 3. Each voter winner must be aff or neg. "
     "recommended_drills can only include: rebuttal, impact, contentions, speed, filler. "
-    "Recommend filler when speech metrics show frequent filler words. "
+    "Recommend filler when speech metrics show frequent filler words or major pauses. "
     "Do not quote long text."
 )
 

@@ -53,6 +53,32 @@ def analyze_fillers(text: str, duration_seconds: float = 0.0) -> dict[str, Any]:
     }
 
 
+def count_major_pauses(words: list[Any] | None, threshold_seconds: float = 3.0) -> int:
+    if not words:
+        return 0
+
+    normalized: list[tuple[float, float]] = []
+    for word in words:
+        start = getattr(word, "start", None)
+        end = getattr(word, "end", None)
+        if isinstance(word, dict):
+            start = word.get("start")
+            end = word.get("end")
+        try:
+            start_seconds = float(start) / 1000.0
+            end_seconds = float(end) / 1000.0
+        except (TypeError, ValueError):
+            continue
+        normalized.append((start_seconds, end_seconds))
+
+    normalized.sort(key=lambda item: item[0])
+    pauses = 0
+    for previous, current in zip(normalized, normalized[1:]):
+        if current[0] - previous[1] >= threshold_seconds:
+            pauses += 1
+    return pauses
+
+
 def merge_speech_metrics(
     existing: Any,
     speech_type: str,
@@ -62,6 +88,7 @@ def merge_speech_metrics(
     filler_count: int,
     filler_words: dict[str, int],
     filler_per_minute: float,
+    major_pause_count: int = 0,
 ) -> dict[str, Any]:
     merged = dict(existing) if isinstance(existing, dict) else {}
     merged[speech_type] = {
@@ -70,6 +97,7 @@ def merge_speech_metrics(
         "filler_count": filler_count,
         "filler_words": filler_words,
         "filler_per_minute": filler_per_minute,
+        "major_pause_count": major_pause_count,
     }
     return merged
 
@@ -79,11 +107,13 @@ def summarize_round_fillers(metrics: Any) -> dict[str, Any]:
         return {"filler_count": 0, "filler_per_minute": 0.0}
 
     total_fillers = 0
+    total_major_pauses = 0
     total_duration = 0.0
     for value in metrics.values():
         if not isinstance(value, dict):
             continue
         total_fillers += int(value.get("filler_count") or 0)
+        total_major_pauses += int(value.get("major_pause_count") or 0)
         try:
             total_duration += max(float(value.get("duration_seconds") or 0), 0.0)
         except (TypeError, ValueError):
@@ -92,5 +122,6 @@ def summarize_round_fillers(metrics: Any) -> dict[str, Any]:
     minutes = total_duration / 60.0
     return {
         "filler_count": total_fillers,
+        "major_pause_count": total_major_pauses,
         "filler_per_minute": round(total_fillers / minutes, 2) if minutes > 0 else 0.0,
     }

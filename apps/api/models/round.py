@@ -46,6 +46,7 @@ class Round(BaseModel):
     speech_metrics: Any | None = None
     filler_count: int | None = None
     filler_per_minute: float | None = None
+    major_pause_count: int | None = None
     total_speech_time: str | None = None
     created_at: str | None = None
 
@@ -64,6 +65,7 @@ class RoundSummary(BaseModel):
     speech_metrics: Any | None = None
     filler_count: int | None = None
     filler_per_minute: float | None = None
+    major_pause_count: int | None = None
     created_at: str | None = None
 
 
@@ -81,6 +83,7 @@ class SpeechResponse(BaseModel):
     filler_count: int = 0
     filler_words: dict[str, int] = Field(default_factory=dict)
     filler_per_minute: float = 0.0
+    major_pause_count: int = 0
 
 
 class TextSpeechRequest(BaseModel):

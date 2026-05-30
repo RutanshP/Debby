@@ -19,6 +19,8 @@ interface RecordButtonProps {
   realtimeTranscription?: boolean;
   onRealtimeTranscript?: (result: RealtimeTranscriptResult) => void;
   stopWhenRealtimeTranscript?: (result: RealtimeTranscriptResult) => boolean;
+  stopAfterRealtimeSilenceSeconds?: number;
+  allowEmptyRealtimeTranscript?: boolean;
 }
 
 export function RecordButton({
@@ -29,18 +31,31 @@ export function RecordButton({
   realtimeTranscription = false,
   onRealtimeTranscript,
   stopWhenRealtimeTranscript,
+  stopAfterRealtimeSilenceSeconds,
+  allowEmptyRealtimeTranscript = false,
 }: RecordButtonProps) {
   const { state, error, stream, start, stop } = useMediaRecorder();
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const stoppingRef = useRef(false);
   const autoStopRef = useRef(false);
+  const lastRealtimeActivityAtRef = useRef<number | null>(null);
+  const lastRealtimeTranscriptRef = useRef("");
+  const lastRealtimeWordCountRef = useRef(0);
 
   const isRecording = state === "recording";
   const isBusy = state === "requesting" || state === "stopping";
 
   const realtime = useRealtimeTranscription({
     onTranscript: (result) => {
+      if (
+        result.transcript !== lastRealtimeTranscriptRef.current ||
+        result.words.length !== lastRealtimeWordCountRef.current
+      ) {
+        lastRealtimeTranscriptRef.current = result.transcript;
+        lastRealtimeWordCountRef.current = result.words.length;
+        lastRealtimeActivityAtRef.current = Date.now();
+      }
       onRealtimeTranscript?.(result);
       if (
         stopWhenRealtimeTranscript?.(result) &&
@@ -59,7 +74,11 @@ export function RecordButton({
     try {
       const realtimeResult = realtimeTranscription ? await realtime.stop() : null;
       const blob = await stop();
-      if (realtimeTranscription && !realtimeResult?.transcript.trim()) {
+      if (
+        realtimeTranscription &&
+        !allowEmptyRealtimeTranscript &&
+        !realtimeResult?.transcript.trim()
+      ) {
         setRealtimeError(
           "Realtime transcription connected but returned no transcript. Check the browser console Network tab for the AssemblyAI websocket messages.",
         );
@@ -79,6 +98,9 @@ export function RecordButton({
       return;
     }
     autoStopRef.current = false;
+    lastRealtimeActivityAtRef.current = Date.now();
+    lastRealtimeTranscriptRef.current = "";
+    lastRealtimeWordCountRef.current = 0;
     setRemainingSeconds(maxDurationSeconds ?? null);
     setRealtimeError(null);
     const mediaStream = await start().catch(() => null);
@@ -116,6 +138,31 @@ export function RecordButton({
     // finishRecording intentionally reads the current recorder state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRecording, maxDurationSeconds]);
+
+  useEffect(() => {
+    if (
+      !isRecording ||
+      !realtimeTranscription ||
+      !stopAfterRealtimeSilenceSeconds
+    ) {
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      const lastActivity = lastRealtimeActivityAtRef.current;
+      if (lastActivity === null || stoppingRef.current || autoStopRef.current) {
+        return;
+      }
+      if (Date.now() - lastActivity >= stopAfterRealtimeSilenceSeconds * 1000) {
+        autoStopRef.current = true;
+        void finishRecording();
+      }
+    }, 250);
+
+    return () => window.clearInterval(interval);
+    // finishRecording intentionally reads the current recorder state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, realtimeTranscription, stopAfterRealtimeSilenceSeconds]);
 
   const timerText =
     remainingSeconds === null

@@ -22,7 +22,7 @@ _SYSTEM = (
     "Identify patterns across rounds, not single-round critique. "
     "Return JSON with keys: headline (one sentence), strengths (3 short bullets), "
     "recurring_issues (3 short bullets covering things like signposting, pacing, "
-    "evidence, warranting, impact weighing, filler words), suggested_focus (one actionable next step). "
+    "evidence, warranting, impact weighing, filler words, long pauses), suggested_focus (one actionable next step). "
     "Each bullet must be under 18 words. Be concrete, kind, and specific to what "
     "actually appears in the transcripts."
 )
@@ -56,10 +56,11 @@ def _build_corpus(rounds: list[Any]) -> tuple[str, int]:
                 if not isinstance(value, dict):
                     continue
                 filler_count = int(value.get("filler_count") or 0)
+                pause_count = int(value.get("major_pause_count") or 0)
                 filler_rate = float(value.get("filler_per_minute") or 0)
-                if filler_count > 0:
+                if filler_count > 0 or pause_count > 0:
                     filler_bits.append(
-                        f"{speech_type}: {filler_count} fillers, {filler_rate}/min"
+                        f"{speech_type}: {filler_count} fillers, {filler_rate}/min, {pause_count} major pauses"
                     )
             if filler_bits:
                 metric_line = "\nFILLER METRICS: " + "; ".join(filler_bits)

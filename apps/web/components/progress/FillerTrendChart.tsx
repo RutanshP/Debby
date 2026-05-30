@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  Bar,
   CartesianGrid,
+  ComposedChart,
+  Legend,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -31,7 +33,7 @@ export function FillerTrendChart({ data }: { data: FillerTrendPoint[] }) {
 
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <LineChart data={data} margin={{ top: 8, right: 16, bottom: 32, left: 20 }}>
+      <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 32, left: 20 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis
           dataKey="label"
@@ -58,22 +60,31 @@ export function FillerTrendChart({ data }: { data: FillerTrendPoint[] }) {
         <Tooltip
           formatter={(value: number, name: string) => [
             Math.round(value),
-            name === "fillerCount" ? "Filler words" : name,
+            name === "fillerCount" ? "Filler words" : "Major pauses",
           ]}
-          labelFormatter={(_label: string, payload) => {
+          labelFormatter={(_label: unknown, payload: Array<{ payload?: unknown }>) => {
             const item = payload?.[0]?.payload as FillerTrendPoint | undefined;
             return item ? `${item.label} · ${shortDate(item.date)}` : "";
           }}
         />
-        <Line
-          type="monotone"
+        <Legend verticalAlign="top" height={28} />
+        <Bar
           dataKey="fillerCount"
-          stroke="#be123c"
-          strokeWidth={2}
-          dot={{ r: 3, fill: "#be123c" }}
+          name="Filler words"
+          fill="#be123c"
+          radius={[3, 3, 0, 0]}
           isAnimationActive={false}
         />
-      </LineChart>
+        <Line
+          type="monotone"
+          dataKey="majorPauseCount"
+          name="Major pauses"
+          stroke="#0f766e"
+          strokeWidth={2}
+          dot={{ r: 3, fill: "#0f766e" }}
+          isAnimationActive={false}
+        />
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

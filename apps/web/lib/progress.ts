@@ -26,10 +26,12 @@ export interface ProgressRound {
       filler_count?: number | null;
       filler_words?: Record<string, number> | null;
       filler_per_minute?: number | null;
+      major_pause_count?: number | null;
     }
   > | null;
   filler_count?: number | null;
   filler_per_minute?: number | null;
+  major_pause_count?: number | null;
   total_speech_time?:
     | string
     | number
@@ -68,6 +70,7 @@ export interface FillerTrendPoint {
   label: string;
   date: string;
   fillerCount: number;
+  majorPauseCount: number;
 }
 
 export interface WinRateBreakdown {
@@ -193,6 +196,7 @@ export function fillerTrend(rounds: ProgressRound[]): FillerTrendPoint[] {
           label: labels[speechType] ?? speechType,
           date: round.created_at,
           fillerCount: Number(metric.filler_count ?? 0),
+          majorPauseCount: Number(metric.major_pause_count ?? 0),
         });
       }
       continue;
@@ -203,6 +207,7 @@ export function fillerTrend(rounds: ProgressRound[]): FillerTrendPoint[] {
         label: "Round",
         date: round.created_at,
         fillerCount: Number(round.filler_count ?? 0),
+        majorPauseCount: Number(round.major_pause_count ?? 0),
       });
     }
   }

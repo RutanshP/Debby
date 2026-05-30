@@ -65,8 +65,8 @@ describe("fillerTrend", () => {
         side: "aff",
         winner_side: "aff",
         speech_metrics: {
-          aff: { filler_count: 3 },
-          aff_two: { filler_count: 1 },
+          aff: { filler_count: 3, major_pause_count: 2 },
+          aff_two: { filler_count: 1, major_pause_count: 0 },
         },
         created_at: "2026-01-01T00:00:00Z",
       },
@@ -87,16 +87,19 @@ describe("fillerTrend", () => {
         label: "Aff",
         date: "2026-01-01T00:00:00Z",
         fillerCount: 3,
+        majorPauseCount: 2,
       },
       {
         label: "Rebuttal",
         date: "2026-01-01T00:00:00Z",
         fillerCount: 1,
+        majorPauseCount: 0,
       },
       {
         label: "Round",
         date: "2026-01-02T00:00:00Z",
         fillerCount: 1,
+        majorPauseCount: 0,
       },
     ]);
   });

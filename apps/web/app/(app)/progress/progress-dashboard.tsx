@@ -88,7 +88,7 @@ export function ProgressDashboard({
         <Section title="WPM over time">
           <WpmTrendChart data={trend} />
         </Section>
-        <Section title="Filler words over time">
+        <Section title="Delivery issues over time">
           <FillerTrendChart data={filler} />
         </Section>
       </div>

@@ -546,6 +546,8 @@ export function DrillsClient() {
                 realtimeTranscription={isFiller}
                 onRealtimeTranscript={isFiller ? handleFillerTranscript : undefined}
                 stopWhenRealtimeTranscript={isFiller ? shouldStopFiller : undefined}
+                stopAfterRealtimeSilenceSeconds={isFiller ? 3 : undefined}
+                allowEmptyRealtimeTranscript={isFiller}
               />
             </div>
           ) : !typingStarted ? (

@@ -32,6 +32,7 @@ from models.round import (
 from services import rounds as rounds_service
 from services.fillers import (
     analyze_fillers,
+    count_major_pauses,
     merge_speech_metrics,
     summarize_round_fillers,
 )
@@ -197,6 +198,7 @@ async def _save_speech_transcript(
         [point.model_dump() for point in wpm_series],
     )
     filler_metrics = analyze_fillers(transcript, duration_seconds)
+    major_pause_count = count_major_pauses(words)
     speech_metrics_store = merge_speech_metrics(
         round_row.speech_metrics,
         speech_type,
@@ -205,6 +207,7 @@ async def _save_speech_transcript(
         filler_count=int(filler_metrics["filler_count"]),
         filler_words=filler_metrics["filler_words"],
         filler_per_minute=float(filler_metrics["filler_per_minute"]),
+        major_pause_count=major_pause_count,
     )
     round_filler_summary = summarize_round_fillers(speech_metrics_store)
     total_speech_seconds = _add_interval_seconds(
@@ -219,6 +222,7 @@ async def _save_speech_transcript(
         "speech_metrics": speech_metrics_store,
         "filler_count": round_filler_summary["filler_count"],
         "filler_per_minute": round_filler_summary["filler_per_minute"],
+        "major_pause_count": round_filler_summary["major_pause_count"],
         "total_speech_time": _format_interval_seconds(total_speech_seconds),
     }
     if speech_type == "aff":
@@ -236,6 +240,7 @@ async def _save_speech_transcript(
         filler_count=int(filler_metrics["filler_count"]),
         filler_words=filler_metrics["filler_words"],
         filler_per_minute=float(filler_metrics["filler_per_minute"]),
+        major_pause_count=major_pause_count,
     )
 
 
