@@ -44,6 +44,7 @@ export function RecordButton({
   const lastRealtimeActivityAtRef = useRef<number | null>(null);
   const lastRealtimeTranscriptRef = useRef("");
   const lastRealtimeWordCountRef = useRef(0);
+  const hasRealtimeTranscriptActivityRef = useRef(false);
 
   const isRecording = state === "recording";
   const isBusy = state === "requesting" || state === "stopping";
@@ -56,6 +57,7 @@ export function RecordButton({
       ) {
         lastRealtimeTranscriptRef.current = result.transcript;
         lastRealtimeWordCountRef.current = result.words.length;
+        hasRealtimeTranscriptActivityRef.current = true;
         lastRealtimeActivityAtRef.current = Date.now();
       }
       onRealtimeTranscript?.(result);
@@ -67,6 +69,10 @@ export function RecordButton({
         autoStopRef.current = true;
         void finishRecording();
       }
+    },
+    onAudioActivity: () => {
+      if (!hasRealtimeTranscriptActivityRef.current) return;
+      lastRealtimeActivityAtRef.current = Date.now();
     },
   });
 
@@ -103,6 +109,7 @@ export function RecordButton({
     lastRealtimeActivityAtRef.current = null;
     lastRealtimeTranscriptRef.current = "";
     lastRealtimeWordCountRef.current = 0;
+    hasRealtimeTranscriptActivityRef.current = false;
     setRemainingSeconds(maxDurationSeconds ?? null);
     setRealtimeError(null);
     const mediaStream = await start().catch(() => null);

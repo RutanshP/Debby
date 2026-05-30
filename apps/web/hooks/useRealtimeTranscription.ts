@@ -51,6 +51,7 @@ export interface UseRealtimeTranscriptionResult {
 
 interface UseRealtimeTranscriptionOptions {
   onTranscript?: (result: RealtimeTranscriptResult) => void;
+  onAudioActivity?: () => void;
 }
 
 function downsampleTo16k(input: Float32Array, inputSampleRate: number): Int16Array {
@@ -113,10 +114,12 @@ export function useRealtimeTranscription(
   const durationRef = useRef<number>(0);
   const closingPromiseRef = useRef<Promise<RealtimeTranscriptResult | null> | null>(null);
   const onTranscriptRef = useRef(options.onTranscript);
+  const onAudioActivityRef = useRef(options.onAudioActivity);
 
   useEffect(() => {
     onTranscriptRef.current = options.onTranscript;
-  }, [options.onTranscript]);
+    onAudioActivityRef.current = options.onAudioActivity;
+  }, [options.onTranscript, options.onAudioActivity]);
 
   const cleanupAudio = useCallback(() => {
     processorRef.current?.disconnect();
@@ -243,6 +246,14 @@ export function useRealtimeTranscription(
         processor.onaudioprocess = (event) => {
           if (ws.readyState !== WebSocket.OPEN) return;
           const input = event.inputBuffer.getChannelData(0);
+          let sum = 0;
+          for (let i = 0; i < input.length; i += 1) {
+            sum += (input[i] ?? 0) ** 2;
+          }
+          const rms = Math.sqrt(sum / Math.max(input.length, 1));
+          if (rms > 0.025) {
+            onAudioActivityRef.current?.();
+          }
           const pcm = downsampleTo16k(input, audioContext.sampleRate);
           ws.send(pcm.buffer);
         };

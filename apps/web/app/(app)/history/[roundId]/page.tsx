@@ -12,6 +12,26 @@ const SIDE_LABEL: Record<"aff" | "neg", string> = {
   aff: "Affirmative",
   neg: "Negative",
 };
+const FILLER_PATTERNS = [
+  "you know",
+  "i mean",
+  "sort of",
+  "kind of",
+  "so like",
+  "and like",
+  "but like",
+  "like i",
+  "like we",
+  "like you",
+  "like they",
+  "basically",
+  "um",
+  "uh",
+  "erm",
+  "er",
+  "ah",
+  "hmm",
+];
 
 interface Round {
   id: string;
@@ -127,6 +147,40 @@ function FillerSummary({
   );
 }
 
+function HighlightedTranscript({ text }: { text: string }) {
+  const escaped = FILLER_PATTERNS.map((pattern) =>
+    pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
+  const regex = new RegExp(`\\b(${escaped.join("|")})\\b`, "gi");
+  const parts: Array<{ text: string; filler: boolean }> = [];
+  let lastIndex = 0;
+  for (const match of text.matchAll(regex)) {
+    const index = match.index ?? 0;
+    if (index > lastIndex) {
+      parts.push({ text: text.slice(lastIndex, index), filler: false });
+    }
+    parts.push({ text: match[0], filler: true });
+    lastIndex = index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push({ text: text.slice(lastIndex), filler: false });
+  }
+
+  return (
+    <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+      {parts.map((part, index) =>
+        part.filler ? (
+          <span key={index} className="font-semibold text-rose-700">
+            {part.text}
+          </span>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </p>
+  );
+}
+
 export default async function HistoryDetailPage({ params }: PageProps) {
   const { roundId } = await params;
 
@@ -224,9 +278,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
               <WpmChart series={speechSeries(round.wpm_series, "aff")} />
             </div>
             <FillerSummary metric={round.speech_metrics?.aff} />
-            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
-              {round.aff_speech}
-            </p>
+            <HighlightedTranscript text={round.aff_speech} />
           </details>
         )}
         {round.neg_speech && (
@@ -235,9 +287,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
               {round.side === "neg" ? "Your" : "Debby's"} negative speech
             </summary>
             <FillerSummary metric={round.speech_metrics?.neg} />
-            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
-              {round.neg_speech}
-            </p>
+            <HighlightedTranscript text={round.neg_speech} />
           </details>
         )}
         {round.aff_two_speech && (
@@ -249,9 +299,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
               <WpmChart series={speechSeries(round.wpm_series, "aff_two")} />
             </div>
             <FillerSummary metric={round.speech_metrics?.aff_two} />
-            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
-              {round.aff_two_speech}
-            </p>
+            <HighlightedTranscript text={round.aff_two_speech} />
           </details>
         )}
       </section>
