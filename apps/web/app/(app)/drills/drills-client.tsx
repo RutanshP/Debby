@@ -56,12 +56,21 @@ const FILLER_WORDS = new Set([
   "er",
   "ah",
   "hmm",
-  "like",
   "basically",
-  "literally",
-  "actually",
 ]);
-const FILLER_PHRASES = ["you know", "i mean", "sort of", "kind of"];
+const FILLER_PHRASES = [
+  "you know",
+  "i mean",
+  "sort of",
+  "kind of",
+  "so like",
+  "and like",
+  "but like",
+  "like i",
+  "like we",
+  "like you",
+  "like they",
+];
 
 interface DrillPrompt {
   id: string | number;
