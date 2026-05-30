@@ -22,7 +22,7 @@ _SYSTEM = (
     "Identify patterns across rounds, not single-round critique. "
     "Return JSON with keys: headline (one sentence), strengths (3 short bullets), "
     "recurring_issues (3 short bullets covering things like signposting, pacing, "
-    "evidence, warranting, impact weighing), suggested_focus (one actionable next step). "
+    "evidence, warranting, impact weighing, filler words), suggested_focus (one actionable next step). "
     "Each bullet must be under 18 words. Be concrete, kind, and specific to what "
     "actually appears in the transcripts."
 )
@@ -48,10 +48,27 @@ def _build_corpus(rounds: list[Any]) -> tuple[str, int]:
             speeches.append(f"REBUTTAL:\n{rebuttal}")
         if not speeches:
             continue
+        metrics = getattr(r, "speech_metrics", None)
+        metric_line = ""
+        if isinstance(metrics, dict):
+            filler_bits = []
+            for speech_type, value in metrics.items():
+                if not isinstance(value, dict):
+                    continue
+                filler_count = int(value.get("filler_count") or 0)
+                filler_rate = float(value.get("filler_per_minute") or 0)
+                if filler_count > 0:
+                    filler_bits.append(
+                        f"{speech_type}: {filler_count} fillers, {filler_rate}/min"
+                    )
+            if filler_bits:
+                metric_line = "\nFILLER METRICS: " + "; ".join(filler_bits)
         used += 1
         topic = getattr(r, "topic", "") or ""
         blocks.append(
-            f"--- Round {used} ({topic}) ---\n" + "\n\n".join(speeches)
+            f"--- Round {used} ({topic}) ---\n"
+            + "\n\n".join(speeches)
+            + metric_line
         )
     return "\n\n".join(blocks), used
 

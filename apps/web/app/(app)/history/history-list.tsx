@@ -10,6 +10,8 @@ export interface HistoryRound {
   format: string;
   side: "aff" | "neg";
   winner_side: "aff" | "neg" | null;
+  filler_count?: number | null;
+  filler_per_minute?: number | null;
   flow?: {
     ballot?: {
       winner?: "aff" | "neg" | string | null;
@@ -148,6 +150,9 @@ export function HistoryList({ rounds, pageSize = 20 }: HistoryListProps) {
                     </h3>
                     <div className="mt-1 text-xs text-slate-500">
                       {r.format} &middot; {SIDE_LABEL[r.side] ?? r.side}
+                      {typeof r.filler_count === "number"
+                        ? ` · ${r.filler_count} fillers`
+                        : ""}
                     </div>
                   </div>
                   <span

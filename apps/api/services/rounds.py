@@ -16,7 +16,8 @@ from services.supabase_client import get_supabase
 _TABLE = "rounds"
 _SUMMARY_COLUMNS = (
     "id,topic,format,side,winner_side,flow,average_wpm,first_speech_wpm,"
-    "second_speech_wpm,total_speech_time,created_at"
+    "second_speech_wpm,total_speech_time,speech_metrics,filler_count,"
+    "filler_per_minute,created_at"
 )
 
 

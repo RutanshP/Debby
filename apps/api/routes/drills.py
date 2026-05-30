@@ -88,6 +88,7 @@ _SUMMARY_COLUMNS = (
     "id,drill_type,prompt,score,numeric_score,duration_seconds,wpm,accuracy,"
     "completion,timer_seconds,created_at"
 )
+from services.fillers import analyze_fillers
 
 
 def _persist_drill(row: dict[str, Any]) -> dict[str, Any]:
@@ -472,7 +473,14 @@ async def score_filler_route(
         raise HTTPException(status_code=400, detail="This drill is not a filler drill.")
 
     transcript = (body.transcript or "").strip()
-    filler = (body.filler_word or "").strip().lower() or None
+    detected = analyze_fillers(transcript, body.duration_seconds)
+    detected_words = detected.get("filler_words") if isinstance(detected, dict) else {}
+    first_detected = (
+        next(iter(detected_words.keys()))
+        if isinstance(detected_words, dict) and detected_words
+        else None
+    )
+    filler = (body.filler_word or "").strip().lower() or first_detected
     duration = max(float(body.duration_seconds or 0), 0.0)
     survival_score = max(0, min(round((duration / 60.0) * 10), 10))
 

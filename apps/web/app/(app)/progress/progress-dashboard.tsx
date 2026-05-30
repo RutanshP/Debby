@@ -5,6 +5,7 @@ import {
   activityHeatmap,
   drillScoreTrend,
   droppedPatterns,
+  fillerTrend,
   headlineStats,
   recentRounds,
   weaknessSpotlight,
@@ -16,6 +17,7 @@ import {
 import type { SpeechInsightsResponse } from "@/lib/api";
 import { HeadlineStatsRow } from "@/components/progress/HeadlineStats";
 import { WpmTrendChart } from "@/components/progress/WpmTrendChart";
+import { FillerTrendChart } from "@/components/progress/FillerTrendChart";
 import { WinRateBreakdownCard } from "@/components/progress/WinRateBreakdown";
 import { RecentRoundsList } from "@/components/progress/RecentRoundsList";
 import { DrillScoreTrendChart } from "@/components/progress/DrillScoreTrend";
@@ -66,6 +68,7 @@ export function ProgressDashboard({
 
   const stats = headlineStats(rounds, drills);
   const trend = wpmTrend(rounds);
+  const filler = fillerTrend(rounds);
   const breakdown = winRateBreakdown(rounds);
   const recent = recentRounds(rounds, 5);
   const drillTrend = drillScoreTrend(drills);
@@ -85,14 +88,19 @@ export function ProgressDashboard({
         <Section title="WPM over time">
           <WpmTrendChart data={trend} />
         </Section>
-        <Section title="Win rate">
-          <WinRateBreakdownCard data={breakdown} />
+        <Section title="Filler words over time">
+          <FillerTrendChart data={filler} />
         </Section>
       </div>
 
-      <Section title="Focus area">
-        <WeaknessSpotlight weakness={weakness} />
-      </Section>
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <Section title="Win rate">
+          <WinRateBreakdownCard data={breakdown} />
+        </Section>
+        <Section title="Focus area">
+          <WeaknessSpotlight weakness={weakness} />
+        </Section>
+      </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Section title="Drill scores">

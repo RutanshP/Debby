@@ -21,6 +21,17 @@ interface Round {
   winner_side: "aff" | "neg" | null;
   flow: FlowSheetData | null;
   wpm_series: WpmPoint[] | { aff?: WpmPoint[]; aff_two?: WpmPoint[] } | null;
+  speech_metrics: Record<
+    string,
+    {
+      duration_seconds?: number | null;
+      filler_count?: number | null;
+      filler_words?: Record<string, number> | null;
+      filler_per_minute?: number | null;
+    }
+  > | null;
+  filler_count: number | null;
+  filler_per_minute: number | null;
   first_speech_wpm: number | null;
   second_speech_wpm: number | null;
   average_wpm: number | null;
@@ -76,6 +87,36 @@ function StatCard({ label, value }: { label: string; value: number | null }) {
       <div className="mt-1 text-2xl font-semibold text-slate-900">
         {value ?? "N/A"}
       </div>
+    </div>
+  );
+}
+
+function FillerSummary({
+  metric,
+}: {
+  metric:
+    | {
+        filler_count?: number | null;
+        filler_words?: Record<string, number> | null;
+        filler_per_minute?: number | null;
+      }
+    | null
+    | undefined;
+}) {
+  if (!metric) return null;
+  const count = Number(metric.filler_count ?? 0);
+  const perMinute = Number(metric.filler_per_minute ?? 0);
+  const words = Object.entries(metric.filler_words ?? {})
+    .filter(([, value]) => Number(value) > 0)
+    .map(([word, value]) => `${word} (${value})`);
+
+  return (
+    <div className="mt-3 rounded-md bg-rose-50 p-3 text-sm text-slate-700">
+      <span className="font-semibold text-rose-700">Filler words: </span>
+      {count} total · {perMinute.toFixed(1)}/min
+      {words.length > 0 ? (
+        <span className="text-slate-500"> · {words.join(", ")}</span>
+      ) : null}
     </div>
   );
 }
@@ -136,6 +177,17 @@ export default async function HistoryDetailPage({ params }: PageProps) {
           <StatCard label="2nd speech WPM" value={round.second_speech_wpm} />
           <StatCard label="Average WPM" value={round.average_wpm} />
         </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <StatCard label="Filler words" value={round.filler_count} />
+          <StatCard
+            label="Fillers/min"
+            value={
+              typeof round.filler_per_minute === "number"
+                ? Math.round(round.filler_per_minute)
+                : null
+            }
+          />
+        </div>
       </section>
 
       {round.flow && (
@@ -155,6 +207,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
             <div className="mt-4">
               <WpmChart series={speechSeries(round.wpm_series, "aff")} />
             </div>
+            <FillerSummary metric={round.speech_metrics?.aff} />
             <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
               {round.aff_speech}
             </p>
@@ -165,6 +218,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
             <summary className="cursor-pointer text-sm font-medium text-slate-700">
               {round.side === "neg" ? "Your" : "Debby's"} negative speech
             </summary>
+            <FillerSummary metric={round.speech_metrics?.neg} />
             <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
               {round.neg_speech}
             </p>
@@ -178,6 +232,7 @@ export default async function HistoryDetailPage({ params }: PageProps) {
             <div className="mt-4">
               <WpmChart series={speechSeries(round.wpm_series, "aff_two")} />
             </div>
+            <FillerSummary metric={round.speech_metrics?.aff_two} />
             <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
               {round.aff_two_speech}
             </p>

@@ -1,5 +1,6 @@
 import {
   drillScoreTrend,
+  fillerTrend,
   headlineStats,
   type ProgressDrill,
   type ProgressRound,
@@ -51,6 +52,46 @@ describe("headlineStats", () => {
     ];
 
     expect(headlineStats(rounds, drills).totalPracticeMinutes).toBe(6);
+  });
+});
+
+describe("fillerTrend", () => {
+  it("tracks filler words per minute over rounds", () => {
+    const rounds: ProgressRound[] = [
+      {
+        id: "r1",
+        topic: "Topic",
+        format: "parli",
+        side: "aff",
+        winner_side: "aff",
+        filler_count: 3,
+        filler_per_minute: 4.5,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "r2",
+        topic: "Topic 2",
+        format: "parli",
+        side: "aff",
+        winner_side: "neg",
+        filler_count: 1,
+        filler_per_minute: 1,
+        created_at: "2026-01-02T00:00:00Z",
+      },
+    ];
+
+    expect(fillerTrend(rounds)).toEqual([
+      {
+        date: "2026-01-01T00:00:00Z",
+        fillerCount: 3,
+        fillerPerMinute: 4.5,
+      },
+      {
+        date: "2026-01-02T00:00:00Z",
+        fillerCount: 1,
+        fillerPerMinute: 1,
+      },
+    ]);
   });
 });
 

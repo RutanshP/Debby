@@ -299,6 +299,30 @@ async def test_generate_round_flow_caps_lists(patched_client: AsyncMock):
     assert len(flow.aff_sheet) == 4
 
 
+async def test_generate_round_flow_recommends_filler_from_metrics(
+    patched_client: AsyncMock,
+):
+    payload = {
+        "aff_sheet": [],
+        "neg_sheet": [],
+        "voters": [],
+        "dropped": [],
+        "recommended_drills": ["impact"],
+    }
+    patched_client.return_value = _chat_completion(json.dumps(payload))
+
+    flow = await ai_service.generate_round_flow(
+        "topic",
+        "aff",
+        "neg",
+        "aff2",
+        "rfd",
+        speech_metrics={"aff": {"filler_count": 4, "filler_per_minute": 5.0}},
+    )
+
+    assert "filler" in flow.recommended_drills
+
+
 # --- route tests --------------------------------------------------------------
 
 

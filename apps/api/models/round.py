@@ -43,6 +43,9 @@ class Round(BaseModel):
     second_speech_wpm: int | None = None
     average_wpm: int | None = None
     wpm_series: Any | None = None
+    speech_metrics: Any | None = None
+    filler_count: int | None = None
+    filler_per_minute: float | None = None
     total_speech_time: str | None = None
     created_at: str | None = None
 
@@ -58,6 +61,9 @@ class RoundSummary(BaseModel):
     first_speech_wpm: int | None = None
     second_speech_wpm: int | None = None
     total_speech_time: str | int | float | dict[str, Any] | None = None
+    speech_metrics: Any | None = None
+    filler_count: int | None = None
+    filler_per_minute: float | None = None
     created_at: str | None = None
 
 
@@ -72,6 +78,9 @@ class SpeechResponse(BaseModel):
     wpm: int
     wpm_series: list[WpmPoint]
     duration_seconds: float
+    filler_count: int = 0
+    filler_words: dict[str, int] = Field(default_factory=dict)
+    filler_per_minute: float = 0.0
 
 
 class TextSpeechRequest(BaseModel):

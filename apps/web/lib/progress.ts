@@ -19,6 +19,17 @@ export interface ProgressRound {
   average_wpm?: number | null;
   first_speech_wpm?: number | null;
   second_speech_wpm?: number | null;
+  speech_metrics?: Record<
+    string,
+    {
+      duration_seconds?: number | null;
+      filler_count?: number | null;
+      filler_words?: Record<string, number> | null;
+      filler_per_minute?: number | null;
+    }
+  > | null;
+  filler_count?: number | null;
+  filler_per_minute?: number | null;
   total_speech_time?:
     | string
     | number
@@ -51,6 +62,12 @@ export interface HeadlineStats {
 export interface WpmTrendPoint {
   date: string; // ISO
   avgWpm: number;
+}
+
+export interface FillerTrendPoint {
+  date: string;
+  fillerPerMinute: number;
+  fillerCount: number;
 }
 
 export interface WinRateBreakdown {
@@ -160,6 +177,17 @@ export function wpmTrend(rounds: ProgressRound[]): WpmTrendPoint[] {
     .map((r) => ({ date: r.created_at, avgWpm: r.average_wpm as number }));
 }
 
+export function fillerTrend(rounds: ProgressRound[]): FillerTrendPoint[] {
+  return [...rounds]
+    .filter((r) => typeof r.filler_per_minute === "number")
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .map((r) => ({
+      date: r.created_at,
+      fillerPerMinute: Number(r.filler_per_minute ?? 0),
+      fillerCount: Number(r.filler_count ?? 0),
+    }));
+}
+
 export function winRateBreakdown(rounds: ProgressRound[]): WinRateBreakdown {
   const bucket = (filter: (r: ProgressRound) => boolean) => {
     const subset = rounds.filter(filter);
@@ -213,6 +241,7 @@ const WEAKNESS_LABEL: Record<string, { label: string; href: string }> = {
   contention: { label: "Contention Storm", href: "/drills" },
   speed: { label: "Speed Reading", href: "/drills" },
   filler: { label: "Filler Detection", href: "/drills" },
+  fillers: { label: "Filler Detection", href: "/drills" },
 };
 
 export interface Weakness {

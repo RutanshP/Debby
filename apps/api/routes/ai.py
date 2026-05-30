@@ -217,6 +217,7 @@ async def post_judgment(
             body.neg_speech,
             body.aff_two_speech,
             verdict.rfd,
+            getattr(cached_round, "speech_metrics", None) if body.round_id else None,
         )
         if body.round_id:
             update_fields = {

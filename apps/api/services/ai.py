@@ -180,7 +180,12 @@ def _normalize_sheet_row(row: Any, side: Side) -> dict[str, Any]:
     return normalized
 
 
-def _normalize_flow_data(data: Any, rfd: str, topic: str = "") -> dict[str, Any]:
+def _normalize_flow_data(
+    data: Any,
+    rfd: str,
+    topic: str = "",
+    speech_metrics: Any | None = None,
+) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("generate_round_flow: model did not return a JSON object")
 
@@ -238,7 +243,16 @@ def _normalize_flow_data(data: Any, rfd: str, topic: str = "") -> dict[str, Any]
         if isinstance(data.get("recommended_drills"), list)
         else []
     )
-    allowed_drills = {"rebuttal", "impact", "contentions", "speed"}
+    allowed_drills = {"rebuttal", "impact", "contentions", "speed", "filler"}
+    recommended_drills = [
+        str(drill).strip().lower()
+        for drill in drills[:4]
+        if str(drill).strip().lower() in allowed_drills
+    ]
+    if _has_filler_issue(speech_metrics) and "filler" not in recommended_drills:
+        if len(recommended_drills) >= 4:
+            recommended_drills = recommended_drills[:3]
+        recommended_drills.append("filler")
 
     return {
         "aff_sheet": aff_rows,
@@ -251,12 +265,21 @@ def _normalize_flow_data(data: Any, rfd: str, topic: str = "") -> dict[str, Any]
         },
         "dropped": _flow_items(data.get("dropped"), "Dropped argument")[:4],
         "voters": normalized_voters,
-        "recommended_drills": [
-            str(drill).strip().lower()
-            for drill in drills[:4]
-            if str(drill).strip().lower() in allowed_drills
-        ],
+        "recommended_drills": recommended_drills[:4],
     }
+
+
+def _has_filler_issue(speech_metrics: Any | None) -> bool:
+    if not isinstance(speech_metrics, dict):
+        return False
+    for value in speech_metrics.values():
+        if not isinstance(value, dict):
+            continue
+        count = int(value.get("filler_count") or 0)
+        per_minute = float(value.get("filler_per_minute") or 0)
+        if count >= 3 or per_minute >= 4:
+            return True
+    return False
 
 
 # --- speech generation --------------------------------------------------------
@@ -572,7 +595,8 @@ _FLOW_SYSTEM = (
     "Winner must be the side with more unrefuted contentions; if tied, use impact weighing from the RFD. "
     "ballot winner must be aff or neg; explanation <= 35 words. "
     "dropped max 4. voters max 3. Each voter winner must be aff or neg. "
-    "recommended_drills can only include: rebuttal, impact, contentions, speed. "
+    "recommended_drills can only include: rebuttal, impact, contentions, speed, filler. "
+    "Recommend filler when speech metrics show frequent filler words. "
     "Do not quote long text."
 )
 
@@ -583,6 +607,7 @@ async def generate_round_flow(
     neg_speech: str,
     aff_rebuttal: str,
     rfd: str,
+    speech_metrics: Any | None = None,
 ) -> FlowBallot:
     """Produce a structured flow ballot. Raises ValueError on bad JSON."""
 
@@ -600,7 +625,8 @@ async def generate_round_flow(
                     f"AFF CONSTRUCTIVE:\n{_truncate_for_flow(aff_speech)}\n\n"
                     f"NEG SPEECH:\n{_truncate_for_flow(neg_speech)}\n\n"
                     f"AFF REBUTTAL:\n{_truncate_for_flow(aff_rebuttal)}\n\n"
-                    f"JUDGE RFD:\n{_truncate_for_flow(rfd, 1200)}"
+                    f"JUDGE RFD:\n{_truncate_for_flow(rfd, 1200)}\n\n"
+                    f"SPEECH METRICS:\n{json.dumps(speech_metrics or {}, default=str)}"
                 ),
             },
         ],
@@ -612,4 +638,6 @@ async def generate_round_flow(
     except json.JSONDecodeError as exc:
         raise ValueError(f"generate_round_flow: malformed JSON from model: {raw!r}") from exc
 
-    return FlowBallot.model_validate(_normalize_flow_data(data, rfd, topic))
+    return FlowBallot.model_validate(
+        _normalize_flow_data(data, rfd, topic, speech_metrics)
+    )

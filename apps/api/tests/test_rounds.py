@@ -365,6 +365,8 @@ def test_speeches_happy_path(
     assert row["average_wpm"] == 7
     assert row["first_speech_wpm"] == 7
     assert row["wpm_series"]["aff"] == body["wpm_series"]
+    assert row["speech_metrics"]["aff"]["filler_count"] == 0
+    assert row["filler_count"] == 0
     assert row["total_speech_time"] == "00:01:00"
 
 
@@ -441,22 +443,29 @@ def test_text_speech_route_saves_realtime_transcript(
         f"/api/rounds/{round_id}/speeches/text",
         json={
             "speech_type": "aff",
-            "transcript": "streamed speech text",
+            "transcript": "streamed speech text um",
             "duration_seconds": 30,
             "words": [
                 {"text": "streamed", "start": 0, "end": 500},
                 {"text": "speech", "start": 500, "end": 1000},
                 {"text": "text", "start": 1000, "end": 1500},
+                {"text": "um", "start": 1500, "end": 2000},
             ],
         },
     )
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["transcript"] == "streamed speech text"
-    assert body["wpm"] == 6
+    assert body["transcript"] == "streamed speech text um"
+    assert body["wpm"] == 8
+    assert body["filler_count"] == 1
+    assert body["filler_words"] == {"um": 1}
+    assert body["filler_per_minute"] == 2.0
     row = next(r for r in table.rows if r["id"] == round_id)
-    assert row["aff_speech"] == "streamed speech text"
+    assert row["aff_speech"] == "streamed speech text um"
+    assert row["speech_metrics"]["aff"]["filler_count"] == 1
+    assert row["filler_count"] == 1
+    assert row["filler_per_minute"] == 2.0
     assert row["total_speech_time"] == "00:00:30"
 
 
