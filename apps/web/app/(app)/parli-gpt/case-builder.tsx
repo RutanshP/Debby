@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -16,6 +17,39 @@ interface RandomCaseResponse {
   topic: string;
   side: Side;
 }
+
+const markdownComponents = {
+  h1: ({ children }: { children?: React.ReactNode }) => (
+    <h1 className="mb-4 text-2xl font-bold text-teal-800">{children}</h1>
+  ),
+  h2: ({ children }: { children?: React.ReactNode }) => (
+    <h2 className="mb-3 mt-6 text-xl font-semibold text-teal-700">
+      {children}
+    </h2>
+  ),
+  h3: ({ children }: { children?: React.ReactNode }) => (
+    <h3 className="mb-2 mt-4 text-lg font-semibold text-slate-800">
+      {children}
+    </h3>
+  ),
+  p: ({ children }: { children?: React.ReactNode }) => (
+    <p className="mb-3 leading-7 text-slate-700">{children}</p>
+  ),
+  ul: ({ children }: { children?: React.ReactNode }) => (
+    <ul className="mb-4 list-disc space-y-2 pl-6 text-slate-700">{children}</ul>
+  ),
+  ol: ({ children }: { children?: React.ReactNode }) => (
+    <ol className="mb-4 list-decimal space-y-2 pl-6 text-slate-700">
+      {children}
+    </ol>
+  ),
+  li: ({ children }: { children?: React.ReactNode }) => (
+    <li className="leading-7">{children}</li>
+  ),
+  strong: ({ children }: { children?: React.ReactNode }) => (
+    <strong className="font-semibold text-slate-900">{children}</strong>
+  ),
+};
 
 export default function CaseBuilder() {
   const [format, setFormat] = useState<Format>("parli");
@@ -171,8 +205,10 @@ export default function CaseBuilder() {
             </div>
           )}
           {!loading && !error && caseText && (
-            <article className="prose max-w-none">
-              <ReactMarkdown>{caseText}</ReactMarkdown>
+            <article>
+              <ReactMarkdown components={markdownComponents}>
+                {caseText}
+              </ReactMarkdown>
             </article>
           )}
           {!loading && !error && !caseText && (

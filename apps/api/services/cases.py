@@ -20,7 +20,10 @@ _SYSTEM_PROMPT = (
     "You are a parliamentary debater. You are required to make a debate case "
     "using the case template provided for you. Give your responses in markdown "
     "text. Please format them so that the response is coherent and visually "
-    "appealing."
+    "appealing. Return only markdown, not HTML and not a fenced code block. "
+    "Use markdown headings for sections, bullet lists for arguments, and bold "
+    "labels such as **Claim**, **Warrant**, **Evidence**, **Impact**, and "
+    "**Weighing**."
 )
 
 _PARLI_AFF_USER = (
@@ -139,7 +142,10 @@ _MSPDP_NEG_SYSTEM = (
     "You are a parliamentary debater. You are required to make a debate case "
     "using the case template provided for you. Give your responses in markdown "
     "text. Please format them so that the response is coherent and visually "
-    "appealing. "
+    "appealing. Return only markdown, not HTML and not a fenced code block. "
+    "Use markdown headings for sections, bullet lists for arguments, and bold "
+    "labels such as **Assertion**, **Reasoning**, **Evidence**, **Source**, "
+    "and **Impact**. "
 )
 
 _MSPDP_NEG_USER = (
