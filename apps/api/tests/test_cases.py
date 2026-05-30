@@ -57,6 +57,7 @@ async def test_make_case_instructs_complex_parli_tuli():
     system_prompt = kwargs["messages"][0]["content"]
     user_prompt = kwargs["messages"][1]["content"]
     assert "**Tagline**" in system_prompt
+    assert "Always use TULI for policy rounds" in system_prompt
     assert "**Uniqueness:**" in user_prompt
     assert "**Links:**" in user_prompt
     assert "**Internal Links:**" in user_prompt
@@ -71,6 +72,7 @@ async def test_make_case_instructs_complex_parli_tuli():
     assert "Each U point must have" in user_prompt
     assert "at least 4 evidence bullets" in user_prompt
     assert "using `->`" in user_prompt
+    assert "Only use **Claim**, **Warrant**, and **Impact**" in user_prompt
 
 
 @pytest.mark.parametrize("side", ["aff", "neg"])

@@ -28,12 +28,11 @@ _SYSTEM_PROMPT = (
 
 _PARLI_SYSTEM_PROMPT = (
     _SYSTEM_PROMPT
-    + " For parliamentary cases, write a tournament-style case. For simple "
-    "topics, concise Claim/Warrant/Impact is acceptable. For complex "
-    "parliamentary topics, especially policy, value, fact, economics, "
-    "international relations, social policy, development, or actor-based "
-    "resolutions, use TULI for each contention: **Tagline**, **Uniqueness**, "
-    "**Links**, and **Impacts**. Prefer specific link chains, solvency, "
+    + " For parliamentary cases, write a tournament-style case. Always use "
+    "TULI for policy rounds: **Tagline**, **Uniqueness**, **Links**, and "
+    "**Impacts** for each contention or disadvantage. Use concise "
+    "Claim/Warrant/Impact only for non-policy rounds when TULI would not fit "
+    "the topic. Prefer specific link chains, solvency, "
     "internal links, and impact calculus over generic explanation. In AFF "
     "policy rounds, uniqueness proves the status quo is bad and that a plan "
     "text is needed to change it; links explain how the plan solves that "
@@ -56,7 +55,7 @@ _PARLI_OUTPUT_RULES = (
     "- Definitions must be operational and concrete. If the resolution uses terms like significantly increase, substantially increase, reduce, expand, restrict, or prioritize, define them with a measurable threshold such as a percentage, dollar amount, legal standard, or scope limit.\n"
     "- If the topic is policy-oriented, include a plan text or counterplan when appropriate, plus solvency.\n"
     "- Plan text must be specific enough to implement. If the plan increases funding, name the amount or percentage increase, identify the funding recipient, and explain why that amount is greater than the status quo baseline. Do not use Normal Ways and Means as a substitute for an amount when the resolution asks to increase funding.\n"
-    "- For complex parliamentary topics, write 2-3 contentions/advantages using this TULI structure:\n"
+    "- For policy rounds, always write 2-3 contentions/advantages/disadvantages using this TULI structure. For non-policy rounds, CWI is acceptable if it better fits the topic:\n"
     "  - **Tagline:** one strategic sentence naming the contention.\n"
     "  - **Uniqueness:** multiple U1/U2/U3 sub-uniquenesses. Each U point must have a short claim/tagline followed by at least 4 evidence bullets underneath it; use more than 4 when the topic is complex or the claim needs more support. Those evidence bullets must include concrete statistics, named institutions, recent events, comparative baselines, rankings, percentages, dollar figures, or clearly labeled analytical warrants. For AFF policy cases, prove the status quo harm exists now and is bad enough to justify the plan. For NEG policy cases, prove the status quo has good things worth preserving, such as innovation, stability, jobs, effective institutions, markets, deterrence, diplomacy, or existing reforms.\n"
     "  - **Links:** multiple L1/L2 link chains. Format every link as an arrow chain using `->`, not a paragraph. For AFF policy cases, show: plan passes -> mechanism changes -> uniqueness harm reduced -> impact access. For NEG policy cases, show: AFF plan passes -> good status quo condition disrupted -> internal consequence -> impact access.\n"
@@ -64,7 +63,7 @@ _PARLI_OUTPUT_RULES = (
     "  - **Impacts:** terminal impact plus magnitude, probability, timeframe, and weighing.\n"
     "- For NEG disadvantages, model the structure as: U1/U2 good status quo conditions -> L1/L2 ways AFF disrupts them -> internal links -> terminal impact.\n"
     "- If NEG runs a counterplan, include a short counterplan text, solvency, and optionally one CP advantage. The CP advantage can use AFF-style links showing how the counterplan solves a harm, but keep it logically consistent with the disadvantages against AFF.\n"
-    "- For simple topics, each contention may use **Claim**, **Warrant**, and **Impact** instead.\n"
+    "- Only use **Claim**, **Warrant**, and **Impact** instead of TULI when the round is not policy-oriented.\n"
     "- Make the case more developed than a drill prompt: include specific mechanisms, examples, and quantitative estimates when reasonable, but do not fabricate exact citations. If you are uncertain about an exact statistic, use a qualified estimate or cite the type of source instead of inventing precision.\n"
 )
 
