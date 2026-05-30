@@ -56,7 +56,8 @@ _PARLI_OUTPUT_RULES = (
     "- Plan text must be specific enough to implement. If the plan increases funding, name the amount or percentage increase, identify the funding recipient, and explain why that amount is greater than the status quo baseline. Do not use Normal Ways and Means as a substitute for an amount when the resolution asks to increase funding.\n"
     "- Classify the round as exactly one of: **Policy**, **Value**, or **Fact**.\n"
     "- For Parli policy and value rounds, write 2-3 contentions/advantages/disadvantages using this TULI structure:\n"
-    "  - **Tagline:** one strategic sentence naming the contention.\n"
+    "  - Use the contention/advantage/disadvantage heading itself as the tagline, around 5 words, rather than writing a generic heading plus a separate tagline.\n"
+    "  - **Tagline:** one strategic phrase around 5 words naming the contention.\n"
     "  - **Uniqueness:** multiple U1/U2/U3 sub-uniquenesses. Each U point must have a short claim/tagline followed by at least 4 evidence bullets underneath it; use more than 4 when the topic is complex or the claim needs more support. Those evidence bullets must include concrete statistics, named institutions, recent events, comparative baselines, rankings, percentages, dollar figures, or clearly labeled analytical warrants. For AFF policy cases, prove the status quo harm exists now and is bad enough to justify the plan. For NEG policy cases, prove the status quo has good things worth preserving, such as innovation, stability, jobs, effective institutions, markets, deterrence, diplomacy, or existing reforms.\n"
     "  - **Links:** multiple L1/L2 link chains. Format every link as an arrow chain using `->`, not a paragraph. For AFF policy cases, show: plan passes -> mechanism changes -> uniqueness harm reduced -> impact access. For NEG policy cases, show: AFF plan passes -> good status quo condition disrupted -> internal consequence -> impact access.\n"
     "  - **Internal Links:** 2-4 downstream causal chains from the solved/disrupted harm to the terminal impact. Format internal links with `->` arrows. Example: homework increases stress -> worse sleep -> mental health decline -> lower retention -> family conflict.\n"
@@ -70,7 +71,7 @@ _PARLI_OUTPUT_RULES = (
 
 _PARLI_TULI_CONTENTION_TEMPLATE = (
     "Contention Template:\n"
-    "Tagline { write a brief strategic tagline for the contention }\n"
+    "Contention Heading / Tagline { write the contention name as a brief strategic tagline, around 5 words }\n"
     "Uniqueness { include U1/U2/U3 sub-uniquenesses. Each U point needs a short claim plus at least 4 evidence/stat bullets underneath it. }\n"
     "Links { include L1/L2 link chains formatted with arrows, e.g. plan passes -> mechanism changes -> uniqueness harm reduced -> impact access. }\n"
     "Internal Links { include 2-4 downstream arrow chains from the solved/disrupted harm to the terminal impact. }\n"

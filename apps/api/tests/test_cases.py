@@ -76,6 +76,7 @@ async def test_make_case_instructs_complex_parli_tuli():
     assert "using `->`" in user_prompt
     assert "Do not use Claim/Warrant/Impact headings" in user_prompt
     assert "For Parli fact rounds, use Claim/Warrant/Impact" in user_prompt
+    assert "around 5 words" in user_prompt
 
 
 @pytest.mark.parametrize("side", ["aff", "neg"])

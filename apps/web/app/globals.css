@@ -55,11 +55,13 @@
   }
 
   .case-print-document h1 {
-    margin: 0 0 10pt;
+    margin: 0 0 8pt;
     color: #000000 !important;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 15pt;
+    font-size: clamp(9pt, 2.2vw, 12pt);
     line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
     page-break-after: avoid;
   }
 
@@ -92,13 +94,20 @@
 
   .case-print-document ul,
   .case-print-document ol {
-    margin: 0 0 5pt 15pt;
+    margin: 0 0 3pt 13pt;
     padding: 0;
   }
 
   .case-print-document li {
-    margin: 0 0 2pt;
+    margin: 0;
+    padding: 0;
+    line-height: 1.2;
     page-break-inside: avoid;
+  }
+
+  .case-print-document li p {
+    display: inline;
+    margin: 0;
   }
 
   .case-print-document strong {
