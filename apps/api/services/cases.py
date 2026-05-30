@@ -26,6 +26,33 @@ _SYSTEM_PROMPT = (
     "**Weighing**."
 )
 
+_PARLI_SYSTEM_PROMPT = (
+    _SYSTEM_PROMPT
+    + " For parliamentary cases, write a tournament-style case. For simple "
+    "topics, concise Claim/Warrant/Impact is acceptable. For complex "
+    "parliamentary topics, especially policy, value, fact, economics, "
+    "international relations, social policy, development, or actor-based "
+    "resolutions, use TULI for each contention: **Tagline**, **Uniqueness**, "
+    "**Links**, and **Impacts**. Prefer specific link chains, solvency, "
+    "internal links, and impact calculus over generic explanation."
+)
+
+_PARLI_OUTPUT_RULES = (
+    "\n\nOutput requirements:\n"
+    "- Return polished markdown only.\n"
+    "- Do not output the raw template or bracketed instructions.\n"
+    "- Start with a heading naming the side and topic.\n"
+    "- Include round type, weighing mechanism, and definitions/background.\n"
+    "- If the topic is policy-oriented, include a plan text or counterplan when appropriate, plus solvency.\n"
+    "- For complex parliamentary topics, write 2-3 contentions/advantages using this TULI structure:\n"
+    "  - **Tagline:** one strategic sentence naming the contention.\n"
+    "  - **Uniqueness:** 1-2 status quo facts showing the problem or trend now.\n"
+    "  - **Links:** clear causal chains from the plan/position to the impact. Use L1/L2 when helpful.\n"
+    "  - **Impacts:** terminal impact plus magnitude, probability, timeframe, and weighing.\n"
+    "- For simple topics, each contention may use **Claim**, **Warrant**, and **Impact** instead.\n"
+    "- Make the case more developed than a drill prompt: include specific mechanisms, examples, and quantitative estimates when reasonable, but do not fabricate exact citations.\n"
+)
+
 _PARLI_AFF_USER = (
     "Below is a parliamentary case template. You are the affirmative side on the following topic: {topic}. \n"
     " The only time you may make a plan text is in a policy round (refer to the case template for definitions of plan text or policy round). This case template uses \"[ ]\" to signify a definition or explanation of a debate term in the template. Use the affirmative top of case and ignore the negation top of case. Here is the case template:\n"
@@ -201,8 +228,8 @@ async def make_case(topic: str, side: str) -> str:
     # The prompt templates contain literal "{...}" braces that aren't
     # format-string placeholders, so substitute the topic with plain
     # replacement instead of .format().
-    user = template.replace("{topic}", topic)
-    return await _chat(_SYSTEM_PROMPT, user)
+    user = template.replace("{topic}", topic) + _PARLI_OUTPUT_RULES
+    return await _chat(_PARLI_SYSTEM_PROMPT, user)
 
 
 async def make_mspdp_case(topic: str, side: str) -> str:

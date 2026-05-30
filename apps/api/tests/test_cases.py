@@ -46,6 +46,22 @@ async def test_make_case_returns_markdown(side: str):
     assert mock.await_count == 1
 
 
+async def test_make_case_instructs_complex_parli_tuli():
+    mock = AsyncMock(return_value=_mock_completion("# Parli case\nbody"))
+    with patch.object(cases_service.client.chat.completions, "create", mock):
+        await cases_service.make_case(
+            "The United States should provide military aid to Nigeria", "aff"
+        )
+
+    kwargs = mock.await_args.kwargs
+    system_prompt = kwargs["messages"][0]["content"]
+    user_prompt = kwargs["messages"][1]["content"]
+    assert "**Tagline**" in system_prompt
+    assert "**Uniqueness:**" in user_prompt
+    assert "**Links:**" in user_prompt
+    assert "**Impacts:**" in user_prompt
+
+
 @pytest.mark.parametrize("side", ["aff", "neg"])
 async def test_make_mspdp_case_returns_markdown(side: str):
     mock = AsyncMock(return_value=_mock_completion("# MSPDP case\nbody"))
