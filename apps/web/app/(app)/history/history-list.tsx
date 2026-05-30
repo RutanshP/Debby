@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 export interface HistoryRound {
   id: string;
@@ -18,6 +20,7 @@ export interface HistoryRound {
 
 interface HistoryListProps {
   rounds: HistoryRound[];
+  pageSize?: number;
 }
 
 const SIDE_LABEL: Record<string, string> = {
@@ -48,12 +51,35 @@ function winnerLabel(round: HistoryRound): string {
   return winner === round.side ? "You" : "Debby";
 }
 
-export function HistoryList({ rounds }: HistoryListProps) {
-  const total = rounds.length;
-  const userWins = rounds.filter(
+export function HistoryList({ rounds, pageSize = 20 }: HistoryListProps) {
+  const [items, setItems] = useState(rounds);
+  const [offset, setOffset] = useState(rounds.length);
+  const [hasMore, setHasMore] = useState(rounds.length >= pageSize);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  async function loadMore() {
+    setIsLoadingMore(true);
+    setLoadError(null);
+    try {
+      const next = await apiFetch<HistoryRound[]>(
+        `/api/rounds/summary?limit=${pageSize}&offset=${offset}`,
+      );
+      setItems((current) => [...current, ...next]);
+      setOffset((current) => current + next.length);
+      setHasMore(next.length === pageSize);
+    } catch {
+      setLoadError("Could not load more rounds. Try again in a moment.");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
+  const total = items.length;
+  const userWins = items.filter(
     (r) => resolvedWinner(r) === r.side,
   ).length;
-  const debbyWins = rounds.filter(
+  const debbyWins = items.filter(
     (r) => {
       const winner = resolvedWinner(r);
       return winner !== null && winner !== r.side;
@@ -105,7 +131,7 @@ export function HistoryList({ rounds }: HistoryListProps) {
       </aside>
 
       <ul className="space-y-3">
-        {rounds.map((r) => {
+        {items.map((r) => {
           const winner = resolvedWinner(r);
           const userWon = winner === r.side;
           return (
@@ -142,6 +168,23 @@ export function HistoryList({ rounds }: HistoryListProps) {
           );
         })}
       </ul>
+
+      {loadError ? (
+        <p className="text-sm text-red-600">{loadError}</p>
+      ) : null}
+
+      {hasMore ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={isLoadingMore}
+            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-teal/50 hover:text-teal disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoadingMore ? "Loading..." : "Load more"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

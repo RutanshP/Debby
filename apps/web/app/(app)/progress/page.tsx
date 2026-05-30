@@ -21,6 +21,12 @@ async function fetchJson<T>(path: string, token: string): Promise<T | null> {
   }
 }
 
+interface ProgressSummaryResponse {
+  rounds: ProgressRound[];
+  drills: ProgressDrill[];
+  insights: SpeechInsightsResponse | null;
+}
+
 export default async function ProgressPage() {
   const cookieStore = await Promise.resolve(cookies());
   const supabase = getServerSupabase(cookieStore);
@@ -37,19 +43,18 @@ export default async function ProgressPage() {
     );
   }
 
-  const [rounds, drills, insights] = await Promise.all([
-    fetchJson<ProgressRound[]>("/api/rounds/summary?limit=100", session.access_token),
-    fetchJson<ProgressDrill[]>("/api/drills/summary?limit=100", session.access_token),
-    fetchJson<SpeechInsightsResponse>("/api/insights", session.access_token),
-  ]);
+  const summary = await fetchJson<ProgressSummaryResponse>(
+    "/api/progress/summary?round_limit=100&drill_limit=100",
+    session.access_token,
+  );
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
       <h1 className="mb-6 text-2xl font-semibold text-teal-dark">Progress</h1>
       <ProgressDashboard
-        rounds={rounds ?? []}
-        drills={drills ?? []}
-        initialInsights={insights}
+        rounds={summary?.rounds ?? []}
+        drills={summary?.drills ?? []}
+        initialInsights={summary?.insights ?? null}
       />
     </main>
   );

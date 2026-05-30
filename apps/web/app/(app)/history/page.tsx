@@ -4,6 +4,7 @@ import { HistoryList, type HistoryRound } from "./history-list";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const HISTORY_PAGE_SIZE = 20;
 
 async function fetchRounds(): Promise<HistoryRound[]> {
   const cookieStore = await Promise.resolve(cookies());
@@ -15,7 +16,7 @@ async function fetchRounds(): Promise<HistoryRound[]> {
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}/api/rounds/summary?limit=50`, {
+    res = await fetch(`${API_BASE_URL}/api/rounds/summary?limit=${HISTORY_PAGE_SIZE}&offset=0`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
       cache: "no-store",
     });
@@ -31,7 +32,7 @@ export default async function HistoryPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
       <h1 className="mb-6 text-2xl font-semibold text-teal-dark">History</h1>
-      <HistoryList rounds={rounds} />
+      <HistoryList rounds={rounds} pageSize={HISTORY_PAGE_SIZE} />
     </main>
   );
 }

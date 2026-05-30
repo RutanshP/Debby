@@ -61,6 +61,8 @@ class _FakeQuery:
         self.order_field: str | None = None
         self.order_desc: bool = False
         self.limit_n: int | None = None
+        self.range_start: int | None = None
+        self.range_end: int | None = None
 
     def eq(self, field: str, value: Any) -> "_FakeQuery":
         self.filters.append((field, value))
@@ -73,6 +75,11 @@ class _FakeQuery:
 
     def limit(self, n: int) -> "_FakeQuery":
         self.limit_n = n
+        return self
+
+    def range(self, start: int, end: int) -> "_FakeQuery":
+        self.range_start = start
+        self.range_end = end
         return self
 
     def _matches(self, row: dict) -> bool:
@@ -94,7 +101,10 @@ class _FakeQuery:
                     key=lambda r: r.get(self.order_field) or "",
                     reverse=self.order_desc,
                 )
-            if self.limit_n is not None:
+            if self.range_start is not None:
+                end = self.range_end if self.range_end is not None else len(matched) - 1
+                matched = matched[self.range_start : end + 1]
+            elif self.limit_n is not None:
                 matched = matched[: self.limit_n]
             return _FakeResponse(matched)
         if self.op == "update":

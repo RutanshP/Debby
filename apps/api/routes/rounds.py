@@ -71,10 +71,16 @@ async def list_rounds_route(
 @router.get("/rounds/summary", response_model=list[RoundSummary])
 async def list_round_summaries_route(
     limit: int = 25,
+    offset: int = 0,
     user: User = Depends(get_current_user),
 ) -> list[RoundSummary]:
     limit = max(1, min(limit, 100))
-    return await rounds_service.list_round_summaries(user_id=user.id, limit=limit)
+    offset = max(offset, 0)
+    return await rounds_service.list_round_summaries(
+        user_id=user.id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/rounds/{round_id}", response_model=Round)

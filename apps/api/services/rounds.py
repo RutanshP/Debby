@@ -77,9 +77,10 @@ async def list_rounds(user_id: str, limit: int = 25) -> list[Round]:
 
 
 async def list_round_summaries(
-    user_id: str, limit: int = 25
+    user_id: str, limit: int = 25, offset: int = 0
 ) -> list[RoundSummary]:
     client = get_supabase()
+    offset = max(offset, 0)
 
     def _do() -> list[dict[str, Any]]:
         resp = (
@@ -87,7 +88,7 @@ async def list_round_summaries(
             .select(_SUMMARY_COLUMNS)
             .eq("user_id", user_id)
             .order("created_at", desc=True)
-            .limit(limit)
+            .range(offset, offset + limit - 1)
             .execute()
         )
         return list(getattr(resp, "data", None) or [])
