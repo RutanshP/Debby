@@ -53,17 +53,19 @@ _PARLI_OUTPUT_RULES = (
     "- Do not output the raw template or bracketed instructions.\n"
     "- Start with a heading naming the side and topic.\n"
     "- Include round type, weighing mechanism, and definitions/background.\n"
+    "- Definitions must be operational and concrete. If the resolution uses terms like significantly increase, substantially increase, reduce, expand, restrict, or prioritize, define them with a measurable threshold such as a percentage, dollar amount, legal standard, or scope limit.\n"
     "- If the topic is policy-oriented, include a plan text or counterplan when appropriate, plus solvency.\n"
+    "- Plan text must be specific enough to implement. If the plan increases funding, name the amount or percentage increase, identify the funding recipient, and explain why that amount is greater than the status quo baseline. Do not use Normal Ways and Means as a substitute for an amount when the resolution asks to increase funding.\n"
     "- For complex parliamentary topics, write 2-3 contentions/advantages using this TULI structure:\n"
     "  - **Tagline:** one strategic sentence naming the contention.\n"
-    "  - **Uniqueness:** multiple bullet points or U1/U2/U3 sub-uniquenesses. For AFF policy cases, prove the status quo harm exists now and is bad enough to justify the plan. For NEG policy cases, prove the status quo has good things worth preserving, such as innovation, stability, jobs, effective institutions, markets, deterrence, diplomacy, or existing reforms.\n"
+    "  - **Uniqueness:** multiple U1/U2/U3 sub-uniquenesses. Each U point must have a short claim/tagline followed by 2-4 evidence bullets underneath it. Those evidence bullets must include concrete statistics, named institutions, recent events, comparative baselines, rankings, percentages, dollar figures, or clearly labeled analytical warrants. For AFF policy cases, prove the status quo harm exists now and is bad enough to justify the plan. For NEG policy cases, prove the status quo has good things worth preserving, such as innovation, stability, jobs, effective institutions, markets, deterrence, diplomacy, or existing reforms.\n"
     "  - **Links:** multiple L1/L2 link chains. For AFF policy cases, explain how the plan directly solves the uniqueness harm. For NEG policy cases, explain how the AFF plan destroys, weakens, trades off with, or creates a disadvantage to the good status quo conditions from uniqueness.\n"
     "  - **Internal Links:** 2-4 downstream causal steps from the solved harm to the terminal impact. Example: homework increases stress; stress causes worse sleep, mental health decline, lower retention, and family conflict.\n"
     "  - **Impacts:** terminal impact plus magnitude, probability, timeframe, and weighing.\n"
     "- For NEG disadvantages, model the structure as: U1/U2 good status quo conditions -> L1/L2 ways AFF disrupts them -> internal links -> terminal impact.\n"
     "- If NEG runs a counterplan, include a short counterplan text, solvency, and optionally one CP advantage. The CP advantage can use AFF-style links showing how the counterplan solves a harm, but keep it logically consistent with the disadvantages against AFF.\n"
     "- For simple topics, each contention may use **Claim**, **Warrant**, and **Impact** instead.\n"
-    "- Make the case more developed than a drill prompt: include specific mechanisms, examples, and quantitative estimates when reasonable, but do not fabricate exact citations.\n"
+    "- Make the case more developed than a drill prompt: include specific mechanisms, examples, and quantitative estimates when reasonable, but do not fabricate exact citations. If you are uncertain about an exact statistic, use a qualified estimate or cite the type of source instead of inventing precision.\n"
 )
 
 _PARLI_AFF_USER = (

@@ -66,6 +66,10 @@ async def test_make_case_instructs_complex_parli_tuli():
     assert "AFF plan destroys" in user_prompt
     assert "counterplan" in user_prompt
     assert "logically consistent" in user_prompt
+    assert "operational and concrete" in user_prompt
+    assert "status quo baseline" in user_prompt
+    assert "Each U point must have" in user_prompt
+    assert "2-4 evidence bullets" in user_prompt
 
 
 @pytest.mark.parametrize("side", ["aff", "neg"])
