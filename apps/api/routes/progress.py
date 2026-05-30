@@ -19,6 +19,7 @@ router = APIRouter(tags=["progress"])
 async def progress_summary_route(
     round_limit: int = 100,
     drill_limit: int = 100,
+    include_insights: bool = False,
     user: User = Depends(get_current_user),
 ) -> ProgressSummary:
     round_limit = max(1, min(round_limit, 100))
@@ -33,14 +34,16 @@ async def progress_summary_route(
         user.id,
         drill_limit,
     )
-    insights_task = insights_service.get_cached_insights(user.id)
-
-    rounds, drill_rows, insights = await asyncio.gather(
+    rounds, drill_rows = await asyncio.gather(
         rounds_task,
         drill_rows_task,
-        insights_task,
     )
     drill_summaries = [_row_to_drill_summary(row) for row in drill_rows]
+    insights = (
+        await insights_service.get_cached_insights(user.id)
+        if include_insights
+        else None
+    )
 
     return ProgressSummary(
         rounds=rounds,

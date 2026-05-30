@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { refreshInsights, type SpeechInsightsResponse } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { getInsights, refreshInsights, type SpeechInsightsResponse } from "@/lib/api";
 
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
@@ -22,8 +22,39 @@ export function SpeechInsightsCard({
   initial: SpeechInsightsResponse | null;
 }) {
   const [data, setData] = useState<SpeechInsightsResponse | null>(initial);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(initial === null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initial) return;
+
+    let cancelled = false;
+
+    async function loadCachedInsights() {
+      setLoading(true);
+      setError(null);
+      try {
+        const cached = await getInsights();
+        if (!cancelled) {
+          setData(cached);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load insights.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadCachedInsights();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initial]);
 
   const refresh = async () => {
     setLoading(true);
@@ -44,7 +75,9 @@ export function SpeechInsightsCard({
         <p className="text-xs text-slate-500">
           {data
             ? `${data.rounds_covered} rounds analyzed · updated ${relativeTime(data.generated_at)}`
-            : "Not generated yet."}
+            : loading
+              ? "Loading insights..."
+              : "Not generated yet."}
         </p>
         <button
           type="button"
@@ -52,7 +85,7 @@ export function SpeechInsightsCard({
           disabled={loading}
           className="inline-flex h-9 items-center justify-center rounded-md border border-teal px-3 text-xs font-medium text-teal transition hover:bg-teal/5 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? "Generating…" : data ? "Refresh insights" : "Generate insights"}
+          {loading ? "Loading..." : data ? "Refresh insights" : "Generate insights"}
         </button>
       </div>
 
