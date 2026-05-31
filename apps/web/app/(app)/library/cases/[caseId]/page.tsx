@@ -62,7 +62,7 @@ function NotFound() {
         href="/library?tab=cases"
         className="mb-4 inline-flex text-sm font-medium text-teal transition hover:text-teal-dark"
       >
-        Back to Library
+        Back to cases
       </Link>
       <div className="rounded-md border border-slate-200 bg-white p-6 text-sm text-slate-500">
         Saved case not found.
@@ -105,7 +105,7 @@ export default async function SavedCasePage({ params }: PageProps) {
           href="/library?tab=cases"
           className="mb-4 inline-flex text-sm font-medium text-teal transition hover:text-teal-dark"
         >
-          Back to Library
+          Back to cases
         </Link>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
