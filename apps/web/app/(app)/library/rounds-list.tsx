@@ -139,7 +139,7 @@ export function HistoryList({ rounds, pageSize = 20 }: HistoryListProps) {
           return (
             <li key={r.id}>
               <Link
-                href={`/history/${r.id}`}
+                href={`/library/rounds/${r.id}`}
                 className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal/50 hover:shadow"
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

@@ -71,7 +71,7 @@ interface PageProps {
 function NotFound() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <h1 className="mb-4 text-2xl font-semibold text-slate-800">History</h1>
+      <h1 className="mb-4 text-2xl font-semibold text-slate-800">Library</h1>
       <div className="rounded-md border border-slate-200 bg-white p-6 text-sm text-slate-500">
         Round not found.
       </div>
@@ -181,7 +181,7 @@ function HighlightedTranscript({ text }: { text: string }) {
   );
 }
 
-export default async function HistoryDetailPage({ params }: PageProps) {
+export default async function RoundDetailPage({ params }: PageProps) {
   const { roundId } = await params;
 
   const cookieStore = await Promise.resolve(cookies());
@@ -215,10 +215,10 @@ export default async function HistoryDetailPage({ params }: PageProps) {
     <main className="mx-auto max-w-4xl space-y-8 px-4 py-10">
       <header>
         <Link
-          href="/history"
+          href="/library?tab=rounds"
           className="mb-4 inline-flex text-sm font-medium text-teal transition hover:text-teal-dark"
         >
-          ← Back to history
+          Back to rounds
         </Link>
         <h1 className="text-2xl font-semibold text-teal-dark">{round.topic}</h1>
         <p className="mt-1 text-sm text-slate-500">

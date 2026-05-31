@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { getServerSupabase } from "@/lib/supabase";
-import { HistoryList, type HistoryRound } from "../history/history-list";
 import { LibraryTabs, type LibraryTab } from "./library-tabs";
+import { HistoryList, type HistoryRound } from "./rounds-list";
 import { SavedCasesList, type SavedCaseSummary } from "./saved-cases-list";
 
 const API_BASE_URL =

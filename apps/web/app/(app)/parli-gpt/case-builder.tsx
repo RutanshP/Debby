@@ -76,12 +76,14 @@ export default function CaseBuilder() {
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
 
   async function handleGenerate() {
     setLoading(true);
     setError(null);
     setSaveMessage(null);
     setSaveError(null);
+    setSavedCaseId(null);
     setCaseText("");
     try {
       const data = await apiFetch<CaseResponse>("/api/cases", {
@@ -107,6 +109,7 @@ export default function CaseBuilder() {
     setError(null);
     setSaveMessage(null);
     setSaveError(null);
+    setSavedCaseId(null);
     setCaseText("");
     try {
       const data = await apiFetch<RandomCaseResponse>("/api/cases/random", {
@@ -130,7 +133,7 @@ export default function CaseBuilder() {
   }
 
   async function handleSaveCase() {
-    if (!caseText.trim()) return;
+    if (!caseText.trim() || savedCaseId) return;
     setSaving(true);
     setSaveMessage(null);
     setSaveError(null);
@@ -146,6 +149,7 @@ export default function CaseBuilder() {
           content: caseText,
         }),
       });
+      setSavedCaseId(saved.id);
       setSaveMessage(`Saved to Library.`);
       window.history.replaceState(null, "", `/parli-gpt?saved=${saved.id}`);
     } catch (err) {
@@ -278,10 +282,10 @@ export default function CaseBuilder() {
                 <button
                   type="button"
                   onClick={handleSaveCase}
-                  disabled={saving}
+                  disabled={saving || Boolean(savedCaseId)}
                   className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:border-teal-600 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {saving ? "Saving..." : "Save to Library"}
+                  {savedCaseId ? "Saved to Library" : saving ? "Saving..." : "Save to Library"}
                 </button>
                 <button
                   type="button"

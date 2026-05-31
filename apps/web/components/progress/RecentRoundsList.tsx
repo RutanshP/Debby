@@ -36,7 +36,7 @@ export function RecentRoundsList({ rounds }: { rounds: ProgressRound[] }) {
         return (
           <li key={r.id}>
             <Link
-              href={`/history/${r.id}`}
+              href={`/library/rounds/${r.id}`}
               className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm transition hover:border-teal/50 hover:shadow-sm"
             >
               <div className="min-w-0 flex-1">

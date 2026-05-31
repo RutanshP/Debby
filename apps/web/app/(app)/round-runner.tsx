@@ -1035,10 +1035,10 @@ export function RoundRunner() {
                 />
                 {roundId && (
                   <a
-                    href={`/history/${roundId}`}
+                    href={`/library/rounds/${roundId}`}
                     className="text-sm text-teal underline"
                   >
-                    round saved as /history/{roundId}
+                    round saved in Library
                   </a>
                 )}
                 <button

@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { render, screen } from "@testing-library/react";
-import { HistoryList, type HistoryRound } from "@/app/(app)/history/history-list";
+import { HistoryList, type HistoryRound } from "@/app/(app)/library/rounds-list";
 
 jest.mock("next/headers", () => ({ cookies: jest.fn() }));
 jest.mock("@/lib/supabase", () => ({ getServerSupabase: jest.fn() }));
@@ -71,7 +71,7 @@ describe("HistoryPage (server component) — list view", () => {
   });
 
   async function loadPage() {
-    return import("@/app/(app)/history/page");
+    return import("@/app/(app)/library/page");
   }
 
   it("calls /api/rounds with the user's bearer token", async () => {
@@ -99,7 +99,7 @@ describe("HistoryPage (server component) — list view", () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { default: Page } = await loadPage();
-    const element = await Page();
+    const element = await Page({ searchParams: Promise.resolve({ tab: "rounds" }) });
     render(element);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -130,7 +130,7 @@ describe("HistoryPage (server component) — list view", () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { default: Page } = await loadPage();
-    render(await Page());
+    render(await Page({ searchParams: Promise.resolve({ tab: "rounds" }) }));
 
     expect(screen.getByText(/no rounds yet/i)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -143,7 +143,7 @@ describe("HistoryDetailPage (server component)", () => {
   });
 
   async function loadPage() {
-    return import("@/app/(app)/history/[roundId]/page");
+    return import("@/app/(app)/library/rounds/[roundId]/page");
   }
 
   function withSession(token: string | null) {

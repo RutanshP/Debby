@@ -379,12 +379,12 @@ describe("RoundRunner", () => {
     expect(screen.queryByText("Econ")).not.toBeInTheDocument();
     expect(screen.queryByText("growth good")).not.toBeInTheDocument();
     expect(screen.queryByText("Env")).not.toBeInTheDocument();
-    expect(screen.getByText(/round saved as \/history\/r1/)).toBeInTheDocument();
+    expect(screen.getByText(/round saved in library/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /practice again/i }));
 
     expect(screen.getByRole("button", { name: /get topic/i })).toBeEnabled();
     expect(screen.queryByText("Aff wins because of clear impact comparison.")).not.toBeInTheDocument();
-    expect(screen.queryByText(/round saved as \/history\/r1/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/round saved in library/i)).not.toBeInTheDocument();
   });
 });

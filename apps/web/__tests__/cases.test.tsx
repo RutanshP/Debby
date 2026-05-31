@@ -92,7 +92,10 @@ describe("CaseBuilder", () => {
       side: "aff",
       content: "# My Case\nContent.",
     });
-    expect(await screen.findByText(/saved to library/i)).toBeInTheDocument();
+    const savedButton = await screen.findByRole("button", {
+      name: /saved to library/i,
+    });
+    expect(savedButton).toBeDisabled();
   });
 
   it("Random button calls /api/cases/random and populates topic", async () => {
