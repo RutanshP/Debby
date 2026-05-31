@@ -9,6 +9,7 @@ type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
 
 const TOPIC_WORD_LIMIT = 100;
+const SAVED_CASE_TITLE_LIMIT = 240;
 
 interface CaseResponse {
   case: string;
@@ -70,6 +71,20 @@ function filenamePart(value: string): string {
 
 function countWords(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function truncateTitle(value: string): string {
+  const title = value.trim();
+  if (title.length <= SAVED_CASE_TITLE_LIMIT) return title;
+  return `${title.slice(0, SAVED_CASE_TITLE_LIMIT - 3).trimEnd()}...`;
+}
+
+function titleFromGeneratedCase(markdown: string): string | null {
+  const heading = markdown
+    .split(/\r?\n/)
+    .map((line) => line.match(/^#{1,3}\s+(.+)$/)?.[1]?.trim())
+    .find(Boolean);
+  return heading ? truncateTitle(heading) : null;
 }
 
 export default function CaseBuilder() {
@@ -152,7 +167,11 @@ export default function CaseBuilder() {
     setSaveMessage(null);
     setSaveError(null);
     try {
-      const title = `${side === "aff" ? "Affirmative" : "Negative"} Case: ${topic.trim() || "Untitled topic"}`;
+      const title =
+        titleFromGeneratedCase(caseText) ??
+        truncateTitle(
+          `${side === "aff" ? "Affirmative" : "Negative"} Case: ${topic.trim() || "Untitled topic"}`,
+        );
       const saved = await apiFetch<SavedCaseResponse>("/api/saved-cases", {
         method: "POST",
         body: JSON.stringify({

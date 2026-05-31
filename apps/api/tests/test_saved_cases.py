@@ -167,6 +167,32 @@ def test_create_saved_case_scopes_to_user(
     assert fake_supabase.tables["saved_cases"].rows[0]["user_id"] == USER_A.id
 
 
+def test_create_saved_case_truncates_long_title(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+) -> None:
+    long_topic = (
+        "The Federal Constitutional Court of Germany should ban AfD. Info Slide: "
+        "AfD is a far-right political party currently holding seats in parliament."
+    )
+    resp = client.post(
+        "/api/saved-cases",
+        json={
+            "title": "Affirmative Case: " + ("x" * 300),
+            "topic": long_topic,
+            "format": "parli",
+            "side": "aff",
+            "content": "# Case",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    title = resp.json()["title"]
+    assert len(title) == 240
+    assert title.endswith("...")
+    assert fake_supabase.tables["saved_cases"].rows[0]["topic"] == long_topic
+
+
 def test_list_saved_cases_only_returns_owner(
     client: TestClient,
     fake_supabase: _FakeSupabase,
