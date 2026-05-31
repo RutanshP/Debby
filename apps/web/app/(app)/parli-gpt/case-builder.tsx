@@ -18,6 +18,10 @@ interface RandomCaseResponse {
   side: Side;
 }
 
+interface SavedCaseResponse {
+  id: string;
+}
+
 const markdownComponents = {
   h1: ({ children }: { children?: React.ReactNode }) => (
     <h1 className="mb-4 text-2xl font-bold text-teal-800">{children}</h1>
@@ -68,11 +72,16 @@ export default function CaseBuilder() {
   const [side, setSide] = useState<Side>("aff");
   const [caseText, setCaseText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   async function handleGenerate() {
     setLoading(true);
     setError(null);
+    setSaveMessage(null);
+    setSaveError(null);
     setCaseText("");
     try {
       const data = await apiFetch<CaseResponse>("/api/cases", {
@@ -96,6 +105,8 @@ export default function CaseBuilder() {
   async function handleRandom() {
     setLoading(true);
     setError(null);
+    setSaveMessage(null);
+    setSaveError(null);
     setCaseText("");
     try {
       const data = await apiFetch<RandomCaseResponse>("/api/cases/random", {
@@ -118,17 +129,36 @@ export default function CaseBuilder() {
     }
   }
 
-  function handleDownloadMarkdown() {
+  async function handleSaveCase() {
     if (!caseText.trim()) return;
-    const blob = new Blob([caseText], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${filenamePart(topic)}-${format}-${side}.md`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    setSaving(true);
+    setSaveMessage(null);
+    setSaveError(null);
+    try {
+      const title = `${side === "aff" ? "Affirmative" : "Negative"} Case: ${topic.trim() || "Untitled topic"}`;
+      const saved = await apiFetch<SavedCaseResponse>("/api/saved-cases", {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          topic: topic.trim() || "Untitled topic",
+          format,
+          side,
+          content: caseText,
+        }),
+      });
+      setSaveMessage(`Saved to Library.`);
+      window.history.replaceState(null, "", `/parli-gpt?saved=${saved.id}`);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Failed to save case";
+      setSaveError(msg);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handlePrintPdf() {
@@ -247,10 +277,11 @@ export default function CaseBuilder() {
               <div className="case-builder-actions mb-5 flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
-                  onClick={handleDownloadMarkdown}
-                  className="rounded border border-teal-600 px-4 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50"
+                  onClick={handleSaveCase}
+                  disabled={saving}
+                  className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:border-teal-600 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Download .md
+                  {saving ? "Saving..." : "Save to Library"}
                 </button>
                 <button
                   type="button"
@@ -260,6 +291,16 @@ export default function CaseBuilder() {
                   Save PDF
                 </button>
               </div>
+              {saveMessage ? (
+                <p className="case-builder-actions mb-4 text-right text-sm font-medium text-teal-700">
+                  {saveMessage}
+                </p>
+              ) : null}
+              {saveError ? (
+                <p className="case-builder-actions mb-4 text-right text-sm font-medium text-red-600">
+                  {saveError}
+                </p>
+              ) : null}
               <article className="case-print-document">
                 <ReactMarkdown components={markdownComponents}>
                   {caseText}

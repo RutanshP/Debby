@@ -69,6 +69,32 @@ describe("CaseBuilder", () => {
     expect(heading).toBeInTheDocument();
   });
 
+  it("saves a generated case to the Library", async () => {
+    const user = userEvent.setup();
+    mockFetchOnce({ case: "# My Case\nContent." });
+    mockFetchOnce({ id: "case-1" });
+    render(<CaseBuilder />);
+
+    await user.type(screen.getByLabelText(/topic/i), "Topic");
+    await user.click(screen.getByRole("button", { name: /generate/i }));
+
+    await screen.findByRole("heading", { level: 1, name: /my case/i });
+    await user.click(screen.getByRole("button", { name: /save to library/i }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[1];
+    expect(url).toContain("/api/saved-cases");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toMatchObject({
+      title: "Affirmative Case: Topic",
+      topic: "Topic",
+      format: "parli",
+      side: "aff",
+      content: "# My Case\nContent.",
+    });
+    expect(await screen.findByText(/saved to library/i)).toBeInTheDocument();
+  });
+
   it("Random button calls /api/cases/random and populates topic", async () => {
     const user = userEvent.setup();
     mockFetchOnce({

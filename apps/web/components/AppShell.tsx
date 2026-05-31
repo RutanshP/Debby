@@ -8,7 +8,7 @@ const navItems = [
   { href: "/drills", label: "Drills" },
   { href: "/parli-gpt", label: "Case Builder" },
   { href: "/progress", label: "Progress" },
-  { href: "/history", label: "History" },
+  { href: "/library", label: "Library" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
