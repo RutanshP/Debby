@@ -68,6 +68,11 @@ async def test_make_case_instructs_complex_parli_tuli():
     assert "good things worth preserving" in user_prompt
     assert "AFF plan passes" in user_prompt
     assert "counterplan" in user_prompt
+    assert "Mutual exclusivity" in user_prompt
+    assert "MUST be mutually exclusive" in user_prompt
+    assert "cannot happen at the same time" in user_prompt
+    assert "specific legal, procedural, funding, jurisdictional, or implementation conflict" in user_prompt
+    assert "civic education or political education is invalid" in user_prompt
     assert "logically consistent" in user_prompt
     assert "operational and concrete" in user_prompt
     assert "status quo baseline" in user_prompt
