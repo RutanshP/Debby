@@ -108,8 +108,24 @@ async def test_winner_structured_output(patched_client: AsyncMock):
     assert "healthcare" in verdict.rfd
     kwargs = patched_client.await_args.kwargs
     assert kwargs["model"] == "gpt-5.4-mini"
-    assert kwargs["reasoning_effort"] == "medium"
-    assert kwargs["max_completion_tokens"] == 900
+    assert kwargs["reasoning_effort"] == "low"
+    assert kwargs["max_completion_tokens"] == 2000
+
+
+async def test_winner_retries_fallback_model_on_empty_output(
+    patched_client: AsyncMock,
+):
+    patched_client.side_effect = [
+        _chat_completion(""),
+        _chat_completion(json.dumps({"winner_side": "neg", "rfd": "Neg outweighs."})),
+    ]
+
+    verdict = await ai_service.winner("aff", "neg", "aff2", "topic")
+
+    assert verdict.winner_side == "neg"
+    assert patched_client.await_args_list[0].kwargs["model"] == "gpt-5.4-mini"
+    assert patched_client.await_args_list[1].kwargs["model"] == ai_service.MODEL
+    assert patched_client.await_args_list[1].kwargs["max_tokens"] == 900
 
 
 async def test_winner_prompt_allows_nuanced_rfd_and_keeps_it_separate_from_flow(

@@ -15,6 +15,7 @@ from services.openai_client import client
 
 MODEL = "gpt-4o-mini-2024-07-18"
 JUDGE_MODEL = "gpt-5.4-mini"
+JUDGE_FALLBACK_MODEL = MODEL
 
 Side = Literal["aff", "neg"]
 
@@ -511,6 +512,12 @@ _WINNER_SYSTEM = (
 )
 
 
+def _judge_request_options(model: str) -> dict[str, Any]:
+    if model.startswith("gpt-5"):
+        return {"max_completion_tokens": 2000, "reasoning_effort": "low"}
+    return {"max_tokens": 900, "temperature": 0.0}
+
+
 async def winner(
     first_speech_transcription: str,
     against_speech: str,
@@ -528,39 +535,44 @@ async def winner(
             "Both speeches and AI response are required for winner determination!"
         )
 
-    response = await client.chat.completions.create(
-        model=JUDGE_MODEL,
-        max_completion_tokens=900,
-        reasoning_effort="medium",
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": _WINNER_SYSTEM},
-            {
-                "role": "user",
-                "content": (
-                    "Given the following topic: \n" + topic
-                    + "\nand given the following for speech constructive: \n"
-                    + first_speech_transcription
-                    + "\nand given the following against speech: \n"
-                    + against_speech
-                    + "\nand given the following for speech rebuttal: \n"
-                    + second_speech_transcription
-                    + "\nDecide a winner and return JSON: "
-                    "{\"winner_side\": \"aff\" | \"neg\", \"rfd\": \"...\"}. "
-                    "The rfd should explain the decisive clash, qualify the "
-                    "strength of the key refutations, identify any dropped or "
-                    "residual offense, and compare impacts after accounting for "
-                    "partial refutation/residual offense. "
-                    "Put detailed flow information only in the separate flow JSON, "
-                    "not in the RFD. Do not use any contention that is merely a "
-                    "restatement of the topic or that is not actually present in "
-                    "the transcript."
-                ),
-            },
-        ],
-    )
+    messages = [
+        {"role": "system", "content": _WINNER_SYSTEM},
+        {
+            "role": "user",
+            "content": (
+                "Given the following topic: \n" + topic
+                + "\nand given the following for speech constructive: \n"
+                + first_speech_transcription
+                + "\nand given the following against speech: \n"
+                + against_speech
+                + "\nand given the following for speech rebuttal: \n"
+                + second_speech_transcription
+                + "\nDecide a winner and return JSON: "
+                "{\"winner_side\": \"aff\" | \"neg\", \"rfd\": \"...\"}. "
+                "The rfd should explain the decisive clash, qualify the "
+                "strength of the key refutations, identify any dropped or "
+                "residual offense, and compare impacts after accounting for "
+                "partial refutation/residual offense. "
+                "Put detailed flow information only in the separate flow JSON, "
+                "not in the RFD. Do not use any contention that is merely a "
+                "restatement of the topic or that is not actually present in "
+                "the transcript."
+            ),
+        },
+    ]
 
-    raw = response.choices[0].message.content or ""
+    raw = ""
+    for model in (JUDGE_MODEL, JUDGE_FALLBACK_MODEL):
+        response = await client.chat.completions.create(
+            model=model,
+            **_judge_request_options(model),
+            response_format={"type": "json_object"},
+            messages=messages,
+        )
+        raw = response.choices[0].message.content or ""
+        if raw.strip():
+            break
+
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
