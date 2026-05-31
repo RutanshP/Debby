@@ -73,10 +73,17 @@ async def test_make_case_instructs_complex_parli_tuli():
     assert "status quo baseline" in user_prompt
     assert "Each U point must have" in user_prompt
     assert "at least 4 evidence bullets" in user_prompt
-    assert "using `->`" in user_prompt
+    assert "Use the arrow symbol `→`" in user_prompt
+    assert "L1 short name" in user_prompt
+    assert "- IL1 - label" in user_prompt
     assert "Do not use Claim/Warrant/Impact headings" in user_prompt
     assert "For Parli fact rounds, use Claim/Warrant/Impact" in user_prompt
     assert "around 5 words" in user_prompt
+    assert "Make 3 contentions if" in user_prompt
+    assert "directly support the overall contention" in user_prompt
+    assert "Under each evidence bullet, add logical reasoning" in user_prompt
+    assert "one event can create several downstream consequences" in user_prompt
+    assert "dense casefile-style impact paragraphs" in user_prompt
 
 
 @pytest.mark.parametrize("side", ["aff", "neg"])
