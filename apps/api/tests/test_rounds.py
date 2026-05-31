@@ -213,6 +213,20 @@ def test_create_round_writes_user_id(
     assert stored[0]["user_id"] == auth_user_a.id
 
 
+def test_create_round_rejects_topics_over_100_words(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+    auth_user_a: _FakeUser,
+) -> None:
+    topic = " ".join(f"word{i}" for i in range(101))
+    resp = client.post(
+        "/api/rounds",
+        json={"format": "parli", "topic": topic, "side": "aff"},
+    )
+    assert resp.status_code == 422
+    assert fake_supabase.tables.get("rounds") is None
+
+
 def test_list_rounds_only_returns_caller_rows(
     client: TestClient,
     fake_supabase: _FakeSupabase,

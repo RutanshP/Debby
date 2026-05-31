@@ -12,6 +12,8 @@ import { WpmChart, type WpmPoint } from "../../components/WpmChart";
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
 
+const TOPIC_WORD_LIMIT = 100;
+
 interface TopicResponse {
   topic: string;
   side: Side;
@@ -66,6 +68,10 @@ const SIDE_LABEL: Record<Side, string> = {
   aff: "Affirmative",
   neg: "Negative",
 };
+
+function countWords(value: string): number {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
 
 function winnerLabel(
   winner: Side | null | undefined,
@@ -173,6 +179,8 @@ export function RoundRunner() {
   const judgmentPromiseRef = useRef<Promise<JudgmentResponse> | null>(null);
   const userSide = topic?.side ?? "aff";
   const userIsAff = userSide === "aff";
+  const customTopicWordCount = countWords(customTopic);
+  const customTopicTooLong = customTopicWordCount > TOPIC_WORD_LIMIT;
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -225,13 +233,17 @@ export function RoundRunner() {
       setTopicError("Enter a custom topic first.");
       return;
     }
+    if (customTopicTooLong) {
+      setTopicError(`Custom topics must be ${TOPIC_WORD_LIMIT} words or fewer.`);
+      return;
+    }
     setTopicError(null);
     setTopic({
       topic: trimmed,
       side: customSide,
       format,
     });
-  }, [customSide, customTopic, format]);
+  }, [customSide, customTopic, customTopicTooLong, format]);
 
   const handleAcceptTopic = useCallback(async () => {
     if (!topic) return;
@@ -728,6 +740,24 @@ export function RoundRunner() {
                   placeholder="Enter your own topic..."
                   className={fieldControlClass}
                 />
+                <div className="flex justify-between text-xs font-normal">
+                  {customTopicTooLong ? (
+                    <span className="text-red-600">
+                      Topics must be {TOPIC_WORD_LIMIT} words or fewer.
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">
+                      {TOPIC_WORD_LIMIT - customTopicWordCount} words left
+                    </span>
+                  )}
+                  <span
+                    className={
+                      customTopicTooLong ? "text-red-600" : "text-slate-400"
+                    }
+                  >
+                    {customTopicWordCount}/{TOPIC_WORD_LIMIT}
+                  </span>
+                </div>
               </label>
               <label className={fieldLabelClass}>
                 Your side
@@ -745,7 +775,7 @@ export function RoundRunner() {
               <button
                 type="button"
                 onClick={handleUseCustomTopic}
-                disabled={step > 1 || !customTopic.trim()}
+                disabled={step > 1 || !customTopic.trim() || customTopicTooLong}
                 className={secondaryButtonClass}
               >
                 Use custom topic

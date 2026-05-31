@@ -8,6 +8,8 @@ import { apiFetch, ApiError } from "@/lib/api";
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
 
+const TOPIC_WORD_LIMIT = 100;
+
 interface CaseResponse {
   case: string;
 }
@@ -66,6 +68,10 @@ function filenamePart(value: string): string {
   );
 }
 
+function countWords(value: string): number {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
 export default function CaseBuilder() {
   const [format, setFormat] = useState<Format>("parli");
   const [topic, setTopic] = useState("");
@@ -77,8 +83,16 @@ export default function CaseBuilder() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
+  const topicWordCount = countWords(topic);
+  const topicTooLong = topicWordCount > TOPIC_WORD_LIMIT;
 
   async function handleGenerate() {
+    const trimmedTopic = topic.trim();
+    if (!trimmedTopic) return;
+    if (topicTooLong) {
+      setError(`Topics must be ${TOPIC_WORD_LIMIT} words or fewer.`);
+      return;
+    }
     setLoading(true);
     setError(null);
     setSaveMessage(null);
@@ -88,7 +102,7 @@ export default function CaseBuilder() {
     try {
       const data = await apiFetch<CaseResponse>("/api/cases", {
         method: "POST",
-        body: JSON.stringify({ format, topic, side }),
+        body: JSON.stringify({ format, topic: trimmedTopic, side }),
       });
       setCaseText(data.case);
     } catch (err) {
@@ -218,6 +232,20 @@ export default function CaseBuilder() {
                 placeholder="Enter a topic..."
                 className="w-full rounded border border-slate-300 px-2 py-1.5"
               />
+              <div className="mt-1 flex justify-between text-xs">
+                {topicTooLong ? (
+                  <span className="text-red-600">
+                    Topics must be {TOPIC_WORD_LIMIT} words or fewer.
+                  </span>
+                ) : (
+                  <span className="text-slate-500">
+                    {TOPIC_WORD_LIMIT - topicWordCount} words left
+                  </span>
+                )}
+                <span className={topicTooLong ? "text-red-600" : "text-slate-400"}>
+                  {topicWordCount}/{TOPIC_WORD_LIMIT}
+                </span>
+              </div>
             </div>
 
             <div>
@@ -241,7 +269,7 @@ export default function CaseBuilder() {
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={loading || !topic.trim()}
+              disabled={loading || !topic.trim() || topicTooLong}
               className="h-10 rounded bg-teal-600 px-5 font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Generate

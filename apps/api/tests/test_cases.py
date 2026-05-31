@@ -138,6 +138,17 @@ def test_create_case_happy_parli(authed):
     assert r.json() == {"case": "# CASE"}
 
 
+def test_create_case_rejects_topics_over_100_words(authed):
+    topic = " ".join(f"word{i}" for i in range(101))
+    mock = AsyncMock(return_value=_mock_completion("# CASE"))
+    with patch.object(cases_service.client.chat.completions, "create", mock):
+        r = client.post(
+            "/api/cases", json={"format": "parli", "topic": topic, "side": "aff"}
+        )
+    assert r.status_code == 422
+    assert mock.await_count == 0
+
+
 def test_create_case_happy_mspdp(authed):
     mock = AsyncMock(return_value=_mock_completion("# CASE"))
     with patch.object(cases_service.client.chat.completions, "create", mock):

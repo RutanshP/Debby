@@ -8,9 +8,14 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from deps.auth import User, get_current_user
+from models.topic_limits import (
+    MAX_TOPIC_WORDS,
+    count_topic_words,
+    validate_topic_word_limit,
+)
 from services.cases import make_case, make_mspdp_case
 
 router = APIRouter(prefix="/cases", tags=["cases"])
@@ -35,6 +40,11 @@ class CaseRequest(BaseModel):
     format: Format
     topic: str = Field(min_length=1)
     side: Side
+
+    @field_validator("topic")
+    @classmethod
+    def topic_must_not_exceed_word_limit(cls, value: str) -> str:
+        return validate_topic_word_limit(value)
 
 
 class CaseResponse(BaseModel):
@@ -70,7 +80,10 @@ def _random_topic(fmt: Format) -> str:
     except (OSError, UnicodeDecodeError):
         rows = []
 
-    pool = rows or (_PARLI_FALLBACK if fmt == "parli" else _MSPDP_FALLBACK)
+    limited_rows = [
+        topic for topic in rows if count_topic_words(topic) <= MAX_TOPIC_WORDS
+    ]
+    pool = limited_rows or (_PARLI_FALLBACK if fmt == "parli" else _MSPDP_FALLBACK)
     return random.choice(pool)
 
 

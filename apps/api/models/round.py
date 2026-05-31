@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from models.topic_limits import validate_topic_word_limit
 
 
 Format = Literal["parli", "mspdp"]
@@ -73,6 +75,11 @@ class CreateRoundRequest(BaseModel):
     format: Format
     topic: str = Field(min_length=1)
     side: Side
+
+    @field_validator("topic")
+    @classmethod
+    def topic_must_not_exceed_word_limit(cls, value: str) -> str:
+        return validate_topic_word_limit(value)
 
 
 class SpeechResponse(BaseModel):
