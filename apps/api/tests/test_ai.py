@@ -106,9 +106,13 @@ async def test_winner_structured_output(patched_client: AsyncMock):
     verdict = await ai_service.winner("aff", "neg", "aff2", "topic")
     assert verdict.winner_side == "aff"
     assert "healthcare" in verdict.rfd
+    kwargs = patched_client.await_args.kwargs
+    assert kwargs["model"] == "gpt-5.4-mini"
+    assert kwargs["reasoning_effort"] == "medium"
+    assert kwargs["max_completion_tokens"] == 900
 
 
-async def test_winner_prompt_keeps_rfd_short_and_separate_from_flow(
+async def test_winner_prompt_allows_nuanced_rfd_and_keeps_it_separate_from_flow(
     patched_client: AsyncMock,
 ):
     patched_client.return_value = _chat_completion(
@@ -124,10 +128,19 @@ async def test_winner_prompt_keeps_rfd_short_and_separate_from_flow(
     system_prompt = patched_client.await_args.kwargs["messages"][0]["content"]
     user_prompt = patched_client.await_args.kwargs["messages"][1]["content"]
     assert "not a flow sheet" in system_prompt
-    assert "under 90 words" in system_prompt
+    assert "under 220 words" in system_prompt
+    assert "Refutation quality" in system_prompt
+    assert "Dropped/residual offense" in system_prompt
     assert "Merely repeating" in system_prompt
     assert "Do not infer, repair, or invent" in system_prompt
+    assert "not an automatic win" in system_prompt
+    assert "partially refutes" in system_prompt
+    assert "remaining offense" in system_prompt
+    assert "probability and warranting" in system_prompt
     assert "not in the RFD" in user_prompt
+    assert "qualify the strength of the key refutations" in user_prompt
+    assert "dropped or residual offense" in user_prompt
+    assert "partial refutation/residual offense" in user_prompt
 
 
 async def test_winner_prompt_disallows_incoherent_aff_win(
@@ -206,6 +219,34 @@ async def test_generate_round_flow_returns_model(patched_client: AsyncMock):
     assert len(flow.neg_sheet) == 1
     assert flow.ballot.winner == "neg"
     assert flow.recommended_drills == ["rebuttal", "impact"]
+
+
+async def test_flow_prompt_requires_nuanced_refutation_and_weighing(
+    patched_client: AsyncMock,
+):
+    payload = {
+        "aff_sheet": [],
+        "neg_sheet": [],
+        "ballot": {
+            "aff_unrefuted": 0,
+            "neg_unrefuted": 0,
+            "winner": "aff",
+            "explanation": "Aff retains residual offense.",
+        },
+        "dropped": [],
+        "voters": [],
+        "recommended_drills": ["impact"],
+    }
+    patched_client.return_value = _chat_completion(json.dumps(payload))
+
+    await ai_service.generate_round_flow("topic", "aff", "neg", "aff2", "rfd")
+
+    system_prompt = patched_client.await_args.kwargs["messages"][0]["content"]
+    assert "partially refutes" in system_prompt
+    assert "residual offense" in system_prompt
+    assert "not treat dropped arguments as automatic winners" in system_prompt
+    assert "probability and warranting" in system_prompt
+    assert "do not decide only by counting unrefuted contentions" in system_prompt
 
 
 async def test_generate_round_flow_accepts_legacy_loose_strings(patched_client: AsyncMock):

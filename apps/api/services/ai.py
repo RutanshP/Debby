@@ -14,6 +14,7 @@ from models.flow import FlowBallot, WinnerVerdict
 from services.openai_client import client
 
 MODEL = "gpt-4o-mini-2024-07-18"
+JUDGE_MODEL = "gpt-5.4-mini"
 
 Side = Literal["aff", "neg"]
 
@@ -474,9 +475,10 @@ _WINNER_SYSTEM = (
     "Return JSON with two keys: winner_side (either \"aff\" or \"neg\") and "
     "rfd (the reason for decision text). The RFD is not a flow sheet. Do not "
     "include the full flow, every contention, aff_sheet, neg_sheet, or a "
-    "speech-by-speech recap. Keep it concise and readable with exactly three "
-    "short labeled lines: 'Winning contention: ...', 'Why it won: ...', and "
-    "'Impact comparison: ...'. Total RFD length must be under 90 words. "
+    "speech-by-speech recap. Give a qualified, nuanced decision in 4-5 short "
+    "labeled lines: 'Decision: ...', 'Key clash: ...', 'Refutation quality: ...', "
+    "'Impact weighing: ...', and optional 'Dropped/residual offense: ...'. "
+    "Total RFD length must be under 220 words. "
     "Before deciding, check whether each side made at least one topical, "
     "judgeable contention. A judgeable contention must contain a claim plus "
     "some warrant, reason, mechanism, evidence, or impact. Merely repeating "
@@ -488,15 +490,24 @@ _WINNER_SYSTEM = (
     "on case offense or dropped arguments. If both sides are incoherent or "
     "off-topic, return winner_side \"neg\" only as the procedural default and "
     "make the RFD say that no side made a judgeable topical argument. "
-    "Criteria: First, if the negation did not fully refute all of the "
-    "affirmation's points, the affirmation should win. Second, there must be "
-    "evidence-based warranting for each point — statistics, link chains, "
-    "examples, or quotes from academia. If no evidence, weigh the point less "
-    "unless it has solid logical backing. Third, no pre-disposed bias for "
-    "either side. Finally, use impact analysis: whichever side provides "
-    "better impacts (measured by how many people they affect — healthcare, "
-    "environment, economy) wins. If neither side provides impacts, default to "
-    "the negation. Either side may bring up impacts implicitly."
+    "Dropped arguments matter, but a dropped contention is not an automatic "
+    "win. If a contention flows through, still evaluate its warrant quality, "
+    "link strength, probability, magnitude, timeframe, and comparison against "
+    "the opponent's offense. A weak dropped argument with tiny or speculative "
+    "impacts can lose to a better-warranted contested argument. Refutation is "
+    "not binary. Evaluate whether each answer fully refutes, partially "
+    "refutes, mitigates, turns, or merely asserts against the original point. "
+    "When a response only partially refutes a contention, preserve the "
+    "remaining offense and weigh the reduced/residual impact. If a response "
+    "claims an impact is possible, such as possible misuse, factor in the "
+    "probability and warranting of that misuse before assigning weight. "
+    "Criteria: There must be evidence-based warranting for each point — "
+    "statistics, link chains, examples, or quotes from academia. If no "
+    "evidence, weigh the point less unless it has solid logical backing. "
+    "No pre-disposed bias for either side. Finally, use impact analysis: "
+    "weigh probability, magnitude, timeframe, reversibility, and directness "
+    "of the link chain. If neither side provides impacts, default to the "
+    "negation. Either side may bring up impacts implicitly."
 )
 
 
@@ -518,9 +529,9 @@ async def winner(
         )
 
     response = await client.chat.completions.create(
-        model=MODEL,
-        max_tokens=512,
-        temperature=0.0,
+        model=JUDGE_MODEL,
+        max_completion_tokens=900,
+        reasoning_effort="medium",
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": _WINNER_SYSTEM},
@@ -536,8 +547,10 @@ async def winner(
                     + second_speech_transcription
                     + "\nDecide a winner and return JSON: "
                     "{\"winner_side\": \"aff\" | \"neg\", \"rfd\": \"...\"}. "
-                    "The rfd should only name the contention or impact that won "
-                    "the debate, briefly explain why it won, and compare impacts. "
+                    "The rfd should explain the decisive clash, qualify the "
+                    "strength of the key refutations, identify any dropped or "
+                    "residual offense, and compare impacts after accounting for "
+                    "partial refutation/residual offense. "
                     "Put detailed flow information only in the separate flow JSON, "
                     "not in the RFD. Do not use any contention that is merely a "
                     "restatement of the topic or that is not actually present in "
@@ -592,8 +605,17 @@ _FLOW_SYSTEM = (
     "use an empty array; the app already has fixed wording for missing cells. "
     "tag <= 8 words. summary <= 18 words. status must be unrefuted, refuted, or contested. "
     "Mark a contention unrefuted only when the opposing side did not answer it. "
+    "Use contested when a response partially refutes, mitigates, turns, or weakens "
+    "a contention but leaves residual offense. judge_note must explain the degree "
+    "of refutation and any remaining impact weight. Do not treat dropped arguments "
+    "as automatic winners; still evaluate their warrant quality, link strength, "
+    "probability, magnitude, timeframe, and comparison against opposing offense. "
+    "When a response says an impact is merely possible, such as possible misuse, "
+    "judge_note must account for the probability and warranting of that risk. "
     "ballot has aff_unrefuted, neg_unrefuted, winner, explanation. "
-    "Winner must be the side with more unrefuted contentions; if tied, use impact weighing from the RFD. "
+    "Winner must be based on comparative impact weighing, including dropped arguments, "
+    "partial refutations, residual offense, probability, magnitude, timeframe, and link quality; "
+    "do not decide only by counting unrefuted contentions. "
     "ballot winner must be aff or neg; explanation <= 35 words. "
     "dropped max 4. voters max 3. Each voter winner must be aff or neg. "
     "recommended_drills can only include: rebuttal, impact, contentions, speed, filler. "
