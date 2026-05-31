@@ -124,6 +124,42 @@ describe("RoundRunner", () => {
     expect(url).toContain("tournament=Bargain+Belt");
   });
 
+  test("can start a round from a custom topic without fetching a random topic", async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(tournamentResponse())
+      .mockResolvedValueOnce(jsonResponse({ id: "custom-round" }));
+
+    render(<RoundRunner />);
+
+    fireEvent.change(screen.getByLabelText(/custom topic/i), {
+      target: { value: "Resolved: Cities should ban private cars" },
+    });
+    fireEvent.change(screen.getByLabelText(/custom side/i), {
+      target: { value: "neg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /use custom topic/i }));
+
+    expect(
+      await screen.findByText("Resolved: Cities should ban private cars"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Your side: Negative")).toBeInTheDocument();
+    expect(screen.queryByText(/^Max$/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /accept topic/i }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[1] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toContain("/api/rounds");
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      format: "parli",
+      topic: "Resolved: Cities should ban private cars",
+      side: "neg",
+    });
+  });
+
   test("after recording the aff speech, fetch saves the realtime transcript", async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce(tournamentResponse())

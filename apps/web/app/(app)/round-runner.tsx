@@ -67,10 +67,6 @@ const SIDE_LABEL: Record<Side, string> = {
   neg: "Negative",
 };
 
-function formatDuration(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
 function winnerLabel(
   winner: Side | null | undefined,
   userSide: Side,
@@ -131,6 +127,8 @@ export function RoundRunner() {
   const [tournament, setTournament] = useState<string>("");
   const [tournaments, setTournaments] = useState<string[]>([]);
   const [topic, setTopic] = useState<TopicResponse | null>(null);
+  const [customTopic, setCustomTopic] = useState("");
+  const [customSide, setCustomSide] = useState<Side>("aff");
   const [topicLoading, setTopicLoading] = useState(false);
   const [topicError, setTopicError] = useState<string | null>(null);
   const [roundId, setRoundId] = useState<string | null>(null);
@@ -221,6 +219,20 @@ export function RoundRunner() {
     }
   }, [format, tournament]);
 
+  const handleUseCustomTopic = useCallback(() => {
+    const trimmed = customTopic.trim();
+    if (!trimmed) {
+      setTopicError("Enter a custom topic first.");
+      return;
+    }
+    setTopicError(null);
+    setTopic({
+      topic: trimmed,
+      side: customSide,
+      format,
+    });
+  }, [customSide, customTopic, format]);
+
   const handleAcceptTopic = useCallback(async () => {
     if (!topic) return;
     setTopicError(null);
@@ -277,6 +289,8 @@ export function RoundRunner() {
     judgmentPromiseRef.current = null;
     setStep(1);
     setTopic(null);
+    setCustomTopic("");
+    setCustomSide("aff");
     setTopicError(null);
     setRoundId(null);
     setAffTranscript(null);
@@ -702,6 +716,42 @@ export function RoundRunner() {
             {topicLoading ? "Loading…" : "Get topic"}
             </button>
           </div>
+          <div className="rounded-md border border-slate-200 bg-white p-4">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-end">
+              <label className={fieldLabelClass}>
+                Custom topic
+                <input
+                  aria-label="Custom topic"
+                  value={customTopic}
+                  onChange={(event) => setCustomTopic(event.target.value)}
+                  disabled={step > 1}
+                  placeholder="Enter your own topic..."
+                  className={fieldControlClass}
+                />
+              </label>
+              <label className={fieldLabelClass}>
+                Your side
+                <select
+                  aria-label="Custom side"
+                  value={customSide}
+                  onChange={(event) => setCustomSide(event.target.value as Side)}
+                  disabled={step > 1}
+                  className={fieldControlClass}
+                >
+                  <option value="aff">Affirmative</option>
+                  <option value="neg">Negative</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={handleUseCustomTopic}
+                disabled={step > 1 || !customTopic.trim()}
+                className={secondaryButtonClass}
+              >
+                Use custom topic
+              </button>
+            </div>
+          </div>
           {topicError && <p className="text-sm text-red-600">{topicError}</p>}
           {topic && (
             <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
@@ -1033,14 +1083,6 @@ export function RoundRunner() {
               Speech length
             </div>
           )}
-          <div className="mt-4 rounded-md bg-teal/10 p-4 text-center">
-            <div className="text-xs font-semibold uppercase tracking-wide text-teal-dark">
-              Max
-            </div>
-            <div className="mt-1 text-3xl font-bold text-teal-dark">
-              {formatDuration(speechDurationSeconds)}
-            </div>
-          </div>
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
