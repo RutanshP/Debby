@@ -107,7 +107,7 @@ export function WorkspaceClient() {
               Practice rounds, drills, case builder, progress, and your library.
             </p>
           </div>
-          <Link href="/" className={primaryButtonClass}>
+          <Link href="/practice" className={primaryButtonClass}>
             Go to Debby
           </Link>
         </div>

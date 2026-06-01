@@ -72,7 +72,7 @@ describe("LoginPage", () => {
         password: "longenoughpw",
       }),
     );
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/workspace"));
   });
 
   it("renders the Supabase error message", async () => {
@@ -127,7 +127,7 @@ describe("SignupPage", () => {
         password: "longenoughpw",
       }),
     );
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/workspace"));
   });
 
   it("renders the Supabase error message", async () => {

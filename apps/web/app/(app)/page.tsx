@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { RoundRunner } from "./round-runner";
+import { redirect } from "next/navigation";
 
 export default function HomePage() {
-  return (
-    <Suspense fallback={null}>
-      <RoundRunner />
-    </Suspense>
-  );
+  redirect("/workspace");
 }

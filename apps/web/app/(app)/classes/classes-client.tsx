@@ -72,7 +72,7 @@ function assignmentHref(detail: AssignmentRecipientDetail): string {
   const id = detail.recipient.id;
   return detail.assignment.type === "drill"
     ? `/drills?assignment=${id}`
-    : `/?assignment=${id}`;
+    : `/practice?assignment=${id}`;
 }
 
 export function ClassesClient() {

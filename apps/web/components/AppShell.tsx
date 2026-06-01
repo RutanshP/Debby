@@ -8,7 +8,7 @@ import type { ClassDetail, ClassRole } from "@/lib/classroom";
 import { getBrowserSupabase } from "@/lib/supabase";
 
 const navItems = [
-  { href: "/", label: "Practice" },
+  { href: "/practice", label: "Practice" },
   { href: "/drills", label: "Drills" },
   { href: "/parli-gpt", label: "Case Builder" },
   { href: "/progress", label: "Progress" },
@@ -16,7 +16,6 @@ const navItems = [
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -40,7 +39,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     ...navItems.map((item) => ({
       ...item,
       href: classId
-        ? `${item.href === "/" ? "/" : item.href}?class=${classId}`
+        ? `${item.href}?class=${classId}`
         : item.href,
     })),
   ];
@@ -85,7 +84,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-slate-200 bg-white px-4 py-6 shadow-sm md:flex">
         <div>
           <Link
-            href={inClassWorkspace ? "/workspace" : "/"}
+            href={inClassWorkspace ? "/workspace" : "/practice"}
             className="block px-2 text-xl font-bold text-teal-dark"
           >
             Debby
