@@ -1,27 +1,18 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getBrowserSupabase } from "@/lib/supabase";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <LoginForm />
-    </Suspense>
-  );
+  return <LoginForm />;
 }
 
 function LoginForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestedRedirect = searchParams?.get("redirectTo") ?? "/workspace";
-  const redirectTo = requestedRedirect.startsWith("/classes")
-    ? "/workspace"
-    : requestedRedirect;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -59,7 +50,7 @@ function LoginForm() {
         setFormError(error.message);
         return;
       }
-      router.push(redirectTo);
+      router.push("/workspace");
     } catch {
       setFormError("Something went wrong. Please try again.");
     } finally {

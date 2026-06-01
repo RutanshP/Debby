@@ -1,27 +1,18 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getBrowserSupabase } from "@/lib/supabase";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignupPage() {
-  return (
-    <Suspense fallback={null}>
-      <SignupForm />
-    </Suspense>
-  );
+  return <SignupForm />;
 }
 
 function SignupForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestedRedirect = searchParams?.get("redirectTo") ?? "/workspace";
-  const redirectTo = requestedRedirect.startsWith("/classes")
-    ? "/workspace"
-    : requestedRedirect;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -62,7 +53,7 @@ function SignupForm() {
         return;
       }
       if (data?.session) {
-        router.push(redirectTo);
+        router.push("/workspace");
       } else {
         setInfo("Check your email to confirm your account.");
       }
