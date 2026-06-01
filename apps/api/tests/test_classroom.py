@@ -304,6 +304,63 @@ def test_student_completes_drill_and_coach_sees_result(
     assert assignment["results"][recipient_id]["score"]["score"] == 8
 
 
+def test_standalone_drill_can_complete_matching_assignment(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+) -> None:
+    global CURRENT_USER
+    class_id = _create_class_and_join_student(client)
+    recipient_id = _create_drill_assignment(client, class_id)
+    drill_id = str(uuid.uuid4())
+    fake_supabase.table("drills").rows.append(
+        {
+            "id": drill_id,
+            "user_id": STUDENT.id,
+            "drill_type": "rebuttal",
+            "prompt": {"title": "Rebuttal"},
+            "timer_seconds": 60,
+            "score": {"score": 8, "feedback": "Good clash."},
+        }
+    )
+
+    CURRENT_USER = STUDENT
+    complete = client.post(
+        "/api/assignments/complete-matching-drill",
+        json={"drill_id": drill_id},
+    )
+    assert complete.status_code == 200, complete.text
+    assert complete.json()["recipient"]["id"] == recipient_id
+    assert complete.json()["recipient"]["status"] == "completed"
+
+
+def test_standalone_drill_does_not_complete_non_matching_assignment(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+) -> None:
+    global CURRENT_USER
+    class_id = _create_class_and_join_student(client)
+    _create_drill_assignment(client, class_id)
+    drill_id = str(uuid.uuid4())
+    fake_supabase.table("drills").rows.append(
+        {
+            "id": drill_id,
+            "user_id": STUDENT.id,
+            "drill_type": "impact",
+            "prompt": {"title": "Impact"},
+            "timer_seconds": 60,
+            "score": {"score": 6, "feedback": "Needs weighing."},
+        }
+    )
+
+    CURRENT_USER = STUDENT
+    complete = client.post(
+        "/api/assignments/complete-matching-drill",
+        json={"drill_id": drill_id},
+    )
+    assert complete.status_code == 200, complete.text
+    assert complete.json() is None
+
+
 def test_practice_assignment_start_creates_round_and_complete_links_it(
     client: TestClient,
     fake_supabase: _FakeSupabase,

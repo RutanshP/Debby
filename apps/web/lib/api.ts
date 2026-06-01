@@ -33,7 +33,16 @@ export async function apiFetch<T>(
   const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new ApiError(res.status, text || res.statusText);
+    let message = text || res.statusText;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === "object" && typeof parsed.detail === "string") {
+        message = parsed.detail;
+      }
+    } catch {
+      // Keep the raw response body when it is not JSON.
+    }
+    throw new ApiError(res.status, message);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

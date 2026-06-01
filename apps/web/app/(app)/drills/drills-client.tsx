@@ -278,16 +278,27 @@ export function DrillsClient() {
 
   const completeDrillAssignment = useCallback(
     async (drillId: string | number) => {
-      if (!assignmentRecipientId || assignmentCompleted) return;
-      const detail = await apiFetch<AssignmentRecipientDetail>(
-        `/api/assignments/${assignmentRecipientId}/complete`,
+      if (assignmentRecipientId) {
+        if (assignmentCompleted) return;
+        const detail = await apiFetch<AssignmentRecipientDetail>(
+          `/api/assignments/${assignmentRecipientId}/complete`,
+          {
+            method: "POST",
+            body: JSON.stringify({ drill_id: String(drillId) }),
+          },
+        );
+        setAssignmentDetail(detail);
+        setAssignmentCompleted(detail.recipient.status === "completed");
+        return;
+      }
+
+      await apiFetch<AssignmentRecipientDetail | null>(
+        "/api/assignments/complete-matching-drill",
         {
           method: "POST",
           body: JSON.stringify({ drill_id: String(drillId) }),
         },
       );
-      setAssignmentDetail(detail);
-      setAssignmentCompleted(detail.recipient.status === "completed");
     },
     [assignmentCompleted, assignmentRecipientId],
   );

@@ -103,6 +103,11 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _is_jwt_future_error(exc: Exception) -> bool:
+    message = str(exc)
+    return "JWT issued at future" in message or "PGRST303" in message
+
+
 def _validate_payload(kind: AssignmentType, payload: dict[str, Any]) -> dict[str, Any]:
     if kind == "drill":
         return DrillAssignmentPayload.model_validate(payload).model_dump()
@@ -319,7 +324,12 @@ async def _recipient_detail(recipient_row: dict[str, Any]) -> AssignmentRecipien
 
 
 async def list_user_assignments(*, user_id: str) -> list[AssignmentRecipientDetail]:
-    recipients = await _select(_RECIPIENTS, filters={"user_id": user_id})
+    try:
+        recipients = await _select(_RECIPIENTS, filters={"user_id": user_id})
+    except Exception as exc:
+        if _is_jwt_future_error(exc):
+            return []
+        raise
     recipients.sort(
         key=lambda row: (
             row.get("status") == "completed",
@@ -484,3 +494,57 @@ async def complete_assignment(
         {"status": "completed", "completed_at": _now_iso()},
     )
     return await get_assignment_detail(user_id=user_id, recipient_id=recipient_id)
+
+
+async def complete_matching_drill_assignment(
+    *,
+    user_id: str,
+    drill_id: str,
+) -> AssignmentRecipientDetail | None:
+    drill_rows = await _select("drills", filters={"id": drill_id, "user_id": user_id}, limit=1)
+    if not drill_rows:
+        raise PermissionError("Drill not found for current user")
+
+    drill_row = drill_rows[0]
+    drill_type = drill_row.get("drill_type")
+    timer_seconds = drill_row.get("timer_seconds")
+    if not drill_type or timer_seconds is None:
+        return None
+
+    recipients = await _select(_RECIPIENTS, filters={"user_id": user_id})
+    open_recipients = [
+        row
+        for row in recipients
+        if row.get("status") != "completed"
+    ]
+    open_recipients.sort(key=lambda row: row.get("created_at") or "")
+
+    for recipient_row in open_recipients:
+        existing_submission = await _submission_for_recipient(recipient_row["id"])
+        if existing_submission is not None:
+            continue
+
+        assignment_rows = await _select(
+            _ASSIGNMENTS,
+            filters={"id": recipient_row["assignment_id"], "type": "drill"},
+            limit=1,
+        )
+        if not assignment_rows:
+            continue
+
+        assignment_row = assignment_rows[0]
+        payload = assignment_row.get("payload") or {}
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("drill_type") != drill_type:
+            continue
+        if payload.get("timer_seconds") != timer_seconds:
+            continue
+
+        return await complete_assignment(
+            user_id=user_id,
+            recipient_id=recipient_row["id"],
+            drill_id=drill_id,
+        )
+
+    return None

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import {
   assignmentTypeLabel,
   formatDate,
@@ -36,6 +36,17 @@ const fieldClass =
 const labelClass = "flex flex-col gap-1 text-sm font-medium text-slate-700";
 const primaryButtonClass =
   "inline-flex h-10 items-center justify-center rounded-md bg-teal px-4 text-sm font-medium text-white shadow-sm transition hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-60";
+
+function isTransientAssignmentReadError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  return error.message.includes("JWT issued at future") || error.message.includes("PGRST303");
+}
+
+function dueDateToEndOfDayIso(dateValue: string): string | null {
+  if (!dateValue) return null;
+  const dueDate = new Date(`${dateValue}T23:59:00`);
+  return Number.isNaN(dueDate.getTime()) ? null : dueDate.toISOString();
+}
 
 function payloadSummary(detail: AssignmentRecipientDetail | CoachAssignmentSummary): string {
   const assignment = detail.assignment;
@@ -70,9 +81,10 @@ function resultSummary(result?: Record<string, unknown> | null): string {
 
 function assignmentHref(detail: AssignmentRecipientDetail): string {
   const id = detail.recipient.id;
+  const classId = detail.class_room.id;
   return detail.assignment.type === "drill"
-    ? `/drills?assignment=${id}`
-    : `/practice?assignment=${id}`;
+    ? `/drills?class=${classId}&assignment=${id}`
+    : `/practice?class=${classId}&assignment=${id}`;
 }
 
 export function ClassesClient() {
@@ -113,10 +125,13 @@ export function ClassesClient() {
 
   async function loadBase(nextClassId = selectedClassId) {
     setError(null);
-    const [classRows, assignmentRows] = await Promise.all([
-      apiFetch<ClassListItem[]>("/api/classes"),
-      apiFetch<AssignmentRecipientDetail[]>("/api/assignments"),
-    ]);
+    const classRows = await apiFetch<ClassListItem[]>("/api/classes");
+    let assignmentRows: AssignmentRecipientDetail[] = [];
+    try {
+      assignmentRows = await apiFetch<AssignmentRecipientDetail[]>("/api/assignments");
+    } catch (err) {
+      if (!isTransientAssignmentReadError(err)) throw err;
+    }
     setClasses(classRows);
     setAssignments(assignmentRows);
     if (!nextClassId && classRows.length > 0) {
@@ -142,10 +157,13 @@ export function ClassesClient() {
     async function load() {
       setLoading(true);
       try {
-        const [classRows, assignmentRows] = await Promise.all([
-          apiFetch<ClassListItem[]>("/api/classes"),
-          apiFetch<AssignmentRecipientDetail[]>("/api/assignments"),
-        ]);
+        const classRows = await apiFetch<ClassListItem[]>("/api/classes");
+        let assignmentRows: AssignmentRecipientDetail[] = [];
+        try {
+          assignmentRows = await apiFetch<AssignmentRecipientDetail[]>("/api/assignments");
+        } catch (err) {
+          if (!isTransientAssignmentReadError(err)) throw err;
+        }
         if (ignore) return;
         setClasses(classRows);
         setAssignments(assignmentRows);
@@ -199,7 +217,7 @@ export function ClassesClient() {
           title: title.trim(),
           type,
           payload,
-          due_at: dueAt ? new Date(dueAt).toISOString() : null,
+          due_at: dueDateToEndOfDayIso(dueAt),
           assign_all: assignAll,
           recipient_user_ids: assignAll ? null : selectedRecipients,
         }),
@@ -511,7 +529,7 @@ export function ClassesClient() {
                           <label className={labelClass}>
                             Due date
                             <input
-                              type="datetime-local"
+                              type="date"
                               value={dueAt}
                               onChange={(event) => setDueAt(event.target.value)}
                               className={fieldClass}

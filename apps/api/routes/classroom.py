@@ -15,6 +15,7 @@ from models.classroom import (
     CreateAssignmentRequest,
     CreateClassRequest,
     JoinClassRequest,
+    MatchDrillAssignmentRequest,
     StartAssignmentResponse,
 )
 from services import classroom as classroom_service
@@ -147,6 +148,20 @@ async def complete_assignment_route(
             recipient_id=recipient_id,
             drill_id=body.drill_id,
             round_id=body.round_id,
+        )
+    except Exception as exc:
+        raise _translate_error(exc) from exc
+
+
+@router.post("/assignments/complete-matching-drill", response_model=AssignmentRecipientDetail | None)
+async def complete_matching_drill_assignment_route(
+    body: MatchDrillAssignmentRequest,
+    user: User = Depends(get_current_user),
+) -> AssignmentRecipientDetail | None:
+    try:
+        return await classroom_service.complete_matching_drill_assignment(
+            user_id=user.id,
+            drill_id=body.drill_id,
         )
     except Exception as exc:
         raise _translate_error(exc) from exc

@@ -118,6 +118,10 @@ class CompleteAssignmentRequest(BaseModel):
     round_id: str | None = None
 
 
+class MatchDrillAssignmentRequest(BaseModel):
+    drill_id: str
+
+
 class ClassListItem(BaseModel):
     id: str
     name: str
