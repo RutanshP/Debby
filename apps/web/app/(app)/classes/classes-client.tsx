@@ -590,6 +590,12 @@ export function ClassesClient() {
                           </div>
 
                           <div className="lg:col-span-2">
+                            {competitors.length === 0 && (
+                              <p className="mb-3 text-sm font-medium text-amber-700">
+                                Add at least one competitor with the class code before
+                                creating assignments.
+                              </p>
+                            )}
                             <button
                               type="submit"
                               disabled={savingAssignment || competitors.length === 0}
