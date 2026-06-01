@@ -729,7 +729,7 @@ export function RoundRunner() {
             </button>
           </div>
           <div className="rounded-md border border-slate-200 bg-white p-4">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-end">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-start">
               <label className={fieldLabelClass}>
                 Custom topic
                 <input
@@ -771,12 +771,13 @@ export function RoundRunner() {
                   <option value="aff">Affirmative</option>
                   <option value="neg">Negative</option>
                 </select>
+                <div className="h-4 text-xs font-normal" aria-hidden="true" />
               </label>
               <button
                 type="button"
                 onClick={handleUseCustomTopic}
                 disabled={step > 1 || !customTopic.trim() || customTopicTooLong}
-                className={secondaryButtonClass}
+                className={`${secondaryButtonClass} md:mt-6`}
               >
                 Use custom topic
               </button>

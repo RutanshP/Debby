@@ -217,7 +217,7 @@ export default function CaseBuilder() {
       </h1>
       <div className="space-y-6">
         <section className="case-builder-controls rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-4 lg:grid-cols-[160px_1fr_180px_auto_auto] lg:items-end">
+          <div className="grid gap-4 lg:grid-cols-[160px_1fr_180px_auto_auto] lg:items-start">
             <div>
               <label
                 htmlFor="format"
@@ -229,11 +229,12 @@ export default function CaseBuilder() {
                 id="format"
                 value={format}
                 onChange={(e) => setFormat(e.target.value as Format)}
-                className="w-full rounded border border-slate-300 px-2 py-1.5"
+                className="h-10 w-full rounded border border-slate-300 px-2"
               >
                 <option value="parli">Parli</option>
                 <option value="mspdp">MSPDP</option>
               </select>
+              <div className="mt-1 h-4 text-xs" aria-hidden="true" />
             </div>
 
             <div>
@@ -249,7 +250,7 @@ export default function CaseBuilder() {
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="Enter a topic..."
-                className="w-full rounded border border-slate-300 px-2 py-1.5"
+                className="h-10 w-full rounded border border-slate-300 px-2"
               />
               <div className="mt-1 flex justify-between text-xs">
                 {topicTooLong ? (
@@ -278,18 +279,19 @@ export default function CaseBuilder() {
                 id="side"
                 value={side}
                 onChange={(e) => setSide(e.target.value as Side)}
-                className="w-full rounded border border-slate-300 px-2 py-1.5"
+                className="h-10 w-full rounded border border-slate-300 px-2"
               >
                 <option value="aff">Affirmative</option>
                 <option value="neg">Negation</option>
               </select>
+              <div className="mt-1 h-4 text-xs" aria-hidden="true" />
             </div>
 
             <button
               type="button"
               onClick={handleGenerate}
               disabled={loading || !topic.trim() || topicTooLong}
-              className="h-10 rounded bg-teal-600 px-5 font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 rounded bg-teal-600 px-5 font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 lg:mt-6"
             >
               Generate
             </button>
@@ -297,7 +299,7 @@ export default function CaseBuilder() {
               type="button"
               onClick={handleRandom}
               disabled={loading}
-              className="h-10 rounded border border-teal-600 px-5 font-medium text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 rounded border border-teal-600 px-5 font-medium text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50 lg:mt-6"
             >
               Random topic
             </button>
