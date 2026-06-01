@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { DrillsClient } from "./drills-client";
 
 export const metadata = {
@@ -5,5 +6,9 @@ export const metadata = {
 };
 
 export default function DrillsPage() {
-  return <DrillsClient />;
+  return (
+    <Suspense fallback={null}>
+      <DrillsClient />
+    </Suspense>
+  );
 }

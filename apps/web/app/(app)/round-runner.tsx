@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "../../lib/api";
 import { getBrowserSupabase } from "../../lib/supabase";
 import { RecordButton } from "../../components/RecordButton";
@@ -8,6 +9,12 @@ import { RfdCard } from "../../components/RfdCard";
 import type { RealtimeTranscriptResult } from "../../hooks/useRealtimeTranscription";
 import type { FlowSheetData } from "../../components/FlowSheet";
 import { WpmChart, type WpmPoint } from "../../components/WpmChart";
+import {
+  isPracticePayload,
+  statusLabel,
+  type AssignmentRecipientDetail,
+  type StartAssignmentResponse,
+} from "../../lib/classroom";
 
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
@@ -126,6 +133,8 @@ function StepCard({
 }
 
 export function RoundRunner() {
+  const searchParams = useSearchParams();
+  const assignmentRecipientId = searchParams.get("assignment");
   const [step, setStep] = useState<Step>(1);
 
   // Step 1
@@ -138,6 +147,10 @@ export function RoundRunner() {
   const [topicLoading, setTopicLoading] = useState(false);
   const [topicError, setTopicError] = useState<string | null>(null);
   const [roundId, setRoundId] = useState<string | null>(null);
+  const [assignmentDetail, setAssignmentDetail] =
+    useState<AssignmentRecipientDetail | null>(null);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentCompleted, setAssignmentCompleted] = useState(false);
 
   // Step 2
   const [affTranscript, setAffTranscript] = useState<string | null>(null);
@@ -179,6 +192,11 @@ export function RoundRunner() {
   const judgmentPromiseRef = useRef<Promise<JudgmentResponse> | null>(null);
   const userSide = topic?.side ?? "aff";
   const userIsAff = userSide === "aff";
+  const assignmentPayload =
+    assignmentDetail && isPracticePayload(assignmentDetail.assignment)
+      ? assignmentDetail.assignment.payload
+      : null;
+  const assignmentLocked = Boolean(assignmentPayload);
   const customTopicWordCount = countWords(customTopic);
   const customTopicTooLong = customTopicWordCount > TOPIC_WORD_LIMIT;
   useEffect(() => {
@@ -205,14 +223,60 @@ export function RoundRunner() {
     };
   }, []);
 
+  useEffect(() => {
+    let ignore = false;
+    async function loadAssignment() {
+      if (!assignmentRecipientId) {
+        setAssignmentDetail(null);
+        setAssignmentCompleted(false);
+        return;
+      }
+      setAssignmentLoading(true);
+      setTopicError(null);
+      try {
+        const detail = await apiFetch<AssignmentRecipientDetail>(
+          `/api/assignments/${assignmentRecipientId}`,
+        );
+        if (ignore) return;
+        if (!isPracticePayload(detail.assignment)) {
+          throw new Error("This assignment is not a practice round.");
+        }
+        const payload = detail.assignment.payload;
+        setAssignmentDetail(detail);
+        setAssignmentCompleted(detail.recipient.status === "completed");
+        setFormat(payload.format);
+        setSpeechDurationSeconds(payload.speech_duration_seconds);
+        setCustomTopic(payload.topic);
+        setCustomSide(payload.side);
+        setTopic({
+          topic: payload.topic,
+          side: payload.side,
+          format: payload.format,
+        });
+      } catch (err) {
+        if (!ignore) {
+          setTopicError(err instanceof Error ? err.message : "Failed to load assignment");
+        }
+      } finally {
+        if (!ignore) setAssignmentLoading(false);
+      }
+    }
+    void loadAssignment();
+    return () => {
+      ignore = true;
+    };
+  }, [assignmentRecipientId]);
+
   const handleFormatChange = useCallback((nextFormat: Format) => {
+    if (assignmentLocked) return;
     setFormat(nextFormat);
     setTopic(null);
     setTopicError(null);
     if (nextFormat !== "parli") setTournament("");
-  }, []);
+  }, [assignmentLocked]);
 
   const handleGetTopic = useCallback(async () => {
+    if (assignmentLocked) return;
     setTopicError(null);
     setTopicLoading(true);
     try {
@@ -225,9 +289,10 @@ export function RoundRunner() {
     } finally {
       setTopicLoading(false);
     }
-  }, [format, tournament]);
+  }, [assignmentLocked, format, tournament]);
 
   const handleUseCustomTopic = useCallback(() => {
+    if (assignmentLocked) return;
     const trimmed = customTopic.trim();
     if (!trimmed) {
       setTopicError("Enter a custom topic first.");
@@ -243,21 +308,35 @@ export function RoundRunner() {
       side: customSide,
       format,
     });
-  }, [customSide, customTopic, customTopicTooLong, format]);
+  }, [assignmentLocked, customSide, customTopic, customTopicTooLong, format]);
 
   const handleAcceptTopic = useCallback(async () => {
     if (!topic) return;
     setTopicError(null);
     try {
-      const round = await apiFetch<RoundResponse>("/api/rounds", {
-        method: "POST",
-        body: JSON.stringify({
-          format: topic.format,
-          topic: topic.topic,
-          side: topic.side,
-        }),
-      });
-      setRoundId(round.id);
+      let nextRoundId: string | null = null;
+      if (assignmentRecipientId) {
+        const started = await apiFetch<StartAssignmentResponse>(
+          `/api/assignments/${assignmentRecipientId}/start`,
+          { method: "POST" },
+        );
+        nextRoundId = started.round_id ?? null;
+        setAssignmentDetail((current) =>
+          current ? { ...current, recipient: started.recipient } : current,
+        );
+      } else {
+        const round = await apiFetch<RoundResponse>("/api/rounds", {
+          method: "POST",
+          body: JSON.stringify({
+            format: topic.format,
+            topic: topic.topic,
+            side: topic.side,
+          }),
+        });
+        nextRoundId = round.id;
+      }
+      if (!nextRoundId) throw new Error("Failed to start round");
+      setRoundId(nextRoundId);
       setStep(2);
       affStartedRef.current = false;
       negStartedRef.current = false;
@@ -286,7 +365,7 @@ export function RoundRunner() {
     } catch (err) {
       setTopicError(err instanceof Error ? err.message : "Failed to start round");
     }
-  }, [topic]);
+  }, [assignmentRecipientId, topic]);
 
   const handlePracticeAgain = useCallback(() => {
     abortRef.current?.abort();
@@ -551,8 +630,19 @@ export function RoundRunner() {
           aff_two_speech: affTwoTranscript,
         }),
       })
-      .then((res) => {
+      .then(async (res) => {
         setJudgment(res);
+        if (assignmentRecipientId && roundId && !assignmentCompleted) {
+          const detail = await apiFetch<AssignmentRecipientDetail>(
+            `/api/assignments/${assignmentRecipientId}/complete`,
+            {
+              method: "POST",
+              body: JSON.stringify({ round_id: roundId }),
+            },
+          );
+          setAssignmentDetail(detail);
+          setAssignmentCompleted(detail.recipient.status === "completed");
+        }
         return res;
       })
       .catch((err) => {
@@ -568,7 +658,16 @@ export function RoundRunner() {
 
     judgmentPromiseRef.current = promise;
     return promise;
-  }, [topic, affTranscript, affTwoTranscript, negTokens, judgment, roundId]);
+  }, [
+    topic,
+    affTranscript,
+    affTwoTranscript,
+    negTokens,
+    judgment,
+    roundId,
+    assignmentRecipientId,
+    assignmentCompleted,
+  ]);
 
   const revealJudgment = useCallback(async () => {
     setJudgmentRequested(true);
@@ -684,6 +783,27 @@ export function RoundRunner() {
       <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-slate-900">Practice Round</h1>
 
+      {assignmentDetail && (
+        <section className="rounded-lg border border-teal/30 bg-teal/5 p-4 text-sm shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="font-semibold text-teal-dark">
+                {assignmentDetail.assignment.title}
+              </div>
+              <div className="text-slate-600">
+                {assignmentDetail.class_room.name} / {assignmentPayload?.format} /{" "}
+                {assignmentPayload?.side} / {assignmentPayload?.speech_duration_seconds}s
+              </div>
+            </div>
+            <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-teal-dark">
+              {assignmentCompleted
+                ? "Completed"
+                : statusLabel(assignmentDetail.recipient.status)}
+            </span>
+          </div>
+        </section>
+      )}
+
       <StepCard step={1} title="Pick a topic" active={step === 1} done={step > 1}>
         <div className="flex flex-col gap-4">
           <label className={fieldLabelClass}>
@@ -692,7 +812,7 @@ export function RoundRunner() {
               aria-label="Format"
               value={format}
               onChange={(e) => handleFormatChange(e.target.value as Format)}
-              disabled={step > 1}
+              disabled={step > 1 || assignmentLocked}
               className={fieldControlClass}
             >
               <option value="parli">Parli</option>
@@ -706,7 +826,7 @@ export function RoundRunner() {
                 aria-label="Tournament"
                 value={tournament}
                 onChange={(e) => setTournament(e.target.value)}
-                disabled={step > 1}
+                disabled={step > 1 || assignmentLocked}
                 className={fieldControlClass}
               >
                 <option value="">No Tournament</option>
@@ -722,7 +842,7 @@ export function RoundRunner() {
             <button
               type="button"
               onClick={handleGetTopic}
-              disabled={topicLoading || step > 1}
+              disabled={topicLoading || step > 1 || assignmentLocked}
               className={primaryButtonClass}
             >
             {topicLoading ? "Loading…" : "Get topic"}
@@ -736,7 +856,7 @@ export function RoundRunner() {
                   aria-label="Custom topic"
                   value={customTopic}
                   onChange={(event) => setCustomTopic(event.target.value)}
-                  disabled={step > 1}
+                  disabled={step > 1 || assignmentLocked}
                   placeholder="Enter your own topic..."
                   className={fieldControlClass}
                 />
@@ -765,7 +885,7 @@ export function RoundRunner() {
                   aria-label="Custom side"
                   value={customSide}
                   onChange={(event) => setCustomSide(event.target.value as Side)}
-                  disabled={step > 1}
+                  disabled={step > 1 || assignmentLocked}
                   className={fieldControlClass}
                 >
                   <option value="aff">Affirmative</option>
@@ -776,7 +896,9 @@ export function RoundRunner() {
               <button
                 type="button"
                 onClick={handleUseCustomTopic}
-                disabled={step > 1 || !customTopic.trim() || customTopicTooLong}
+                disabled={
+                  step > 1 || assignmentLocked || !customTopic.trim() || customTopicTooLong
+                }
                 className={`${secondaryButtonClass} md:mt-6`}
               >
                 Use custom topic
@@ -807,9 +929,10 @@ export function RoundRunner() {
                 <button
                   type="button"
                   onClick={handleAcceptTopic}
+                  disabled={assignmentLoading || assignmentCompleted}
                   className={`mt-3 ${primaryButtonClass}`}
                 >
-                  Accept topic
+                  {assignmentCompleted ? "Assignment completed" : "Accept topic"}
                 </button>
               )}
             </div>
@@ -1072,13 +1195,19 @@ export function RoundRunner() {
                     round saved in Library
                   </a>
                 )}
-                <button
-                  type="button"
-                  onClick={handlePracticeAgain}
-                  className={secondaryButtonClass}
-                >
-                  Practice again
-                </button>
+                {assignmentDetail ? (
+                  <a href="/classes" className={secondaryButtonClass}>
+                    Back to Classes
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handlePracticeAgain}
+                    className={secondaryButtonClass}
+                  >
+                    Practice again
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -1100,6 +1229,7 @@ export function RoundRunner() {
                 aria-label="Speech timer"
                 value={speechDurationSeconds}
                 onChange={(event) => setSpeechDurationSeconds(Number(event.target.value))}
+                disabled={assignmentLocked}
                 className={fieldControlClass}
               >
                 {timerOptions.map((option) => (

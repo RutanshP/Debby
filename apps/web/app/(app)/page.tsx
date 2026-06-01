@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import { RoundRunner } from "./round-runner";
 
 export default function HomePage() {
-  return <RoundRunner />;
+  return (
+    <Suspense fallback={null}>
+      <RoundRunner />
+    </Suspense>
+  );
 }

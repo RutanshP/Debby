@@ -1,10 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { RecordButton } from "@/components/RecordButton";
 import { WpmChart, type WpmPoint } from "@/components/WpmChart";
 import type { RealtimeTranscriptResult } from "@/hooks/useRealtimeTranscription";
+import {
+  isDrillPayload,
+  statusLabel,
+  type AssignmentRecipientDetail,
+} from "@/lib/classroom";
 
 export type DrillType = "rebuttal" | "speed" | "impact" | "contention" | "filler";
 
@@ -168,8 +174,14 @@ function FeedbackLoading() {
 }
 
 export function DrillsClient() {
+  const searchParams = useSearchParams();
+  const assignmentRecipientId = searchParams.get("assignment");
   const [drillType, setDrillType] = useState<DrillType>("rebuttal");
   const [timerSeconds, setTimerSeconds] = useState<number>(60);
+  const [assignmentDetail, setAssignmentDetail] =
+    useState<AssignmentRecipientDetail | null>(null);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentCompleted, setAssignmentCompleted] = useState(false);
   const [drill, setDrill] = useState<DrillPrompt | null>(null);
   const [response, setResponse] = useState("");
   const [score, setScore] = useState<DrillScore | null>(null);
@@ -191,6 +203,11 @@ export function DrillsClient() {
   const isFiller = drillType === "filler";
   const usesAudio = !isContention;
   const drillComplete = Boolean(score || speedScore);
+  const assignmentPayload =
+    assignmentDetail && isDrillPayload(assignmentDetail.assignment)
+      ? assignmentDetail.assignment.payload
+      : null;
+  const assignmentLocked = Boolean(assignmentPayload);
   const typingTimerExpired =
     isContention && typingStarted && remainingSeconds !== null && remainingSeconds <= 0;
 
@@ -216,10 +233,64 @@ export function DrillsClient() {
     typingDeadlineRef.current = null;
   }
 
+  useEffect(() => {
+    let ignore = false;
+    async function loadAssignment() {
+      if (!assignmentRecipientId) {
+        setAssignmentDetail(null);
+        setAssignmentCompleted(false);
+        return;
+      }
+      setAssignmentLoading(true);
+      setError(null);
+      try {
+        const detail = await apiFetch<AssignmentRecipientDetail>(
+          `/api/assignments/${assignmentRecipientId}`,
+        );
+        if (ignore) return;
+        if (!isDrillPayload(detail.assignment)) {
+          throw new Error("This assignment is not a drill.");
+        }
+        setAssignmentDetail(detail);
+        setAssignmentCompleted(detail.recipient.status === "completed");
+        setDrillType(detail.assignment.payload.drill_type);
+        setTimerSeconds(detail.assignment.payload.timer_seconds);
+        clearCurrentDrill();
+      } catch (err) {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : "Failed to load assignment");
+        }
+      } finally {
+        if (!ignore) setAssignmentLoading(false);
+      }
+    }
+    void loadAssignment();
+    return () => {
+      ignore = true;
+    };
+  }, [assignmentRecipientId]);
+
   function handleDrillTypeChange(nextType: DrillType) {
+    if (assignmentLocked) return;
     setDrillType(nextType);
     clearCurrentDrill();
   }
+
+  const completeDrillAssignment = useCallback(
+    async (drillId: string | number) => {
+      if (!assignmentRecipientId || assignmentCompleted) return;
+      const detail = await apiFetch<AssignmentRecipientDetail>(
+        `/api/assignments/${assignmentRecipientId}/complete`,
+        {
+          method: "POST",
+          body: JSON.stringify({ drill_id: String(drillId) }),
+        },
+      );
+      setAssignmentDetail(detail);
+      setAssignmentCompleted(detail.recipient.status === "completed");
+    },
+    [assignmentCompleted, assignmentRecipientId],
+  );
 
   async function handleGenerate() {
     setError(null);
@@ -235,8 +306,13 @@ export function DrillsClient() {
     typingDeadlineRef.current = null;
     setGenerating(true);
     try {
+      if (assignmentRecipientId) {
+        await apiFetch(`/api/assignments/${assignmentRecipientId}/start`, {
+          method: "POST",
+        });
+      }
       const body: Record<string, unknown> = { drill_type: drillType };
-      body.timer_seconds = isFiller ? 60 : timerSeconds;
+      body.timer_seconds = assignmentPayload?.timer_seconds ?? (isFiller ? 60 : timerSeconds);
       const data = await apiFetch<DrillPrompt>("/api/drills", {
         method: "POST",
         body: JSON.stringify(body),
@@ -274,12 +350,13 @@ export function DrillsClient() {
         },
       );
       setScore(data);
+      await completeDrillAssignment(drill.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to score drill");
     } finally {
       setSubmitting(false);
     }
-  }, [drill]);
+  }, [completeDrillAssignment, drill]);
 
   useEffect(() => {
     if (!isContention || !drill || !typingStarted || drillComplete) return;
@@ -344,6 +421,7 @@ export function DrillsClient() {
         { method: "POST", body: form },
       );
       setSpeedScore(data);
+      await completeDrillAssignment(drill.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to score speed drill");
     } finally {
@@ -396,6 +474,7 @@ export function DrillsClient() {
         },
       );
       setScore(data);
+      await completeDrillAssignment(drill.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to score filler drill");
     } finally {
@@ -417,6 +496,7 @@ export function DrillsClient() {
         { method: "POST", body: form },
       );
       setScore(data);
+      await completeDrillAssignment(drill.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to score audio");
     } finally {
@@ -433,6 +513,27 @@ export function DrillsClient() {
         </p>
       </header>
 
+      {assignmentDetail && (
+        <section className="rounded-lg border border-teal/30 bg-teal/5 p-4 text-sm shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="font-semibold text-teal-dark">
+                {assignmentDetail.assignment.title}
+              </div>
+              <div className="text-slate-600">
+                {assignmentDetail.class_room.name} / {assignmentPayload?.drill_type} /{" "}
+                {assignmentPayload?.timer_seconds}s
+              </div>
+            </div>
+            <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-teal-dark">
+              {assignmentCompleted
+                ? "Completed"
+                : statusLabel(assignmentDetail.recipient.status)}
+            </span>
+          </div>
+        </section>
+      )}
+
       <section aria-label="Drill types" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {DRILL_TYPES.map((option) => {
           const active = option.type === drillType;
@@ -441,12 +542,13 @@ export function DrillsClient() {
               key={option.type}
               type="button"
               onClick={() => handleDrillTypeChange(option.type)}
+              disabled={assignmentLocked}
               aria-pressed={active}
               className={`flex flex-col gap-1 rounded-lg border p-4 text-left transition-colors ${
                 active
                   ? "border-teal bg-teal/5 ring-2 ring-teal"
                   : "border-slate-200 bg-white hover:border-teal/60"
-              }`}
+              } disabled:cursor-not-allowed disabled:opacity-80`}
             >
               <span className="inline-block w-fit rounded-full bg-teal/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-teal-dark">
                 {option.mode}
@@ -467,7 +569,7 @@ export function DrillsClient() {
             id="timer"
             value={timerSeconds}
             onChange={(e) => setTimerSeconds(Number(e.target.value))}
-            disabled={isFiller}
+            disabled={isFiller || assignmentLocked}
             className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
           >
             {TIMER_OPTIONS.map((s) => (
@@ -483,7 +585,7 @@ export function DrillsClient() {
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={generating}
+          disabled={generating || assignmentLoading || assignmentCompleted}
           className="rounded-md bg-teal px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-60"
         >
           {generating ? "Generating…" : "Generate Drill"}
@@ -528,10 +630,14 @@ export function DrillsClient() {
               <button
                 type="button"
                 onClick={handleGenerate}
-                disabled={generating}
+                disabled={generating || assignmentCompleted}
                 className="rounded-md bg-teal px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {generating ? "Generating..." : "Redo Drill"}
+                {assignmentCompleted
+                  ? "Assignment completed"
+                  : generating
+                    ? "Generating..."
+                    : "Redo Drill"}
               </button>
             </div>
           ) : usesAudio ? (
