@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import {
   assignmentTypeLabel,
@@ -28,8 +29,6 @@ const fieldClass =
 const labelClass = "flex flex-col gap-1 text-sm font-medium text-slate-700";
 const primaryButtonClass =
   "inline-flex h-10 items-center justify-center rounded-md bg-teal px-4 text-sm font-medium text-white shadow-sm transition hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-60";
-const secondaryButtonClass =
-  "inline-flex h-10 items-center justify-center rounded-md border border-teal px-4 text-sm font-medium text-teal transition hover:bg-teal/5 disabled:cursor-not-allowed disabled:opacity-60";
 
 function payloadSummary(detail: AssignmentRecipientDetail | CoachAssignmentSummary): string {
   const assignment = detail.assignment;
@@ -70,6 +69,8 @@ function assignmentHref(detail: AssignmentRecipientDetail): string {
 }
 
 export function ClassesClient() {
+  const searchParams = useSearchParams();
+  const requestedClassId = searchParams.get("class");
   const [classes, setClasses] = useState<ClassListItem[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRecipientDetail[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -78,9 +79,6 @@ export function ClassesClient() {
   const [loading, setLoading] = useState(true);
   const [classLoading, setClassLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [newClassName, setNewClassName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
 
   const [title, setTitle] = useState("");
   const [type, setType] = useState<AssignmentType>("drill");
@@ -143,9 +141,11 @@ export function ClassesClient() {
         if (ignore) return;
         setClasses(classRows);
         setAssignments(assignmentRows);
-        if (classRows[0]) {
-          setSelectedClassId(classRows[0].id);
-          await loadClass(classRows[0].id);
+        const initialClass =
+          classRows.find((row) => row.id === requestedClassId) ?? classRows[0];
+        if (initialClass) {
+          setSelectedClassId(initialClass.id);
+          await loadClass(initialClass.id);
         }
       } catch (err) {
         if (!ignore) setError(err instanceof Error ? err.message : "Failed to load classes");
@@ -157,41 +157,7 @@ export function ClassesClient() {
     return () => {
       ignore = true;
     };
-  }, []);
-
-  async function handleCreateClass(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!newClassName.trim()) return;
-    setError(null);
-    try {
-      const created = await apiFetch<{ id: string }>("/api/classes", {
-        method: "POST",
-        body: JSON.stringify({ name: newClassName.trim() }),
-      });
-      setNewClassName("");
-      setSelectedClassId(created.id);
-      await loadBase(created.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create class");
-    }
-  }
-
-  async function handleJoinClass(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!joinCode.trim()) return;
-    setError(null);
-    try {
-      const joined = await apiFetch<{ id: string }>("/api/classes/join", {
-        method: "POST",
-        body: JSON.stringify({ join_code: joinCode.trim().toUpperCase() }),
-      });
-      setJoinCode("");
-      setSelectedClassId(joined.id);
-      await loadBase(joined.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to join class");
-    }
-  }
+  }, [requestedClassId]);
 
   async function handleCreateAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -245,11 +211,19 @@ export function ClassesClient() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 p-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold text-teal-dark">Classes</h1>
-        <p className="text-slate-600">
-          {unfinishedCount} unfinished assignment{unfinishedCount === 1 ? "" : "s"}
-        </p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-teal-dark">Classroom</h1>
+          <p className="text-slate-600">
+            {unfinishedCount} unfinished assignment{unfinishedCount === 1 ? "" : "s"}
+          </p>
+        </div>
+        <Link
+          href="/workspace"
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md border border-teal px-4 text-sm font-medium text-teal transition hover:bg-teal/5"
+        >
+          Switch workspace
+        </Link>
       </header>
 
       {error && (
@@ -257,44 +231,6 @@ export function ClassesClient() {
           {error}
         </div>
       )}
-
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
-        <form
-          onSubmit={handleCreateClass}
-          className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end"
-        >
-          <label className={`${labelClass} flex-1`}>
-            New class
-            <input
-              value={newClassName}
-              onChange={(event) => setNewClassName(event.target.value)}
-              className={fieldClass}
-              placeholder="Varsity PF"
-            />
-          </label>
-          <button type="submit" className={primaryButtonClass}>
-            Create
-          </button>
-        </form>
-
-        <form
-          onSubmit={handleJoinClass}
-          className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end"
-        >
-          <label className={`${labelClass} flex-1`}>
-            Join code
-            <input
-              value={joinCode}
-              onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
-              className={`${fieldClass} uppercase`}
-              placeholder="ABC123"
-            />
-          </label>
-          <button type="submit" className={secondaryButtonClass}>
-            Join
-          </button>
-        </form>
-      </section>
 
       {loading ? (
         <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">

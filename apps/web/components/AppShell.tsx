@@ -8,7 +8,6 @@ import { getBrowserSupabase } from "@/lib/supabase";
 const navItems = [
   { href: "/", label: "Practice" },
   { href: "/drills", label: "Drills" },
-  { href: "/classes", label: "Classes" },
   { href: "/parli-gpt", label: "Case Builder" },
   { href: "/progress", label: "Progress" },
   { href: "/library", label: "Library" },
@@ -59,14 +58,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
         </div>
-        <button
-          type="button"
-          onClick={handleSignOut}
-          disabled={signingOut}
-          className="mt-auto rounded-md px-3 py-2 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {signingOut ? "Signing out..." : "Sign out"}
-        </button>
+        <div className="mt-auto space-y-1">
+          <Link
+            href="/workspace"
+            className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
+              isActive(pathname, "/workspace")
+                ? "bg-teal text-white"
+                : "text-slate-700 hover:bg-teal/10 hover:text-teal-dark"
+            }`}
+          >
+            Switch workspace
+          </Link>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {signingOut ? "Signing out..." : "Sign out"}
+          </button>
+        </div>
       </aside>
 
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:hidden">
@@ -82,6 +93,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         <nav className="mt-3 flex gap-2 overflow-x-auto" aria-label="Main navigation">
+          <Link
+            href="/workspace"
+            className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium ${
+              isActive(pathname, "/workspace")
+                ? "bg-teal text-white"
+                : "bg-slate-100 text-slate-700"
+            }`}
+          >
+            Workspace
+          </Link>
           {navItems.map((item) => {
             const active = isActive(pathname, item.href);
             return (

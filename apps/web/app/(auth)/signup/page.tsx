@@ -18,7 +18,7 @@ export default function SignupPage() {
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams?.get("redirectTo") ?? "/";
+  const redirectTo = searchParams?.get("redirectTo") ?? "/workspace";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

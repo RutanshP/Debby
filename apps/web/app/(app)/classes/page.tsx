@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ClassesClient } from "./classes-client";
 
 export const metadata = {
@@ -5,5 +6,9 @@ export const metadata = {
 };
 
 export default function ClassesPage() {
-  return <ClassesClient />;
+  return (
+    <Suspense fallback={null}>
+      <ClassesClient />
+    </Suspense>
+  );
 }

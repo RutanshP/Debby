@@ -18,7 +18,7 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams?.get("redirectTo") ?? "/";
+  const redirectTo = searchParams?.get("redirectTo") ?? "/workspace";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
