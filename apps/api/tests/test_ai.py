@@ -80,39 +80,135 @@ async def test_ai_response_prompt_prioritizes_case_then_refutation(
     assert "cross-apply" in user_prompt
 
 
-async def test_ai_neg_framework_topic_only_prompt(patched_client: AsyncMock):
-    patched_client.return_value = _chat_completion("neg contentions")
-    out = await ai_service.ai_neg_framework("topic")
-    assert out == "neg contentions"
+async def test_ai_neg_framework_returns_string(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("neg framework speech")
+    out = await ai_service.ai_neg_framework("AI in schools")
+    assert out == "neg framework speech"
+    patched_client.assert_awaited_once()
+
+
+async def test_ai_neg_framework_prompt_omits_conclusion_language(
+    patched_client: AsyncMock,
+):
+    patched_client.return_value = _chat_completion("neg framework")
+    await ai_service.ai_neg_framework("topic about tech")
 
     messages = patched_client.await_args.kwargs["messages"]
     user_prompt = messages[1]["content"]
-    # Framework presents own contentions only, with no affirmative refutation yet.
-    assert "negative contentions only" in user_prompt
-    assert "do NOT yet" in user_prompt
+    # Must include the opener instruction
+    assert "Hello my name is Debby" in user_prompt
+    # Must explicitly exclude a conclusion/summary paragraph
+    assert "Do NOT include a conclusion" in user_prompt or "no conclusion" in user_prompt.lower() or "no concluding" in user_prompt.lower() or "no closing" in user_prompt.lower() or "no summary" in user_prompt.lower() or "NOT include a conclusion" in user_prompt
 
 
-async def test_ai_neg_augment_uses_framework_and_aff_speech(
+async def test_ai_neg_framework_prompt_no_concluding_summary(
     patched_client: AsyncMock,
 ):
-    patched_client.return_value = _chat_completion("full neg speech")
-    out = await ai_service.ai_neg_augment(
-        "the topic", "prepared case", "aff speech text"
-    )
-    assert out == "full neg speech"
+    patched_client.return_value = _chat_completion("neg framework")
+    await ai_service.ai_neg_framework("climate change")
 
-    user_prompt = patched_client.await_args.kwargs["messages"][1]["content"]
-    assert "prepared case" in user_prompt
+    messages = patched_client.await_args.kwargs["messages"]
+    user_prompt = messages[1]["content"]
+    # The prompt must explicitly forbid a conclusion / closing / summary sentence
+    conclusion_guards = [
+        "Do NOT include a conclusion",
+        "closing/wrap-up",
+        "no closing",
+        "no summary",
+    ]
+    assert any(g.lower() in user_prompt.lower() for g in conclusion_guards)
+
+
+async def test_ai_neg_rebuttal_returns_string(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("neg rebuttal paragraph")
+    out = await ai_service.ai_neg_rebuttal("topic", "neg case", "aff speech")
+    assert out == "neg rebuttal paragraph"
+    patched_client.assert_awaited_once()
+
+
+async def test_ai_neg_rebuttal_prompt_includes_case_and_aff_speech(
+    patched_client: AsyncMock,
+):
+    patched_client.return_value = _chat_completion("neg rebuttal")
+    await ai_service.ai_neg_rebuttal("debate topic", "my neg case text", "aff speech text")
+
+    messages = patched_client.await_args.kwargs["messages"]
+    user_prompt = messages[1]["content"]
+    # Must include both the neg case and aff speech
+    assert "my neg case text" in user_prompt
     assert "aff speech text" in user_prompt
-    assert "cross-apply" in user_prompt
+    # Must have "only" or do-not-restate guards
+    assert any(
+        guard in user_prompt
+        for guard in [
+            "ONLY",
+            "only",
+            "Do NOT restate",
+            "do not restate",
+        ]
+    )
 
 
-async def test_ai_neg_augment_missing_inputs_raises(patched_client: AsyncMock):
+async def test_ai_neg_rebuttal_raises_on_empty_inputs(patched_client: AsyncMock):
     with pytest.raises(ValueError):
-        await ai_service.ai_neg_augment("topic", "", "aff speech")
+        await ai_service.ai_neg_rebuttal("", "case", "aff")
+    with pytest.raises(ValueError):
+        await ai_service.ai_neg_rebuttal("topic", "", "aff")
+    with pytest.raises(ValueError):
+        await ai_service.ai_neg_rebuttal("topic", "case", "")
 
 
-async def test_ai_aff_rebuttal_returns_short_rebuttal_only_prompt(
+async def test_ai_neg_rebuttal_max_tokens_is_350(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("rebuttal")
+    await ai_service.ai_neg_rebuttal("topic", "case", "aff speech")
+    assert patched_client.await_args.kwargs["max_tokens"] == 350
+
+
+async def test_ai_aff_overview_returns_string(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("aff overview paragraph")
+    out = await ai_service.ai_aff_overview("topic", "aff speech")
+    assert out == "aff overview paragraph"
+    patched_client.assert_awaited_once()
+
+
+async def test_ai_aff_overview_prompt_uses_topic_and_aff_only(
+    patched_client: AsyncMock,
+):
+    patched_client.return_value = _chat_completion("overview")
+    await ai_service.ai_aff_overview("debate topic", "the aff speech text")
+
+    messages = patched_client.await_args.kwargs["messages"]
+    user_prompt = messages[1]["content"]
+    # Must include topic and aff speech
+    assert "debate topic" in user_prompt
+    assert "the aff speech text" in user_prompt
+    # Must not include neg speech (no neg speech param)
+    assert "neg" not in user_prompt.lower() or "no rebuttal" in user_prompt.lower() or "Do not make any rebuttal" in user_prompt
+
+
+async def test_ai_aff_overview_no_rebuttal_in_prompt(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("overview")
+    await ai_service.ai_aff_overview("topic", "aff speech")
+
+    messages = patched_client.await_args.kwargs["messages"]
+    user_prompt = messages[1]["content"]
+    assert "Do not make any rebuttal" in user_prompt or "no rebuttal" in user_prompt.lower()
+
+
+async def test_ai_aff_overview_raises_on_empty_inputs(patched_client: AsyncMock):
+    with pytest.raises(ValueError):
+        await ai_service.ai_aff_overview("", "aff speech")
+    with pytest.raises(ValueError):
+        await ai_service.ai_aff_overview("topic", "")
+
+
+async def test_ai_aff_overview_max_tokens_is_250(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("overview")
+    await ai_service.ai_aff_overview("topic", "aff speech")
+    assert patched_client.await_args.kwargs["max_tokens"] == 250
+
+
+async def test_ai_aff_rebuttal_returns_append_only_paragraph(
     patched_client: AsyncMock,
 ):
     patched_client.return_value = _chat_completion("aff rebuttal")
@@ -120,9 +216,30 @@ async def test_ai_aff_rebuttal_returns_short_rebuttal_only_prompt(
     assert out == "aff rebuttal"
 
     messages = patched_client.await_args.kwargs["messages"]
-    assert "short rebuttal-only speech" in messages[0]["content"]
-    assert "Do not introduce a new constructive case" in messages[0]["content"]
-    assert "rebuttal-only, not a new case" in messages[1]["content"]
+    system_prompt = messages[0]["content"]
+    user_prompt = messages[1]["content"]
+    # Must instruct no overview, no new case, no greeting
+    assert "Do not introduce a new constructive case" in system_prompt
+    assert "Do not include a greeting" in system_prompt or "greeting" in system_prompt
+    assert "Do not include an overview" in system_prompt or "overview" in user_prompt
+    # Must be append-only / single paragraph
+    assert "single paragraph" in user_prompt or "ONLY" in user_prompt or "only" in user_prompt
+
+
+async def test_ai_aff_rebuttal_prompt_uses_neg_speech(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("aff rebuttal")
+    await ai_service.ai_aff_rebuttal("topic", "my aff speech", "my neg speech")
+
+    messages = patched_client.await_args.kwargs["messages"]
+    user_prompt = messages[1]["content"]
+    assert "my neg speech" in user_prompt
+    assert "my aff speech" in user_prompt
+
+
+async def test_ai_aff_rebuttal_max_tokens_is_350(patched_client: AsyncMock):
+    patched_client.return_value = _chat_completion("aff rebuttal")
+    await ai_service.ai_aff_rebuttal("topic", "aff speech", "neg speech")
+    assert patched_client.await_args.kwargs["max_tokens"] == 350
 
 
 async def test_ai_response_stream_yields_chunks(patched_client: AsyncMock):
@@ -380,6 +497,27 @@ def test_aff_rebuttal_route_requires_auth(client_unauthed: TestClient):
     assert r.status_code == 401
 
 
+def test_neg_framework_route_requires_auth(client_unauthed: TestClient):
+    r = client_unauthed.post("/api/ai/neg-framework", json={"topic": "x"})
+    assert r.status_code == 401
+
+
+def test_neg_rebuttal_route_requires_auth(client_unauthed: TestClient):
+    r = client_unauthed.post(
+        "/api/ai/neg-rebuttal",
+        json={"topic": "x", "neg_case": "c", "aff_speech": "a"},
+    )
+    assert r.status_code == 401
+
+
+def test_aff_overview_route_requires_auth(client_unauthed: TestClient):
+    r = client_unauthed.post(
+        "/api/ai/aff-overview",
+        json={"topic": "x", "aff_speech": "a"},
+    )
+    assert r.status_code == 401
+
+
 def test_speech_route_happy_path(
     client_authed: TestClient, patched_client: AsyncMock
 ):
@@ -412,19 +550,6 @@ def test_aff_rebuttal_route_happy_path(
     assert r.json() == {"speech": "aff rebuttal"}
 
 
-def test_neg_framework_route_requires_auth(client_unauthed: TestClient):
-    r = client_unauthed.post("/api/ai/neg-framework", json={"topic": "x"})
-    assert r.status_code == 401
-
-
-def test_neg_augment_route_requires_auth(client_unauthed: TestClient):
-    r = client_unauthed.post(
-        "/api/ai/neg-augment",
-        json={"topic": "x", "framework": "f", "aff_speech": "a"},
-    )
-    assert r.status_code == 401
-
-
 def test_neg_framework_route_happy_path(
     client_authed: TestClient, patched_client: AsyncMock
 ):
@@ -434,16 +559,28 @@ def test_neg_framework_route_happy_path(
     assert r.json() == {"speech": "neg framework"}
 
 
-def test_neg_augment_route_happy_path(
+def test_neg_rebuttal_route_happy_path(
     client_authed: TestClient, patched_client: AsyncMock
 ):
-    patched_client.return_value = _chat_completion("neg augmented")
+    patched_client.return_value = _chat_completion("neg rebuttal paragraph")
     r = client_authed.post(
-        "/api/ai/neg-augment",
-        json={"topic": "x", "framework": "f", "aff_speech": "a"},
+        "/api/ai/neg-rebuttal",
+        json={"topic": "x", "neg_case": "c", "aff_speech": "a"},
     )
     assert r.status_code == 200
-    assert r.json() == {"speech": "neg augmented"}
+    assert r.json() == {"speech": "neg rebuttal paragraph"}
+
+
+def test_aff_overview_route_happy_path(
+    client_authed: TestClient, patched_client: AsyncMock
+):
+    patched_client.return_value = _chat_completion("aff overview")
+    r = client_authed.post(
+        "/api/ai/aff-overview",
+        json={"topic": "x", "aff_speech": "a"},
+    )
+    assert r.status_code == 200
+    assert r.json() == {"speech": "aff overview"}
 
 
 def test_response_stream_route(

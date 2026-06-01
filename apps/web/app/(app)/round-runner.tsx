@@ -9,6 +9,7 @@ import type { FlowSheetData } from "../../components/FlowSheet";
 import { WpmChart, type WpmPoint } from "../../components/WpmChart";
 import {
   useDebbySpeech,
+  speechKey,
   type UseDebbySpeechResult,
 } from "../../hooks/useDebbySpeech";
 
@@ -126,15 +127,21 @@ function StepCard({
   );
 }
 
+
 function DebbyAudioButton({
-  text,
+  parts,
   speech,
 }: {
-  text: string | null;
+  parts: string | string[];
   speech: UseDebbySpeechResult;
 }) {
-  if (!text?.trim()) return null;
-  const isThis = speech.activeText === text;
+  const list = (Array.isArray(parts) ? parts : [parts]).filter(
+    (p): p is string => Boolean(p && p.trim()),
+  );
+  if (list.length === 0) return null;
+  const playParts = list.length === 1 ? list[0] : list;
+  const key = speechKey(playParts);
+  const isThis = speech.activeKey === key;
   const loading = isThis && speech.state === "loading";
   const playing = isThis && speech.state === "playing";
   const errored = isThis && speech.state === "error";
@@ -142,7 +149,7 @@ function DebbyAudioButton({
     <div className="flex items-center gap-2">
       <button
         type="button"
-        onClick={() => void speech.play(text)}
+        onClick={() => void speech.play(playParts)}
         disabled={loading}
         className={secondaryButtonClass}
       >
@@ -156,6 +163,8 @@ function DebbyAudioButton({
 }
 
 export function RoundRunner() {
+  const speech = useDebbySpeech();
+
   const [step, setStep] = useState<Step>(1);
 
   // Step 1
@@ -174,20 +183,24 @@ export function RoundRunner() {
   const [affAiRequested, setAffAiRequested] = useState(false);
   const [affAiError, setAffAiError] = useState<string | null>(null);
 
-  // Step 3
-  const [negTokens, setNegTokens] = useState("");
+  // Step 3 — Neg speech (user is AFF: Debby neg; user is NEG: user speaks)
+  // Debby's neg = negCase + negRebuttalPara spliced together.
+  const [negCase, setNegCase] = useState<string | null>(null);
+  const [negRebuttalPara, setNegRebuttalPara] = useState<string | null>(null);
   const [negDone, setNegDone] = useState(false);
   const [negLoading, setNegLoading] = useState(false);
   const [negRequested, setNegRequested] = useState(false);
   const [negError, setNegError] = useState<string | null>(null);
   const [negWpm, setNegWpm] = useState<WpmPoint[]>([]);
 
-  // Step 4
-  const [affTwoTranscript, setAffTwoTranscript] = useState<string | null>(null);
-  const [affTwoWpm, setAffTwoWpm] = useState<WpmPoint[]>([]);
+  // Step 4 — Aff rebuttal (user is NEG: Debby aff-2; user is AFF: user speaks)
+  // Debby's aff-2 = affOverview + affRebuttalPara spliced together.
+  const [affOverview, setAffOverview] = useState<string | null>(null);
+  const [affRebuttalPara, setAffRebuttalPara] = useState<string | null>(null);
   const [affTwoLoading, setAffTwoLoading] = useState(false);
   const [affTwoRequested, setAffTwoRequested] = useState(false);
   const [affTwoError, setAffTwoError] = useState<string | null>(null);
+  const [affTwoWpm, setAffTwoWpm] = useState<WpmPoint[]>([]);
 
   // Step 5
   const [judgment, setJudgment] = useState<JudgmentResponse | null>(null);
@@ -196,23 +209,30 @@ export function RoundRunner() {
   const [judgmentError, setJudgmentError] = useState<string | null>(null);
   const [speechDurationSeconds, setSpeechDurationSeconds] = useState(120);
 
+  // Derive combined transcripts for display and judging.
+  // negTokens = full neg speech text (case + rebuttal paragraph if available).
+  const negTokens = [negCase, negRebuttalPara].filter(Boolean).join("\n\n");
+  // affTwoTranscript = full aff-2 text (overview + rebuttal paragraph if available).
+  const affTwoTranscript = [affOverview, affRebuttalPara].filter(Boolean).join("\n\n");
+
   const abortRef = useRef<AbortController | null>(null);
   const affStartedRef = useRef(false);
-  const negFrameworkStartedRef = useRef(false);
-  const negStartedRef = useRef(false);
+  const negStartedRef = useRef(false);       // user is AFF step-2: neg case prefetch
+  const negRebuttalStartedRef = useRef(false); // user is AFF step-3: neg rebuttal prefetch
   const affTwoStartedRef = useRef(false);
   const judgmentStartedRef = useRef(false);
+
+  // Split promise refs for each AI piece.
   const affPromiseRef = useRef<Promise<string> | null>(null);
-  const negFrameworkRef = useRef<Promise<string> | null>(null);
-  const negPromiseRef = useRef<Promise<string> | null>(null);
-  const affTwoPromiseRef = useRef<Promise<string> | null>(null);
+  const negCaseRef = useRef<Promise<string> | null>(null);
+  const negRebuttalRef = useRef<Promise<string> | null>(null);
+  const affOverviewRef = useRef<Promise<string> | null>(null);
+  const affRebuttalRef = useRef<Promise<string> | null>(null);
   const judgmentPromiseRef = useRef<Promise<JudgmentResponse> | null>(null);
-  const debbySpeech = useDebbySpeech();
-  // `prefetch` is stable across renders; pull it out so the prefetch callbacks
-  // below don't re-create on every playback state change.
-  const { prefetch: prefetchTts, stop: stopAudio } = debbySpeech;
+
   const userSide = topic?.side ?? "aff";
   const userIsAff = userSide === "aff";
+
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -273,51 +293,55 @@ export function RoundRunner() {
       });
       setRoundId(round.id);
       setStep(2);
-      stopAudio();
+      speech.stop();
       affStartedRef.current = false;
-      negFrameworkStartedRef.current = false;
       negStartedRef.current = false;
+      negRebuttalStartedRef.current = false;
       affTwoStartedRef.current = false;
       judgmentStartedRef.current = false;
       affPromiseRef.current = null;
-      negFrameworkRef.current = null;
-      negPromiseRef.current = null;
-      affTwoPromiseRef.current = null;
+      negCaseRef.current = null;
+      negRebuttalRef.current = null;
+      affOverviewRef.current = null;
+      affRebuttalRef.current = null;
       judgmentPromiseRef.current = null;
       setAffTranscript(null);
       setAffWpm([]);
       setAffAiRequested(false);
       setAffAiError(null);
-      setNegTokens("");
+      setNegCase(null);
+      setNegRebuttalPara(null);
       setNegDone(false);
       setNegRequested(false);
       setNegError(null);
       setNegWpm([]);
-      setAffTwoTranscript(null);
-      setAffTwoWpm([]);
+      setAffOverview(null);
+      setAffRebuttalPara(null);
       setAffTwoRequested(false);
       setAffTwoError(null);
+      setAffTwoWpm([]);
       setJudgment(null);
       setJudgmentRequested(false);
       setJudgmentError(null);
     } catch (err) {
       setTopicError(err instanceof Error ? err.message : "Failed to start round");
     }
-  }, [topic, stopAudio]);
+  }, [topic, speech]);
 
   const handlePracticeAgain = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    stopAudio();
+    speech.stop();
     affStartedRef.current = false;
-    negFrameworkStartedRef.current = false;
     negStartedRef.current = false;
+    negRebuttalStartedRef.current = false;
     affTwoStartedRef.current = false;
     judgmentStartedRef.current = false;
     affPromiseRef.current = null;
-    negFrameworkRef.current = null;
-    negPromiseRef.current = null;
-    affTwoPromiseRef.current = null;
+    negCaseRef.current = null;
+    negRebuttalRef.current = null;
+    affOverviewRef.current = null;
+    affRebuttalRef.current = null;
     judgmentPromiseRef.current = null;
     setStep(1);
     setTopic(null);
@@ -328,22 +352,24 @@ export function RoundRunner() {
     setAffLoading(false);
     setAffAiRequested(false);
     setAffAiError(null);
-    setNegTokens("");
+    setNegCase(null);
+    setNegRebuttalPara(null);
     setNegDone(false);
     setNegLoading(false);
     setNegRequested(false);
     setNegError(null);
     setNegWpm([]);
-    setAffTwoTranscript(null);
-    setAffTwoWpm([]);
+    setAffOverview(null);
+    setAffRebuttalPara(null);
     setAffTwoLoading(false);
     setAffTwoRequested(false);
     setAffTwoError(null);
+    setAffTwoWpm([]);
     setJudgment(null);
     setJudgmentLoading(false);
     setJudgmentRequested(false);
     setJudgmentError(null);
-  }, [stopAudio]);
+  }, [speech]);
 
   const uploadSpeech = useCallback(
     async (
@@ -370,7 +396,9 @@ export function RoundRunner() {
         setAffTranscript(res.transcript);
         setAffWpm(res.wpm_series ?? []);
         negStartedRef.current = false;
-        negPromiseRef.current = null;
+        negRebuttalStartedRef.current = false;
+        negCaseRef.current = null;
+        negRebuttalRef.current = null;
         setNegRequested(false);
         setStep(3);
       } finally {
@@ -379,6 +407,8 @@ export function RoundRunner() {
     },
     [uploadSpeech],
   );
+
+  // ── AFF-1: Debby's affirmative speech (user is NEG) ─────────────────────
 
   const prefetchAiAffSpeech = useCallback(async (): Promise<string> => {
     if (!topic) return "";
@@ -391,9 +421,24 @@ export function RoundRunner() {
         method: "POST",
         body: JSON.stringify({ topic: topic.topic, side: "aff" }),
       })
-      .then((res) => {
+      .then(async (res) => {
         setAffTranscript(res.speech);
-        void prefetchTts(res.speech);
+        // Best-effort TTS prefetch for aff-1 — don't await, never blocks.
+        speech.prefetch(res.speech);
+        // Chain: prefetch aff-overview immediately after aff-1 resolves.
+        affOverviewRef.current = apiFetch<AiSpeechResponse>("/api/ai/aff-overview", {
+            method: "POST",
+            body: JSON.stringify({ topic: topic.topic, aff_speech: res.speech }),
+          })
+          .then((ovRes) => {
+            setAffOverview(ovRes.speech);
+            speech.prefetch(ovRes.speech);
+            return ovRes.speech;
+          })
+          .catch(() => "")
+          .finally(() => {
+            affOverviewRef.current = null;
+          });
         return res.speech;
       })
       .catch((err) => {
@@ -409,29 +454,7 @@ export function RoundRunner() {
 
     affPromiseRef.current = promise;
     return promise;
-  }, [topic, affTranscript, prefetchTts]);
-
-  // Phase 1 of the NEG speech: generate Debby's own contentions from the topic
-  // alone. Kicked off at step 2 (right after accept-topic) so it overlaps the
-  // user's affirmative speech. The promise is held for `prefetchAiOpposition`.
-  const prefetchNegFramework = useCallback((): Promise<string> => {
-    if (!topic) return Promise.resolve("");
-    if (negFrameworkRef.current) return negFrameworkRef.current;
-
-    const promise = apiFetch<AiSpeechResponse>("/api/ai/neg-framework", {
-      method: "POST",
-      body: JSON.stringify({ topic: topic.topic }),
-    })
-      .then((res) => res.speech)
-      .catch((err) => {
-        // Drop the ref so a later augment call can retry the framework.
-        negFrameworkRef.current = null;
-        throw err;
-      });
-
-    negFrameworkRef.current = promise;
-    return promise;
-  }, [topic]);
+  }, [topic, affTranscript, speech]);
 
   const revealAiAffSpeech = useCallback(async () => {
     setAffAiRequested(true);
@@ -442,68 +465,105 @@ export function RoundRunner() {
     }
   }, [prefetchAiAffSpeech]);
 
-  // Phase 2 of the NEG speech: await the pre-generated framework, then augment
-  // it with refutations of the (now transcribed) affirmative speech. Fires the
-  // instant the AFF transcript is available so the text + audio are ready by
-  // the time the user clicks "Generate Neg speech".
-  const prefetchAiOpposition = useCallback(async (): Promise<string> => {
-    if (!topic || !affTranscript) return "";
-    if (negTokens.trim()) return negTokens;
-    if (negPromiseRef.current) return negPromiseRef.current;
+  // ── NEG CASE: Debby's neg framework (user is AFF, step 2→3) ─────────────
 
-    setNegTokens("");
-    setNegDone(false);
+  const prefetchNegCase = useCallback(async (): Promise<string> => {
+    if (!topic) return "";
+    if (negCase?.trim()) return negCase;
+    if (negCaseRef.current) return negCaseRef.current;
+
     setNegError(null);
     setNegLoading(true);
-    const promise = (negFrameworkRef.current ?? prefetchNegFramework())
-      .then((framework) =>
-        apiFetch<AiSpeechResponse>("/api/ai/neg-augment", {
-          method: "POST",
-          body: JSON.stringify({
-            topic: topic.topic,
-            framework,
-            aff_speech: affTranscript,
-          }),
-        }),
-      )
+    const promise = apiFetch<AiSpeechResponse>("/api/ai/neg-framework", {
+        method: "POST",
+        body: JSON.stringify({ topic: topic.topic }),
+      })
       .then((res) => {
-        setNegTokens(res.speech);
-        setNegDone(true);
-        void prefetchTts(res.speech);
+        setNegCase(res.speech);
+        // Best-effort TTS prefetch.
+        speech.prefetch(res.speech);
         return res.speech;
       })
       .catch((err) => {
-        setNegError(err instanceof Error ? err.message : "Failed to generate opposition");
+        setNegError(err instanceof Error ? err.message : "Failed to generate neg case");
         throw err;
       })
       .finally(() => {
         setNegLoading(false);
-        negPromiseRef.current = null;
+        negCaseRef.current = null;
       });
 
-    negPromiseRef.current = promise;
+    negCaseRef.current = promise;
     return promise;
-  }, [topic, affTranscript, negTokens, prefetchNegFramework, prefetchTts]);
+  }, [topic, negCase, speech]);
+
+  // ── NEG REBUTTAL: Debby's neg rebuttal paragraph (user is AFF, step 3) ──
+
+  const prefetchNegRebuttal = useCallback(async (): Promise<string> => {
+    if (!topic || !affTranscript) return "";
+    if (negRebuttalPara?.trim()) return negRebuttalPara;
+    if (negRebuttalRef.current) return negRebuttalRef.current;
+
+    // Wait for the neg case before fetching the rebuttal.
+    const caseText = await (negCaseRef.current ?? prefetchNegCase());
+    if (!caseText?.trim()) return "";
+
+    const promise = apiFetch<AiSpeechResponse>("/api/ai/neg-rebuttal", {
+        method: "POST",
+        body: JSON.stringify({
+          topic: topic.topic,
+          neg_case: caseText,
+          aff_speech: affTranscript,
+        }),
+      })
+      .then((res) => {
+        setNegRebuttalPara(res.speech);
+        setNegDone(true);
+        // Best-effort TTS prefetch.
+        speech.prefetch(res.speech);
+        return res.speech;
+      })
+      .catch((err) => {
+        setNegError(
+          err instanceof Error ? err.message : "Failed to generate neg rebuttal",
+        );
+        throw err;
+      })
+      .finally(() => {
+        negRebuttalRef.current = null;
+      });
+
+    negRebuttalRef.current = promise;
+    return promise;
+  }, [topic, affTranscript, negRebuttalPara, prefetchNegCase, speech]);
+
+  // ── REVEAL NEG: show combined neg speech + splice audio ─────────────────
 
   const revealAiOpposition = useCallback(async () => {
     setNegRequested(true);
     try {
-      await prefetchAiOpposition();
+      // Ensure both parts are generated so the Play button can splice instantly.
+      await Promise.all([
+        negCaseRef.current ?? prefetchNegCase(),
+        negRebuttalRef.current ?? prefetchNegRebuttal(),
+      ]);
     } catch {
       // Error text is already stored for the UI.
     }
-  }, [prefetchAiOpposition]);
+  }, [prefetchNegCase, prefetchNegRebuttal]);
 
   const handleNegComplete = useCallback(
     async (blob: Blob) => {
       setNegLoading(true);
       try {
         const res = await uploadSpeech(blob, "neg");
-        setNegTokens(res.transcript);
+        setNegCase(res.transcript);
+        setNegRebuttalPara(null);
         setNegDone(true);
         setNegWpm(res.wpm_series ?? []);
         affTwoStartedRef.current = false;
-        affTwoPromiseRef.current = null;
+        affOverviewRef.current = null;
+        affRebuttalRef.current = null;
         setAffTwoRequested(false);
         setAffTwoError(null);
         setStep(4);
@@ -519,7 +579,10 @@ export function RoundRunner() {
       setAffTwoLoading(true);
       try {
         const res = await uploadSpeech(blob, "aff_two");
-        setAffTwoTranscript(res.transcript);
+        // Store the user's aff-2 in affOverview (the "case" slot) so
+        // affTwoTranscript = overview + rebuttalPara shows the transcript.
+        setAffOverview(res.transcript);
+        setAffRebuttalPara(null);
         setAffTwoWpm(res.wpm_series ?? []);
         judgmentStartedRef.current = false;
         judgmentPromiseRef.current = null;
@@ -532,10 +595,16 @@ export function RoundRunner() {
     [uploadSpeech],
   );
 
-  const prefetchAiAffRebuttal = useCallback(async (): Promise<string> => {
+  // ── AFF OVERVIEW: prefetched after aff-1 (user is NEG) ──────────────────
+  // Note: the chained prefetch after aff-1 resolves sets affOverviewRef.current.
+  // The effect below triggers the rebuttal once we're at step 4.
+
+  // ── AFF REBUTTAL PARA: Debby's aff rebuttal paragraph (user is NEG, step 4) ─
+
+  const prefetchAffRebuttal = useCallback(async (): Promise<string> => {
     if (!topic || !affTranscript || !negTokens.trim()) return "";
-    if (affTwoTranscript?.trim()) return affTwoTranscript;
-    if (affTwoPromiseRef.current) return affTwoPromiseRef.current;
+    if (affRebuttalPara?.trim()) return affRebuttalPara;
+    if (affRebuttalRef.current) return affRebuttalRef.current;
 
     setAffTwoError(null);
     setAffTwoLoading(true);
@@ -548,8 +617,9 @@ export function RoundRunner() {
         }),
       })
       .then((res) => {
-        setAffTwoTranscript(res.speech);
-        void prefetchTts(res.speech);
+        setAffRebuttalPara(res.speech);
+        // Best-effort TTS prefetch.
+        speech.prefetch(res.speech);
         return res.speech;
       })
       .catch((err) => {
@@ -560,21 +630,27 @@ export function RoundRunner() {
       })
       .finally(() => {
         setAffTwoLoading(false);
-        affTwoPromiseRef.current = null;
+        affRebuttalRef.current = null;
       });
 
-    affTwoPromiseRef.current = promise;
+    affRebuttalRef.current = promise;
     return promise;
-  }, [topic, affTranscript, negTokens, affTwoTranscript, prefetchTts]);
+  }, [topic, affTranscript, negTokens, affRebuttalPara, speech]);
+
+  // ── REVEAL AFF REBUTTAL: show combined aff-2 + splice audio ─────────────
 
   const revealAiAffRebuttal = useCallback(async () => {
     setAffTwoRequested(true);
     try {
-      await prefetchAiAffRebuttal();
+      // Ensure both parts are generated so the Play button can splice instantly.
+      await Promise.all([
+        affOverviewRef.current ?? Promise.resolve(affOverview ?? ""),
+        affRebuttalRef.current ?? prefetchAffRebuttal(),
+      ]);
     } catch {
       // Error text is already stored for the UI.
     }
-  }, [prefetchAiAffRebuttal]);
+  }, [affOverview, prefetchAffRebuttal]);
 
   const prefetchJudgment = useCallback(async (): Promise<JudgmentResponse> => {
     if (!topic || !affTranscript || !affTwoTranscript) {
@@ -633,43 +709,53 @@ export function RoundRunner() {
     await revealJudgment();
   }, [revealJudgment]);
 
-  // Debby is NEG (user is AFF): start the contention framework as soon as the
-  // round begins (step 2), so it generates while the user gives their speech.
+  // ── Effects ──────────────────────────────────────────────────────────────
+
+  // User is AFF, step 2: prefetch neg case as soon as topic is accepted.
   useEffect(() => {
     if (
       userIsAff &&
       step === 2 &&
       topic &&
-      !negFrameworkStartedRef.current
+      !negCase?.trim() &&
+      !negLoading &&
+      !negStartedRef.current
     ) {
-      negFrameworkStartedRef.current = true;
-      void prefetchNegFramework().catch(() => undefined);
+      negStartedRef.current = true;
+      void prefetchNegCase().catch(() => undefined);
     }
-  }, [userIsAff, step, topic, prefetchNegFramework]);
+  }, [
+    userIsAff,
+    step,
+    topic,
+    negCase,
+    negLoading,
+    prefetchNegCase,
+  ]);
 
+  // User is AFF, step 3: when aff transcript is ready, prefetch neg rebuttal.
   useEffect(() => {
     if (
       userIsAff &&
       step === 3 &&
       topic &&
       affTranscript &&
-      !negTokens.trim() &&
-      !negLoading &&
-      !negStartedRef.current
+      !negRebuttalPara?.trim() &&
+      !negRebuttalStartedRef.current
     ) {
-      negStartedRef.current = true;
-      void prefetchAiOpposition().catch(() => undefined);
+      negRebuttalStartedRef.current = true;
+      void prefetchNegRebuttal().catch(() => undefined);
     }
   }, [
     userIsAff,
     step,
     topic,
     affTranscript,
-    negTokens,
-    negLoading,
-    prefetchAiOpposition,
+    negRebuttalPara,
+    prefetchNegRebuttal,
   ]);
 
+  // User is NEG, step 2: prefetch Debby's aff-1 (and chains aff-overview).
   useEffect(() => {
     if (
       !userIsAff &&
@@ -691,6 +777,7 @@ export function RoundRunner() {
     prefetchAiAffSpeech,
   ]);
 
+  // User is NEG, step 4: prefetch Debby's aff rebuttal paragraph.
   useEffect(() => {
     if (
       !userIsAff &&
@@ -698,12 +785,12 @@ export function RoundRunner() {
       topic &&
       affTranscript &&
       negTokens.trim() &&
-      !affTwoTranscript?.trim() &&
+      !affRebuttalPara?.trim() &&
       !affTwoLoading &&
       !affTwoStartedRef.current
     ) {
       affTwoStartedRef.current = true;
-      void prefetchAiAffRebuttal().catch(() => undefined);
+      void prefetchAffRebuttal().catch(() => undefined);
     }
   }, [
     userIsAff,
@@ -711,11 +798,16 @@ export function RoundRunner() {
     topic,
     affTranscript,
     negTokens,
-    affTwoTranscript,
+    affRebuttalPara,
     affTwoLoading,
-    prefetchAiAffRebuttal,
+    prefetchAffRebuttal,
   ]);
 
+  // Prefetch judgment once all speeches are final. Gated on step 5 so the
+  // Debby-AFF flow doesn't judge prematurely: affTwoTranscript becomes
+  // non-empty as soon as the overview paragraph lands (well before the aff
+  // rebuttal paragraph), so without the step gate judgment would fire with an
+  // incomplete aff-2. By step 5 both halves are present for either side.
   useEffect(() => {
     if (
       step === 5 &&
@@ -868,7 +960,7 @@ export function RoundRunner() {
                 </button>
                 {affAiError && <p className="text-sm text-red-600">{affAiError}</p>}
                 {affAiRequested && affTranscript && (
-                  <DebbyAudioButton text={affTranscript} speech={debbySpeech} />
+                  <DebbyAudioButton parts={affTranscript} speech={speech} />
                 )}
                 {step === 2 && affAiRequested && affTranscript && (
                   <button
@@ -879,7 +971,7 @@ export function RoundRunner() {
                     Continue to Neg speech
                   </button>
                 )}
-                {affTranscript && (
+                {affAiRequested && affTranscript && (
                   <div
                     data-testid="aff-transcript"
                     className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700"
@@ -920,9 +1012,6 @@ export function RoundRunner() {
               {negRequested && negLoading ? "Generating..." : "Generate Neg speech"}
             </button>
             {negError && <p className="text-sm text-red-600">{negError}</p>}
-            {negRequested && negDone && negTokens && (
-              <DebbyAudioButton text={negTokens} speech={debbySpeech} />
-            )}
             {negRequested && negTokens && (
               <div
                 data-testid="neg-tokens"
@@ -930,6 +1019,12 @@ export function RoundRunner() {
               >
                 {negTokens}
               </div>
+            )}
+            {negRequested && negDone && negTokens.trim().length > 0 && (
+              <DebbyAudioButton
+                parts={[negCase, negRebuttalPara].filter(Boolean) as string[]}
+                speech={speech}
+              />
             )}
             {step === 3 && negRequested && negDone && negTokens.trim().length > 0 && (
               <button
@@ -1015,9 +1110,12 @@ export function RoundRunner() {
                 </button>
                 {affTwoError && <p className="text-sm text-red-600">{affTwoError}</p>}
                 {affTwoRequested && affTwoTranscript && (
-                  <DebbyAudioButton text={affTwoTranscript} speech={debbySpeech} />
+                  <DebbyAudioButton
+                    parts={[affOverview, affRebuttalPara].filter(Boolean) as string[]}
+                    speech={speech}
+                  />
                 )}
-                {affTwoTranscript && (
+                {affTwoRequested && affTwoTranscript && (
                   <div className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                     <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
                       Debby's Aff rebuttal
@@ -1146,3 +1244,4 @@ export function RoundRunner() {
     </main>
   );
 }
+

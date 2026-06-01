@@ -69,9 +69,14 @@ class NegFrameworkBody(BaseModel):
     topic: str = Field(..., min_length=1)
 
 
-class NegAugmentBody(BaseModel):
+class NegRebuttalBody(BaseModel):
     topic: str = Field(..., min_length=1)
-    framework: str = Field(..., min_length=1)
+    neg_case: str = Field(..., min_length=1)
+    aff_speech: str = Field(..., min_length=1)
+
+
+class AffOverviewBody(BaseModel):
+    topic: str = Field(..., min_length=1)
     aff_speech: str = Field(..., min_length=1)
 
 
@@ -158,19 +163,35 @@ async def post_neg_framework(
     return SpeechResponse(speech=text)
 
 
-@router.post("/neg-augment", response_model=SpeechResponse)
-async def post_neg_augment(
-    body: NegAugmentBody,
+@router.post("/neg-rebuttal", response_model=SpeechResponse)
+async def post_neg_rebuttal(
+    body: NegRebuttalBody,
     user: User = Depends(get_current_user),
 ) -> SpeechResponse:
-    """Phase 2 of the two-phase NEG speech: augment the pre-generated framework
-    with refutations of the affirmative speech once it has been transcribed."""
+    """Phase 2 of the NEG speech (append-only): given the pre-generated case and
+    the transcribed affirmative speech, return ONLY the rebuttal+conclusion
+    paragraph to splice onto the end of the case."""
     try:
-        text = await ai_service.ai_neg_augment(
+        text = await ai_service.ai_neg_rebuttal(
             body.topic,
-            body.framework,
+            body.neg_case,
             body.aff_speech,
         )
+    except (RateLimitError, APIStatusError, ValueError) as exc:
+        raise _translate_openai_error(exc) from exc
+    return SpeechResponse(speech=text)
+
+
+@router.post("/aff-overview", response_model=SpeechResponse)
+async def post_aff_overview(
+    body: AffOverviewBody,
+    user: User = Depends(get_current_user),
+) -> SpeechResponse:
+    """Aff-2 part 1 (early, no user input): a one-paragraph overview/roadmap of
+    Debby's own affirmative contentions, generated right after the aff
+    constructive so its audio can be pre-warmed and spliced ahead of time."""
+    try:
+        text = await ai_service.ai_aff_overview(body.topic, body.aff_speech)
     except (RateLimitError, APIStatusError, ValueError) as exc:
         raise _translate_openai_error(exc) from exc
     return SpeechResponse(speech=text)

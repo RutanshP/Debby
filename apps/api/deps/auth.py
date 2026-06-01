@@ -43,7 +43,11 @@ def _get_jwks_client() -> PyJWKClient:
         url = os.environ.get("SUPABASE_URL")
         if not url:
             raise _unauthorized("Server auth not configured")
-        _jwks_client = PyJWKClient(f"{url.rstrip('/')}/auth/v1/.well-known/jwks.json")
+        _jwks_client = PyJWKClient(
+            f"{url.rstrip('/')}/auth/v1/.well-known/jwks.json",
+            cache_keys=True,
+            lifespan=3600,
+        )
     return _jwks_client
 
 

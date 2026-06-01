@@ -1,167 +1,263 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiFetchBlob } from "../lib/api";
+import { apiFetchBlob } from "@/lib/api";
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
 
 export type SpeechState = "idle" | "loading" | "playing" | "error";
 
 export interface UseDebbySpeechResult {
-  play: (text: string, voice?: string) => Promise<void>;
-  prefetch: (text: string, voice?: string) => Promise<void>;
+  play: (parts: string | string[], voice?: string) => Promise<void>;
+  prefetch: (parts: string | string[], voice?: string) => Promise<void>;
   stop: () => void;
   state: SpeechState;
-  activeText: string | null;
+  activeKey: string | null;
   error: string | null;
 }
 
-export function useDebbySpeech(): UseDebbySpeechResult {
-  const [state, setState] = useState<SpeechState>("idle");
-  const [activeText, setActiveText] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const cacheRef = useRef<Map<string, string>>(new Map());
-  // Tracks in-flight prefetch requests so play()/prefetch() don't double-fetch.
-  const pendingRef = useRef<Map<string, Promise<string>>>(new Map());
-  // Monotonically-incrementing token: allows a pending play() to detect it was superseded.
-  const playTokenRef = useRef(0);
+/** Stable join key for a set of speech parts. Single string = itself. */
+export function speechKey(parts: string | string[]): string {
+  return Array.isArray(parts) ? parts.join("\x00") : parts;
+}
 
-  function getAudio(): HTMLAudioElement {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
+function normalise(parts: string | string[]): string[] {
+  return Array.isArray(parts) ? parts : [parts];
+}
+
+// ---------------------------------------------------------------------------
+// Concatenate an array of AudioBuffers into a single AudioBuffer
+// ---------------------------------------------------------------------------
+function concatBuffers(ctx: AudioContext, buffers: AudioBuffer[]): AudioBuffer {
+  const totalLength = buffers.reduce((sum, b) => sum + b.length, 0);
+  const channelCount = Math.max(...buffers.map((b) => b.numberOfChannels));
+  const sampleRate = buffers[0].sampleRate;
+
+  const output = ctx.createBuffer(channelCount, totalLength, sampleRate);
+
+  let offset = 0;
+  for (const buf of buffers) {
+    for (let ch = 0; ch < channelCount; ch++) {
+      const outData = output.getChannelData(ch);
+      if (ch < buf.numberOfChannels) {
+        outData.set(buf.getChannelData(ch), offset);
+      }
+      // channels beyond buf.numberOfChannels are already zero (createBuffer zeros memory)
     }
-    return audioRef.current;
+    offset += buf.length;
   }
 
-  // Fetches (and caches) the audio object URL for `text` without playing it.
-  // Shared by play() and prefetch(); de-dupes concurrent requests for the same text.
-  const loadAudioUrl = useCallback(
-    async (text: string, voice?: string): Promise<string> => {
-      const cached = cacheRef.current.get(text);
+  return output;
+}
+
+// ---------------------------------------------------------------------------
+// Hook
+// ---------------------------------------------------------------------------
+
+export function useDebbySpeech(): UseDebbySpeechResult {
+  const [state, setState] = useState<SpeechState>("idle");
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Lazy singleton AudioContext
+  const ctxRef = useRef<AudioContext | null>(null);
+
+  // Per-part AudioBuffer cache, keyed by text
+  const bufferCacheRef = useRef<Map<string, AudioBuffer>>(new Map());
+
+  // In-flight fetches, de-duped by text
+  const pendingRef = useRef<Map<string, Promise<AudioBuffer>>>(new Map());
+
+  // Currently playing source node
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // Monotonic play token for cancellation
+  const playTokenRef = useRef<number>(0);
+
+  // ------------------------------------------------------------------
+  // AudioContext – created lazily on first use
+  // ------------------------------------------------------------------
+  function getCtx(): AudioContext {
+    if (!ctxRef.current) {
+      const win = typeof window !== "undefined" ? window : null;
+      const AC =
+        (win &&
+          ((win as unknown as { AudioContext?: typeof AudioContext }).AudioContext ||
+            (win as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)) ||
+        null;
+      if (!AC) throw new Error("AudioContext not available");
+      ctxRef.current = new AC();
+    }
+    return ctxRef.current;
+  }
+
+  // ------------------------------------------------------------------
+  // Load a single part's AudioBuffer (network + decode, cached)
+  // ------------------------------------------------------------------
+  const loadBuffer = useCallback(
+    async (text: string, voice?: string): Promise<AudioBuffer> => {
+      const cached = bufferCacheRef.current.get(text);
       if (cached) return cached;
 
-      const inflight = pendingRef.current.get(text);
-      if (inflight) return inflight;
+      const inFlight = pendingRef.current.get(text);
+      if (inFlight) return inFlight;
 
-      const request = apiFetchBlob("/api/ai/tts", {
-        method: "POST",
-        body: JSON.stringify({ text, ...(voice ? { voice } : {}) }),
-      })
-        .then((blob) => {
-          const objectUrl = URL.createObjectURL(blob);
-          cacheRef.current.set(text, objectUrl);
-          return objectUrl;
-        })
-        .finally(() => {
-          pendingRef.current.delete(text);
+      const promise = (async () => {
+        const blob = await apiFetchBlob("/api/ai/tts", {
+          method: "POST",
+          body: JSON.stringify({ text, ...(voice ? { voice } : {}) }),
         });
+        const arrayBuf = await blob.arrayBuffer();
+        const ctx = getCtx();
+        // decodeAudioData detaches the ArrayBuffer – slice to be safe
+        const buffer = await ctx.decodeAudioData(arrayBuf.slice(0));
+        bufferCacheRef.current.set(text, buffer);
+        return buffer;
+      })();
 
-      pendingRef.current.set(text, request);
-      return request;
+      pendingRef.current.set(text, promise);
+      try {
+        const result = await promise;
+        return result;
+      } finally {
+        pendingRef.current.delete(text);
+      }
     },
     [],
   );
 
-  const stop = useCallback(() => {
-    playTokenRef.current += 1; // cancel any in-flight play
-    const audio = audioRef.current;
-    if (audio) {
-      audio.onended = null;
-      audio.onerror = null;
-      audio.pause();
-      audio.src = "";
-    }
-    setActiveText(null);
-    setState("idle");
-  }, []);
-
-  // Warm the cache so a later play() is instant. Never throws and never
-  // touches playback state — TTS failures must not block the speech UI.
+  // ------------------------------------------------------------------
+  // prefetch – warm buffers, best-effort, never throws
+  // ------------------------------------------------------------------
   const prefetch = useCallback(
-    async (text: string, voice?: string): Promise<void> => {
-      if (!text.trim()) return;
+    async (parts: string | string[], voice?: string): Promise<void> => {
+      const texts = normalise(parts);
       try {
-        await loadAudioUrl(text, voice);
+        await Promise.all(texts.map((t) => loadBuffer(t, voice)));
       } catch {
-        // Swallow — audio is best-effort; the speech text still renders.
+        // swallow – prefetch is best-effort
       }
     },
-    [loadAudioUrl],
+    [loadBuffer],
   );
 
-  const play = useCallback(
-    async (text: string, voice?: string): Promise<void> => {
-      const audio = getAudio();
+  // ------------------------------------------------------------------
+  // stop – immediate, bump token
+  // ------------------------------------------------------------------
+  const stop = useCallback(() => {
+    playTokenRef.current += 1;
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.stop();
+        sourceNodeRef.current.disconnect();
+      } catch {
+        // already stopped
+      }
+      sourceNodeRef.current = null;
+    }
+    setState("idle");
+    setActiveKey(null);
+    setError(null);
+  }, []);
 
-      // Toggle: if already playing this text, stop it.
-      if (activeText === text && state === "playing") {
+  // ------------------------------------------------------------------
+  // play
+  // ------------------------------------------------------------------
+  const play = useCallback(
+    async (parts: string | string[], voice?: string): Promise<void> => {
+      const key = speechKey(parts);
+      const texts = normalise(parts);
+
+      // Toggle-stop if already playing the same key
+      if (state === "playing" && activeKey === key) {
         stop();
         return;
       }
 
-      // Cancel any previous in-flight load by bumping the token.
-      playTokenRef.current += 1;
-      const token = playTokenRef.current;
+      const token = ++playTokenRef.current;
 
-      // Clear stale event handlers before starting a new playback.
-      audio.onended = null;
-      audio.onerror = null;
-
-      setError(null);
-      setState("loading");
-      setActiveText(text);
-
-      try {
-        const objectUrl = await loadAudioUrl(text, voice);
-        // Check if this call was superseded while the fetch was in flight.
-        if (playTokenRef.current !== token) return;
-
-        audio.src = objectUrl;
-        audio.onended = () => {
-          if (playTokenRef.current === token) {
-            setState("idle");
-            setActiveText(null);
-          }
-        };
-        audio.onerror = () => {
-          if (playTokenRef.current === token) {
-            setState("error");
-            setError("Audio playback failed");
-            setActiveText(null);
-          }
-        };
-        await audio.play();
-        if (playTokenRef.current === token) {
-          setState("playing");
+      // Stop any current playback
+      if (sourceNodeRef.current) {
+        try {
+          sourceNodeRef.current.stop();
+          sourceNodeRef.current.disconnect();
+        } catch {
+          // already stopped
         }
-      } catch (err) {
-        if (playTokenRef.current === token) {
-          setState("error");
-          setError(err instanceof Error ? err.message : "Failed to play speech");
-          setActiveText(null);
-        }
+        sourceNodeRef.current = null;
       }
+
+      setState("loading");
+      setActiveKey(key);
+      setError(null);
+
+      let buffers: AudioBuffer[];
+      try {
+        buffers = await Promise.all(texts.map((t) => loadBuffer(t, voice)));
+      } catch (err) {
+        if (playTokenRef.current !== token) return; // superseded
+        setState("error");
+        setError(err instanceof Error ? err.message : "TTS fetch failed");
+        return;
+      }
+
+      if (playTokenRef.current !== token) return; // superseded
+
+      const ctx = getCtx();
+      await ctx.resume();
+
+      if (playTokenRef.current !== token) return; // superseded
+
+      const combined =
+        buffers.length === 1 ? buffers[0] : concatBuffers(ctx, buffers);
+
+      const source = ctx.createBufferSource();
+      source.buffer = combined;
+      source.connect(ctx.destination);
+      source.onended = () => {
+        if (playTokenRef.current === token) {
+          setState("idle");
+          setActiveKey(null);
+          sourceNodeRef.current = null;
+        }
+      };
+
+      sourceNodeRef.current = source;
+      setState("playing");
+      source.start();
     },
-    [activeText, state, stop, loadAudioUrl],
+    [state, activeKey, stop, loadBuffer],
   );
 
+  // ------------------------------------------------------------------
+  // Cleanup on unmount
+  // ------------------------------------------------------------------
   useEffect(() => {
-    const cache = cacheRef.current;
     return () => {
-      playTokenRef.current += 1; // cancel any in-flight play on unmount
-      const audio = audioRef.current;
-      if (audio) {
-        audio.onended = null;
-        audio.onerror = null;
-        audio.pause();
-        audio.src = "";
+      playTokenRef.current += 1;
+      if (sourceNodeRef.current) {
+        try {
+          sourceNodeRef.current.stop();
+          sourceNodeRef.current.disconnect();
+        } catch {
+          // already stopped
+        }
+        sourceNodeRef.current = null;
       }
-      for (const url of cache.values()) {
-        URL.revokeObjectURL(url);
+      if (ctxRef.current) {
+        ctxRef.current.close().catch(() => {});
+        ctxRef.current = null;
       }
-      cache.clear();
+      bufferCacheRef.current.clear();
+      pendingRef.current.clear();
     };
   }, []);
 
-  return { play, prefetch, stop, state, activeText, error };
+  return { play, prefetch, stop, state, activeKey, error };
 }

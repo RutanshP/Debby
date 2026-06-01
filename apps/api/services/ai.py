@@ -262,6 +262,114 @@ def _normalize_flow_data(data: Any, rfd: str, topic: str = "") -> dict[str, Any]
 # --- speech generation --------------------------------------------------------
 
 
+async def ai_neg_framework(topic: str) -> str:
+    """Negative constructive case body — 3 contentions, no closing summary."""
+
+    system = (
+        "You are a negation parliamentary debater by the name of Debby. "
+        "Your job is to make a debate case for the topic you are given."
+    )
+    user = (
+        "Make the body of a two-minute negation constructive case for the topic: "
+        + topic
+        + " using a high school parliamentary debate case format style with evidence "
+        "at average speaking pace. Include exactly three negative contentions with "
+        "clear labels, warranting, and impacts. Do NOT include a conclusion, summary "
+        "paragraph, or any closing/wrap-up sentence at the end — the speech ends "
+        "immediately after the third contention. In the start of your speech, you "
+        "must say: \"Hello my name is Debby.\""
+    )
+
+    message = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=512,
+        temperature=0.0,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return message.choices[0].message.content or ""
+
+
+async def ai_neg_rebuttal(topic: str, neg_case: str, aff_speech: str) -> str:
+    """Append-only negative rebuttal + conclusion paragraph.
+
+    Returns ONLY the next paragraph to append after the neg case: refutes the
+    AFF's major contentions, cross-applies neg case contentions by name, then
+    delivers a brief conclusion. Must not restate the case or greet.
+    """
+
+    if not topic or not neg_case or not aff_speech:
+        raise ValueError("Topic, neg case, and aff speech are required")
+
+    system = (
+        "You are a negation parliamentary debater by the name of Debby. "
+        "You have already delivered your negative constructive case. "
+        "Your job is to add only the very next paragraph to that speech."
+    )
+    user = (
+        "Given the following topic:\n"
+        + topic
+        + "\n\nYou have already delivered this negative case:\n"
+        + neg_case
+        + "\n\nThe affirmative gave the following speech:\n"
+        + aff_speech
+        + "\n\nWrite ONLY the next paragraph that comes after your case above. "
+        "This paragraph must: refute the affirmative's major contentions, "
+        "cross-apply your prepared case contentions by name as refutations where "
+        "they apply, and end with a brief conclusion. "
+        "Do NOT restate or summarize your case contentions. "
+        "Do NOT include a greeting. Output only this single paragraph."
+    )
+
+    message = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=350,
+        temperature=0.0,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return message.choices[0].message.content or ""
+
+
+async def ai_aff_overview(topic: str, aff_speech: str) -> str:
+    """One-paragraph affirmative overview/roadmap of the aff's contentions.
+
+    No greeting, no rebuttal — purely previews the aff constructive case.
+    """
+
+    if not topic or not aff_speech:
+        raise ValueError("Topic and affirmative speech are required")
+
+    system = (
+        "You are an affirmative parliamentary debater by the name of Debby. "
+        "Your job is to deliver a brief overview of the affirmative case."
+    )
+    user = (
+        "Given the following topic:\n"
+        + topic
+        + "\n\nGiven Debby's affirmative constructive speech:\n"
+        + aff_speech
+        + "\n\nWrite exactly one paragraph that previews and roadmaps the "
+        "affirmative's contentions from that speech. Do not include a greeting. "
+        "Do not make any rebuttal. Output only this single overview paragraph."
+    )
+
+    message = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=250,
+        temperature=0.0,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return message.choices[0].message.content or ""
+
+
 async def ai_speech(topic: str, side: Side = "aff") -> str:
     """One-shot AI debate speech (legacy `ai_speech` / `ai_response` starter).
 
@@ -346,111 +454,29 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
     return message.choices[0].message.content or ""
 
 
-async def ai_neg_framework(topic: str) -> str:
-    """Phase 1 of the two-phase NEG speech: Debby's own negative contentions.
-
-    Topic-only, so it can run before the affirmative speech exists (kicked off
-    at accept-topic, overlapping the user's ~2-minute speech). Produces just the
-    constructive case; `ai_neg_augment` later layers refutations on top.
-    """
-
-    message = await client.chat.completions.create(
-        model=MODEL,
-        max_tokens=500,
-        temperature=0.0,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a negation parliamentary debater by the name of "
-                    "Debby. Your job is to build the negative constructive case "
-                    "on the topic you are given."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Given the following topic: \n" + topic
-                    + "\nwrite the constructive portion of a high school "
-                    "parliamentary debate negation case at average speaking "
-                    "pace, with evidence. Present Debby's own negative "
-                    "contentions only, with clear signposting — do NOT yet "
-                    "refute any affirmative arguments (those will be added "
-                    "later). In the start of your speech, you must say: "
-                    "\"Hello my name is Debby.\""
-                ),
-            },
-        ],
-    )
-    return message.choices[0].message.content or ""
-
-
-async def ai_neg_augment(topic: str, framework: str, aff_speech: str) -> str:
-    """Phase 2 of the two-phase NEG speech: augment the pre-generated framework.
-
-    Takes the contentions produced by `ai_neg_framework` plus the transcribed
-    affirmative speech and weaves in refutations, yielding the final NEG speech.
-    This is the smaller, faster call that runs once the AFF transcript lands.
-    """
-
-    if not topic or not framework or not aff_speech:
-        raise ValueError("Topic, framework, and affirmative speech are required")
-
-    message = await client.chat.completions.create(
-        model=MODEL,
-        max_tokens=700,
-        temperature=0.0,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a negation parliamentary debater by the name of "
-                    "Debby. You have already prepared your negative constructive "
-                    "case and now need to deliver the full negation speech."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Given the following topic: \n" + topic
-                    + "\n\nGiven Debby's prepared negative constructive case: \n"
-                    + framework
-                    + "\n\nGiven the following affirmative speech: \n"
-                    + aff_speech
-                    + "\n\nWrite the complete two-minute negation speech at "
-                    "average speaking pace. First, present Debby's own negative "
-                    "contentions from the prepared case above; second, refute the "
-                    "affirmative's major contentions. When one of Debby's own "
-                    "contentions answers an affirmative point, explicitly "
-                    "cross-apply it as a refutation. For example, say that your "
-                    "money tradeoff contention also refutes their innovation point "
-                    "because that money can fund innovation elsewhere. Keep the "
-                    "prepared contentions intact and use clear signposting. In the "
-                    "start of your speech, you must say: \"Hello my name is Debby.\""
-                ),
-            },
-        ],
-    )
-    return message.choices[0].message.content or ""
-
-
 async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
-    """Short affirmative rebuttal after the human gives the NEG speech."""
+    """Append-only affirmative rebuttal paragraph after the human gives the NEG speech.
+
+    Returns ONLY a single rebuttal paragraph: answers the NEG's strongest
+    arguments, extends the aff's best offense, and does impact comparison.
+    Must not include an overview, a new case, or a greeting.
+    """
 
     if not topic or not aff_speech or not neg_speech:
         raise ValueError("Topic, affirmative speech, and negative speech are required")
 
     message = await client.chat.completions.create(
         model=MODEL,
-        max_tokens=450,
+        max_tokens=350,
         temperature=0.0,
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are an affirmative parliamentary debater by the name of "
-                    "Debby. You are giving a short rebuttal-only speech. Do not "
-                    "introduce a new constructive case."
+                    "Debby. You are adding the next paragraph to your speech. "
+                    "Do not introduce a new constructive case. Do not include a "
+                    "greeting or an overview."
                 ),
             },
             {
@@ -462,10 +488,11 @@ async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
                     + aff_speech
                     + "\n\nGiven the negative speech:\n"
                     + neg_speech
-                    + "\n\nWrite a concise affirmative rebuttal speech that answers "
+                    + "\n\nWrite ONLY a single rebuttal paragraph that answers "
                     "the negative's strongest arguments, extends the affirmative's "
-                    "best offense, and does clear impact comparison. This should be "
-                    "rebuttal-only, not a new case."
+                    "best offense, and does clear impact comparison. "
+                    "Do not include an overview, a new case, or a greeting. "
+                    "Output only this single paragraph."
                 ),
             },
         ],
