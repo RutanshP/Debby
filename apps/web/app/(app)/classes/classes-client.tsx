@@ -22,7 +22,14 @@ import {
   type PracticeSide,
 } from "@/lib/classroom";
 
-type Tab = "classwork" | "people" | "results";
+type Tab = "classwork" | "people" | "stream" | "results";
+
+const TAB_LABELS: Record<Tab, string> = {
+  classwork: "Assignments",
+  people: "People",
+  stream: "Stream",
+  results: "Results",
+};
 
 const fieldClass =
   "h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
@@ -71,6 +78,7 @@ function assignmentHref(detail: AssignmentRecipientDetail): string {
 export function ClassesClient() {
   const searchParams = useSearchParams();
   const requestedClassId = searchParams.get("class");
+  const requestedTab = searchParams.get("tab");
   const [classes, setClasses] = useState<ClassListItem[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRecipientDetail[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -158,6 +166,17 @@ export function ClassesClient() {
       ignore = true;
     };
   }, [requestedClassId]);
+
+  useEffect(() => {
+    if (
+      requestedTab === "classwork" ||
+      requestedTab === "people" ||
+      requestedTab === "stream" ||
+      requestedTab === "results"
+    ) {
+      setTab(requestedTab);
+    }
+  }, [requestedTab]);
 
   async function handleCreateAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -343,7 +362,11 @@ export function ClassesClient() {
                     )}
                   </div>
                   <nav className="mt-5 flex gap-2" aria-label="Class tabs">
-                    {(["classwork", "people", "results"] as Tab[]).map((nextTab) => (
+                    {(
+                      classDetail.role === "coach"
+                        ? (["classwork", "people", "stream", "results"] as Tab[])
+                        : (["classwork", "stream", "results"] as Tab[])
+                    ).map((nextTab) => (
                       <button
                         key={nextTab}
                         type="button"
@@ -354,7 +377,7 @@ export function ClassesClient() {
                             : "bg-slate-100 text-slate-700 hover:bg-teal/10"
                         }`}
                       >
-                        {nextTab}
+                        {TAB_LABELS[nextTab]}
                       </button>
                     ))}
                   </nav>
@@ -602,6 +625,13 @@ export function ClassesClient() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  ) : tab === "stream" ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="font-semibold text-slate-900">Stream</h3>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Class messages will live here later.
+                      </p>
                     </div>
                   ) : classDetail.role === "coach" ? (
                     <div className="overflow-x-auto">
