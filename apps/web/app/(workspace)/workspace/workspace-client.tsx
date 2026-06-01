@@ -20,6 +20,9 @@ export function WorkspaceClient() {
   const [newClassName, setNewClassName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [submitting, setSubmitting] = useState<"create" | "join" | null>(null);
+  const hasCoachClass = classes.some((item) => item.role === "coach");
+  const hasCompetitorClass = classes.some((item) => item.role === "competitor");
+  const showPersonalWorkspace = hasCoachClass || !hasCompetitorClass;
 
   async function loadClasses() {
     setError(null);
@@ -89,7 +92,9 @@ export function WorkspaceClient() {
       <header className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold text-teal-dark">Choose Workspace</h1>
         <p className="text-slate-600">
-          Use Debby on your own, or enter a classroom workspace.
+          {showPersonalWorkspace
+            ? "Use Debby on your own, or enter a classroom workspace."
+            : "Open your classroom workspace and practice there."}
         </p>
       </header>
 
@@ -99,19 +104,21 @@ export function WorkspaceClient() {
         </div>
       )}
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">Personal Debby</h2>
-            <p className="text-sm text-slate-600">
-              Practice rounds, drills, case builder, progress, and your library.
-            </p>
+      {showPersonalWorkspace && (
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">Personal Debby</h2>
+              <p className="text-sm text-slate-600">
+                Practice rounds, drills, case builder, progress, and your library.
+              </p>
+            </div>
+            <Link href="/practice" className={primaryButtonClass}>
+              Go to Debby
+            </Link>
           </div>
-          <Link href="/practice" className={primaryButtonClass}>
-            Go to Debby
-          </Link>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="grid gap-4 lg:grid-cols-2">
         <form

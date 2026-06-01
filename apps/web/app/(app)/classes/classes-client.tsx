@@ -36,6 +36,18 @@ const fieldClass =
 const labelClass = "flex flex-col gap-1 text-sm font-medium text-slate-700";
 const primaryButtonClass =
   "inline-flex h-10 items-center justify-center rounded-md bg-teal px-4 text-sm font-medium text-white shadow-sm transition hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-60";
+const CLASSROOM_CACHE_KEY = "debby-classroom-cache-v1";
+const CLASSROOM_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+
+interface ClassroomPageCache {
+  classes: ClassListItem[];
+  assignments: AssignmentRecipientDetail[];
+  selectedClassId: string | null;
+  classDetail: ClassDetail | null;
+  savedAt: number;
+}
+
+let classroomPageMemoryCache: ClassroomPageCache | null = null;
 
 function isTransientAssignmentReadError(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false;
@@ -46,6 +58,37 @@ function dueDateToEndOfDayIso(dateValue: string): string | null {
   if (!dateValue) return null;
   const dueDate = new Date(`${dateValue}T23:59:00`);
   return Number.isNaN(dueDate.getTime()) ? null : dueDate.toISOString();
+}
+
+function readClassroomCache(): ClassroomPageCache | null {
+  const now = Date.now();
+  if (classroomPageMemoryCache && now - classroomPageMemoryCache.savedAt <= CLASSROOM_CACHE_MAX_AGE_MS) {
+    return classroomPageMemoryCache;
+  }
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(CLASSROOM_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ClassroomPageCache;
+    if (now - parsed.savedAt > CLASSROOM_CACHE_MAX_AGE_MS) {
+      window.sessionStorage.removeItem(CLASSROOM_CACHE_KEY);
+      return null;
+    }
+    classroomPageMemoryCache = parsed;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeClassroomCache(cache: ClassroomPageCache) {
+  classroomPageMemoryCache = cache;
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(CLASSROOM_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore storage failures; fresh fetches still work.
+  }
 }
 
 function payloadSummary(detail: AssignmentRecipientDetail | CoachAssignmentSummary): string {
@@ -123,6 +166,17 @@ export function ClassesClient() {
     [classDetail],
   );
 
+  useEffect(() => {
+    if (loading) return;
+    writeClassroomCache({
+      classes,
+      assignments,
+      selectedClassId,
+      classDetail,
+      savedAt: Date.now(),
+    });
+  }, [assignments, classDetail, classes, loading, selectedClassId]);
+
   async function loadBase(nextClassId = selectedClassId) {
     setError(null);
     const classRows = await apiFetch<ClassListItem[]>("/api/classes");
@@ -154,8 +208,28 @@ export function ClassesClient() {
 
   useEffect(() => {
     let ignore = false;
+    const cached = readClassroomCache();
+    if (cached) {
+      const cachedClassId =
+        requestedClassId ??
+        cached.selectedClassId ??
+        cached.classes[0]?.id ??
+        null;
+      if (!ignore) {
+        setClasses(cached.classes);
+        setAssignments(cached.assignments);
+        setSelectedClassId(cachedClassId);
+        setClassDetail(
+          cached.classDetail && cached.classDetail.class_room.id === cachedClassId
+            ? cached.classDetail
+            : null,
+        );
+        setLoading(false);
+      }
+    }
+
     async function load() {
-      setLoading(true);
+      if (!cached) setLoading(true);
       try {
         const classRows = await apiFetch<ClassListItem[]>("/api/classes");
         let assignmentRows: AssignmentRecipientDetail[] = [];
@@ -172,6 +246,8 @@ export function ClassesClient() {
         if (initialClass) {
           setSelectedClassId(initialClass.id);
           await loadClass(initialClass.id);
+        } else {
+          setClassDetail(null);
         }
       } catch (err) {
         if (!ignore) setError(err instanceof Error ? err.message : "Failed to load classes");
