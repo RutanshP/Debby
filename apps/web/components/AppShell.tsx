@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import { getBrowserSupabase } from "@/lib/supabase";
 
 const navItems = [
   { href: "/", label: "Practice" },
@@ -19,36 +21,66 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    const supabase = getBrowserSupabase();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-200 bg-white px-4 py-6 shadow-sm md:block">
-        <Link href="/" className="block px-2 text-xl font-bold text-teal-dark">
-          Debby
-        </Link>
-        <nav className="mt-8 space-y-1" aria-label="Main navigation">
-          {navItems.map((item) => {
-            const active = isActive(pathname, item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
-                  active
-                    ? "bg-teal text-white"
-                    : "text-slate-700 hover:bg-teal/10 hover:text-teal-dark"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-slate-200 bg-white px-4 py-6 shadow-sm md:flex">
+        <div>
+          <Link href="/" className="block px-2 text-xl font-bold text-teal-dark">
+            Debby
+          </Link>
+          <nav className="mt-8 space-y-1" aria-label="Main navigation">
+            {navItems.map((item) => {
+              const active = isActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
+                    active
+                      ? "bg-teal text-white"
+                      : "text-slate-700 hover:bg-teal/10 hover:text-teal-dark"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="mt-auto rounded-md px-3 py-2 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {signingOut ? "Signing out..." : "Sign out"}
+        </button>
       </aside>
 
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:hidden">
-        <div className="font-bold text-teal-dark">Debby</div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="font-bold text-teal-dark">Debby</div>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {signingOut ? "Signing out..." : "Sign out"}
+          </button>
+        </div>
         <nav className="mt-3 flex gap-2 overflow-x-auto" aria-label="Main navigation">
           {navItems.map((item) => {
             const active = isActive(pathname, item.href);
