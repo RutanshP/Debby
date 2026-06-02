@@ -8,6 +8,7 @@ export type SpeechState = "idle" | "loading" | "playing" | "error";
 export interface UseDebbySpeechResult {
   play: (parts: string | string[], voice?: string) => Promise<void>;
   prefetch: (parts: string | string[], voice?: string) => Promise<void>;
+  cacheAudio: (text: string, chunks: ArrayBuffer[], voice?: string) => Promise<void>;
   stop: () => void;
   state: SpeechState;
   activeKey: string | null;
@@ -120,6 +121,23 @@ export function useDebbySpeech(): UseDebbySpeechResult {
     [loadBuffer],
   );
 
+  const cacheAudio = useCallback(async (text: string, chunks: ArrayBuffer[], voice?: string) => {
+    const normalizedText = text.trim();
+    if (!normalizedText || chunks.length === 0) return;
+
+    try {
+      const ctx = getCtx();
+      const decoded = await Promise.all(
+        chunks.map((chunk) => ctx.decodeAudioData(chunk.slice(0))),
+      );
+      const combined =
+        decoded.length === 1 ? decoded[0] : concatBuffers(ctx, decoded);
+      bufferCacheRef.current.set(audioCacheKey(normalizedText, voice), combined);
+    } catch {
+      // Best-effort cache hydration only.
+    }
+  }, []);
+
   const stop = useCallback(() => {
     playTokenRef.current += 1;
     if (sourceNodeRef.current) {
@@ -166,8 +184,6 @@ export function useDebbySpeech(): UseDebbySpeechResult {
       await ctx.resume();
       if (playTokenRef.current !== token) return;
 
-      setState("playing");
-
       const playWholeBuffer = (buffer: AudioBuffer) =>
         new Promise<void>((resolve) => {
           if (playTokenRef.current !== token) {
@@ -182,6 +198,7 @@ export function useDebbySpeech(): UseDebbySpeechResult {
             resolve();
           };
           sourceNodeRef.current = source;
+          setState("playing");
           source.start();
         });
 
@@ -226,6 +243,7 @@ export function useDebbySpeech(): UseDebbySpeechResult {
               maybePlayNext();
             };
             sourceNodeRef.current = source;
+            setState("playing");
             source.start();
           };
 
@@ -343,5 +361,5 @@ export function useDebbySpeech(): UseDebbySpeechResult {
     };
   }, []);
 
-  return { play, prefetch, stop, state, activeKey, error };
+  return { play, prefetch, cacheAudio, stop, state, activeKey, error };
 }

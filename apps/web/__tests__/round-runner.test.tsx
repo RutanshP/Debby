@@ -1,4 +1,9 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { TextDecoder } from "util";
+
+if (!(globalThis as { TextDecoder?: typeof TextDecoder }).TextDecoder) {
+  (globalThis as { TextDecoder?: typeof TextDecoder }).TextDecoder = TextDecoder;
+}
 
 // --- Mocks --------------------------------------------------------------
 
@@ -68,6 +73,54 @@ function tournamentResponse() {
   return jsonResponse({ tournaments: ["Bargain Belt", "Berkeley HS"] });
 }
 
+function sseResponse(
+  events: Array<{ event: string; data: unknown }>,
+  init: ResponseInit = {},
+) {
+  const payload = events
+    .map(({ event, data }) => {
+      const serialized = typeof data === "string" ? data : JSON.stringify(data);
+      return `event: ${event}\ndata: ${serialized}\n\n`;
+    })
+    .join("");
+  const status = init.status ?? 200;
+  const headers = new Headers({
+    "Content-Type": "text/event-stream",
+    ...(init.headers ?? {}),
+  });
+  const bytes = new Uint8Array(Buffer.from(payload, "utf8"));
+  let consumed = false;
+
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers,
+    body: {
+      getReader() {
+        return {
+          async read() {
+            if (consumed) return { done: true, value: undefined };
+            consumed = true;
+            return { done: false, value: bytes };
+          },
+          releaseLock() {
+            // no-op test reader
+          },
+        };
+      },
+    },
+    async text() {
+      return payload;
+    },
+    async json() {
+      return JSON.parse(payload);
+    },
+    async blob() {
+      return new Blob([payload], { type: "text/event-stream" });
+    },
+  } as unknown as Response;
+}
+
 function findFetchCall(path: string): [string, RequestInit] {
   const match = (global.fetch as jest.Mock).mock.calls.find(([url]) =>
     String(url).includes(path),
@@ -76,6 +129,12 @@ function findFetchCall(path: string): [string, RequestInit] {
     throw new Error(`Expected fetch call containing ${path}`);
   }
   return match as [string, RequestInit];
+}
+
+function findFetchCalls(path: string): Array<[string, RequestInit]> {
+  return (global.fetch as jest.Mock).mock.calls.filter(([url]) =>
+    String(url).includes(path),
+  ) as Array<[string, RequestInit]>;
 }
 
 beforeEach(() => {
@@ -171,21 +230,34 @@ describe("RoundRunner", () => {
   });
 
   test("after recording the aff speech, fetch saves the realtime transcript", async () => {
-    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/topics/tournaments")) return Promise.resolve(tournamentResponse());
       if (url.includes("/api/topics?")) {
         return Promise.resolve(jsonResponse({ topic: "T", side: "aff", format: "parli" }));
       }
       if (url.endsWith("/api/rounds")) return Promise.resolve(jsonResponse({ id: "round-123" }));
-      if (url.includes("/api/ai/neg-framework")) {
-        return Promise.resolve(jsonResponse({ speech: "neg case" }));
+      if (url.includes("/api/ai/generate-audio-stream")) {
+        const body = JSON.parse(String((init as RequestInit | undefined)?.body ?? "{}"));
+        if (body.kind === "neg_framework") {
+          return Promise.resolve(
+            sseResponse([
+              { event: "text", data: { text: "neg case" } },
+              { event: "done", data: { full_text: "neg case" } },
+            ]),
+          );
+        }
+        if (body.kind === "neg_rebuttal") {
+          return Promise.resolve(
+            sseResponse([
+              { event: "text", data: { text: "neg rebuttal" } },
+              { event: "done", data: { full_text: "neg rebuttal" } },
+            ]),
+          );
+        }
       }
       if (url.includes("/api/rounds/round-123/speeches/text")) {
         return Promise.resolve(jsonResponse({ transcript: "hello world", wpm_series: [] }));
-      }
-      if (url.includes("/api/ai/neg-rebuttal")) {
-        return Promise.resolve(jsonResponse({ speech: "neg rebuttal" }));
       }
       throw new Error(`Unhandled fetch: ${url}`);
     });
@@ -203,7 +275,7 @@ describe("RoundRunner", () => {
     await waitFor(() =>
       expect(
         (global.fetch as jest.Mock).mock.calls.some(([url]) =>
-          String(url).includes("/api/ai/neg-rebuttal"),
+          String(url).includes("/api/ai/generate-audio-stream"),
         ),
       ).toBe(true),
     );
@@ -220,21 +292,34 @@ describe("RoundRunner", () => {
   });
 
   test("the Neg speech step preloads but waits for Generate Neg speech click", async () => {
-    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/topics/tournaments")) return Promise.resolve(tournamentResponse());
       if (url.includes("/api/topics?")) {
         return Promise.resolve(jsonResponse({ topic: "T", side: "aff", format: "parli" }));
       }
       if (url.endsWith("/api/rounds")) return Promise.resolve(jsonResponse({ id: "r1" }));
-      if (url.includes("/api/ai/neg-framework")) {
-        return Promise.resolve(jsonResponse({ speech: "Hello world" }));
+      if (url.includes("/api/ai/generate-audio-stream")) {
+        const body = JSON.parse(String((init as RequestInit | undefined)?.body ?? "{}"));
+        if (body.kind === "neg_framework") {
+          return Promise.resolve(
+            sseResponse([
+              { event: "text", data: { text: "Hello world" } },
+              { event: "done", data: { full_text: "Hello world" } },
+            ]),
+          );
+        }
+        if (body.kind === "neg_rebuttal") {
+          return Promise.resolve(
+            sseResponse([
+              { event: "text", data: { text: "Neg rebuttal" } },
+              { event: "done", data: { full_text: "Neg rebuttal" } },
+            ]),
+          );
+        }
       }
       if (url.includes("/api/rounds/r1/speeches/text")) {
         return Promise.resolve(jsonResponse({ transcript: "aff text", wpm_series: [] }));
-      }
-      if (url.includes("/api/ai/neg-rebuttal")) {
-        return Promise.resolve(jsonResponse({ speech: "Neg rebuttal" }));
       }
       throw new Error(`Unhandled fetch: ${url}`);
     });
@@ -252,7 +337,7 @@ describe("RoundRunner", () => {
     await waitFor(() =>
       expect(
         (global.fetch as jest.Mock).mock.calls.some(([url]) =>
-          String(url).includes("/api/ai/neg-rebuttal"),
+          String(url).includes("/api/ai/generate-audio-stream"),
         ),
       ).toBe(true),
     );
@@ -271,19 +356,34 @@ describe("RoundRunner", () => {
       ballot: { winner: "neg", explanation: "Neg wins." },
     };
 
-    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/topics/tournaments")) return Promise.resolve(tournamentResponse());
       if (url.includes("/api/topics?")) {
         return Promise.resolve(jsonResponse({ topic: "T", side: "neg", format: "parli" }));
       }
       if (url.endsWith("/api/rounds")) return Promise.resolve(jsonResponse({ id: "r-neg" }));
-      if (url.includes("/api/ai/speech")) return Promise.resolve(jsonResponse({ speech: "ai aff" }));
+      if (url.includes("/api/ai/generate-audio-stream")) {
+        const body = JSON.parse(String((init as RequestInit | undefined)?.body ?? "{}"));
+        if (body.kind === "aff_speech") {
+          return Promise.resolve(
+            sseResponse([
+              { event: "text", data: { text: "ai aff" } },
+              { event: "done", data: { full_text: "ai aff" } },
+            ]),
+          );
+        }
+        if (body.kind === "aff_rebuttal") {
+          return Promise.resolve(
+            sseResponse([
+              { event: "text", data: { text: "ai aff rebuttal" } },
+              { event: "done", data: { full_text: "ai aff rebuttal" } },
+            ]),
+          );
+        }
+      }
       if (url.includes("/api/rounds/r-neg/speeches/text")) {
         return Promise.resolve(jsonResponse({ transcript: "user neg", wpm_series: [] }));
-      }
-      if (url.includes("/api/ai/aff-rebuttal")) {
-        return Promise.resolve(jsonResponse({ speech: "ai aff rebuttal" }));
       }
       if (url.includes("/api/ai/judgment")) {
         return Promise.resolve(
@@ -314,7 +414,7 @@ describe("RoundRunner", () => {
     expect(await screen.findByText("user neg")).toBeInTheDocument();
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("/api/ai/aff-rebuttal"),
+      expect.stringContaining("/api/ai/generate-audio-stream"),
       expect.anything(),
     ));
     fireEvent.click(screen.getByRole("button", { name: /generate aff rebuttal/i }));
@@ -327,10 +427,13 @@ describe("RoundRunner", () => {
     expect(await screen.findByText("Negative wins on defense and turns.")).toBeInTheDocument();
     expect(screen.getByText("Winner: You (Negative)")).toBeInTheDocument();
 
-    const [, speechInit] = findFetchCall("/api/ai/speech");
-    expect(JSON.parse(speechInit.body as string)).toMatchObject({
-      side: "aff",
-    });
+    const streamCalls = findFetchCalls("/api/ai/generate-audio-stream");
+    expect(streamCalls.map(([, init]) => JSON.parse(init.body as string))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "aff_speech", side: "aff" }),
+        expect.objectContaining({ kind: "aff_rebuttal" }),
+      ]),
+    );
     const [, judgmentInit] = findFetchCall("/api/ai/judgment");
     expect(JSON.parse(judgmentInit.body as string)).toMatchObject({
       round_id: "r-neg",
@@ -355,8 +458,24 @@ describe("RoundRunner", () => {
         return Promise.resolve(jsonResponse({ topic: "T", side: "aff", format: "parli" }));
       }
       if (url.endsWith("/api/rounds")) return Promise.resolve(jsonResponse({ id: "r1" }));
-      if (url.includes("/api/ai/neg-framework")) {
-        return Promise.resolve(jsonResponse({ speech: "neg case" }));
+      if (url.includes("/api/ai/generate-audio-stream")) {
+        const body = JSON.parse(String((init?.body ?? "{}")));
+        if (body.kind === "neg_framework") {
+          return Promise.resolve(
+            sseResponse([
+              { event: "text", data: { text: "neg case" } },
+              { event: "done", data: { full_text: "neg case" } },
+            ]),
+          );
+        }
+        if (body.kind === "neg_rebuttal") {
+          return Promise.resolve(
+            sseResponse([
+              { event: "text", data: { text: "neg speech" } },
+              { event: "done", data: { full_text: "neg speech" } },
+            ]),
+          );
+        }
       }
       if (url.includes("/api/rounds/r1/speeches/text")) {
         const body = JSON.parse(String(init?.body ?? "{}"));
@@ -366,9 +485,6 @@ describe("RoundRunner", () => {
         if (body.speech_type === "aff_two") {
           return Promise.resolve(jsonResponse({ transcript: "aff two", wpm_series: [] }));
         }
-      }
-      if (url.includes("/api/ai/neg-rebuttal")) {
-        return Promise.resolve(jsonResponse({ speech: "neg speech" }));
       }
       if (url.includes("/api/ai/judgment")) {
         return Promise.resolve(

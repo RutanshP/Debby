@@ -494,6 +494,48 @@ def test_response_stream_route(
     assert body.rstrip().endswith("data: [DONE]")
 
 
+def test_generate_audio_stream_route(
+    client_authed: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    async def fake_speech_stream(topic: str, side: str = "aff"):
+        assert topic == "x"
+        assert side == "aff"
+        for token in (
+            "Hello world. ",
+            "This sentence is intentionally long enough to push the stream past the first chunk threshold. ",
+            "Next sentence.",
+        ):
+            yield token
+
+    synthesize = AsyncMock(side_effect=[b"audio-1", b"audio-2"])
+    monkeypatch.setattr(ai_route.ai_service, "ai_speech_stream", fake_speech_stream)
+    monkeypatch.setattr(ai_route.tts_service, "synthesize", synthesize)
+
+    with client_authed.stream(
+        "POST",
+        "/api/ai/generate-audio-stream",
+        json={"kind": "aff_speech", "topic": "x", "side": "aff"},
+        ) as r:
+            assert r.status_code == 200
+            body = b"".join(r.iter_bytes()).decode()
+
+    assert (
+        'event: text\ndata: {"index": 0, "text": "Hello world. This sentence is intentionally long enough to push the stream past the first chunk threshold. "}\n\n'
+        in body
+    )
+    assert 'event: text\ndata: {"index": 1, "text": "Next sentence."}\n\n' in body
+    assert '"audio_b64": "YXVkaW8tMQ=="' in body
+    assert '"audio_b64": "YXVkaW8tMg=="' in body
+    assert body.rstrip().endswith(
+        'event: done\ndata: {"full_text": "Hello world. This sentence is intentionally long enough to push the stream past the first chunk threshold. Next sentence."}'
+    )
+    assert (
+        synthesize.await_args_list[0].args[0]
+        == "Hello world. This sentence is intentionally long enough to push the stream past the first chunk threshold. "
+    )
+    assert synthesize.await_args_list[1].args[0] == "Next sentence."
+
+
 def test_judgment_route_happy_path(
     client_authed: TestClient, patched_client: AsyncMock, monkeypatch: pytest.MonkeyPatch
 ):

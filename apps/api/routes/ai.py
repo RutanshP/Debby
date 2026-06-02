@@ -13,9 +13,11 @@ which matches the contract closely enough for boot checks and unit tests
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -87,6 +89,16 @@ class TtsBody(BaseModel):
     voice: str | None = None
 
 
+class GeneratedAudioStreamBody(BaseModel):
+    kind: Literal["aff_speech", "neg_framework", "neg_rebuttal", "aff_rebuttal"]
+    topic: str = Field(..., min_length=1)
+    side: Side | None = None
+    aff_speech: str | None = None
+    neg_case: str | None = None
+    neg_speech: str | None = None
+    voice: str | None = None
+
+
 class AffRebuttalBody(BaseModel):
     topic: str = Field(..., min_length=1)
     aff_speech: str = Field(..., min_length=1)
@@ -144,6 +156,68 @@ def _translate_openai_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ValueError):
         return HTTPException(status_code=502, detail=f"Bad model output: {exc}")
     return HTTPException(status_code=500, detail="Internal AI error")
+
+
+_PARAGRAPH_BREAK_RE = re.compile(r"\n\s*\n")
+_SENTENCE_BREAK_RE = re.compile(r"(?<=[.!?])(?:[\"')\]]*)\s+")
+_MIN_STREAM_CHARS = 80
+_MAX_STREAM_CHARS = 260
+
+
+def _pick_streamer(body: GeneratedAudioStreamBody):
+    if body.kind == "aff_speech":
+        return ai_service.ai_speech_stream(body.topic, body.side or "aff")
+    if body.kind == "neg_framework":
+        return ai_service.ai_neg_framework_stream(body.topic)
+    if body.kind == "neg_rebuttal":
+        if not body.neg_case or not body.aff_speech:
+            raise HTTPException(
+                status_code=422,
+                detail="neg_case and aff_speech are required for neg_rebuttal",
+            )
+        return ai_service.ai_neg_rebuttal_stream(
+            body.topic,
+            body.neg_case,
+            body.aff_speech,
+        )
+    if body.kind == "aff_rebuttal":
+        if not body.aff_speech or not body.neg_speech:
+            raise HTTPException(
+                status_code=422,
+                detail="aff_speech and neg_speech are required for aff_rebuttal",
+            )
+        return ai_service.ai_aff_rebuttal_stream(
+            body.topic,
+            body.aff_speech,
+            body.neg_speech,
+        )
+    raise HTTPException(status_code=422, detail="Unsupported generated audio kind")
+
+
+def _next_stream_chunk(buffer: str) -> tuple[str | None, str]:
+    paragraph_match = None
+    for match in _PARAGRAPH_BREAK_RE.finditer(buffer):
+        if match.end() >= _MIN_STREAM_CHARS:
+            paragraph_match = match
+    if paragraph_match is not None:
+        split_at = paragraph_match.end()
+        return buffer[:split_at], buffer[split_at:]
+
+    sentence_match = None
+    for match in _SENTENCE_BREAK_RE.finditer(buffer):
+        if match.end() >= _MIN_STREAM_CHARS:
+            sentence_match = match
+    if sentence_match is not None:
+        split_at = sentence_match.end()
+        return buffer[:split_at], buffer[split_at:]
+
+    if len(buffer) >= _MAX_STREAM_CHARS:
+        split_at = buffer.rfind(" ", 0, _MAX_STREAM_CHARS)
+        if split_at == -1:
+            split_at = _MAX_STREAM_CHARS
+        return buffer[:split_at], buffer[split_at:]
+
+    return None, buffer
 
 
 # --- routes -------------------------------------------------------------------
@@ -354,5 +428,77 @@ async def post_tts_stream(
             yield f"event: error\ndata: {payload}\n\n"
         finally:
             yield "event: done\ndata: [DONE]\n\n"
+
+    return StreamingResponse(event_source(), media_type="text/event-stream")
+
+
+@router.post("/generate-audio-stream")
+async def post_generate_audio_stream(
+    body: GeneratedAudioStreamBody,
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    async def event_source():
+        queue: asyncio.Queue[str | Exception | None] = asyncio.Queue()
+        full_text_parts: list[str] = []
+        voice = body.voice or tts_service.DEFAULT_VOICE
+        text_index = 0
+        audio_index = 0
+
+        async def produce_text_chunks() -> None:
+            pending = ""
+            try:
+                async for token in _pick_streamer(body):
+                    pending += token
+                    while True:
+                        chunk, pending = _next_stream_chunk(pending)
+                        if chunk is None:
+                            break
+                        await queue.put(chunk)
+                if pending.strip():
+                    await queue.put(pending)
+            except Exception as exc:  # pragma: no cover - exercised via route behavior
+                await queue.put(exc)
+            finally:
+                await queue.put(None)
+
+        producer = asyncio.create_task(produce_text_chunks())
+
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+
+                text_chunk = item
+                full_text_parts.append(text_chunk)
+                text_payload = json.dumps(
+                    {"index": text_index, "text": text_chunk}
+                )
+                yield f"event: text\ndata: {text_payload}\n\n"
+                text_index += 1
+
+                audio_chunk = await tts_service.synthesize(text_chunk, voice)
+                audio_payload = json.dumps(
+                    {
+                        "index": audio_index,
+                        "audio_b64": base64.b64encode(audio_chunk).decode("ascii"),
+                    }
+                )
+                yield f"event: audio\ndata: {audio_payload}\n\n"
+                audio_index += 1
+        except HTTPException:
+            raise
+        except TTSError as exc:
+            payload = json.dumps({"message": f"TTS failed: {exc}"})
+            yield f"event: error\ndata: {payload}\n\n"
+        except (RateLimitError, APIStatusError, ValueError) as exc:
+            payload = json.dumps({"message": _translate_openai_error(exc).detail})
+            yield f"event: error\ndata: {payload}\n\n"
+        finally:
+            producer.cancel()
+            done_payload = json.dumps({"full_text": "".join(full_text_parts).strip()})
+            yield f"event: done\ndata: {done_payload}\n\n"
 
     return StreamingResponse(event_source(), media_type="text/event-stream")

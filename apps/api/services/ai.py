@@ -585,6 +585,190 @@ async def ai_response_stream(
             yield token
 
 
+async def _chat_completion_stream(
+    messages: list[dict[str, str]],
+    *,
+    max_tokens: int,
+    temperature: float = 0.0,
+) -> AsyncIterator[str]:
+    stream = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        stream=True,
+        messages=messages,
+    )
+
+    async for chunk in stream:
+        choices = getattr(chunk, "choices", None) or []
+        if not choices:
+            continue
+        delta = getattr(choices[0], "delta", None)
+        token = getattr(delta, "content", None) if delta is not None else None
+        if token:
+            yield token
+
+
+async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]:
+    if side == "aff":
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are an affirmative parliamentary debater by the name of Debby. "
+                    "You are required to make a debate case and complementary speech "
+                    "for the topic you are given. "
+                    + SPOKEN_PROSE_ONLY
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Make a two minute affirmative speech using a high school "
+                    "parliamentary debate case format style with evidence at average "
+                    "speaking pace about the following topic: "
+                    + topic
+                    + '. In the start of your speech, you must say: "Hello my name is Debby."'
+                ),
+            },
+        ]
+    else:
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a negation parliamentary debater by the name of Debby. "
+                    "Your job is to make a debate case and a subsequent negation "
+                    "speech on the topic you are given. "
+                    + SPOKEN_PROSE_ONLY
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Make a two minute negation speech on the topic: "
+                    + topic
+                    + " using a high school parliamentary debate case format style "
+                    "with evidence at average speaking pace. In the start of your "
+                    'speech, you must say: "Hello my name is Debby."'
+                ),
+            },
+        ]
+
+    async for token in _chat_completion_stream(messages, max_tokens=512):
+        yield token
+
+
+async def ai_neg_framework_stream(topic: str) -> AsyncIterator[str]:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a negation parliamentary debater by the name of Debby. "
+                "Your job is to make a debate case for the topic you are given. "
+                + SPOKEN_PROSE_ONLY
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Make the body of a two-minute negation constructive case for the topic: "
+                + topic
+                + " using a high school parliamentary debate case format style with evidence "
+                "at average speaking pace. Include exactly three negative contentions with "
+                "clear labels, warranting, and impacts. This is only the first part of one "
+                "continuous negative speech, and a later paragraph will refute the "
+                "affirmative. Do NOT include a conclusion, summary paragraph, thank-you, "
+                "judge appeal, or any closing/wrap-up sentence. After the third contention, "
+                "end with a brief transition into the upcoming refutation section rather "
+                'than ending the speech. In the start of your speech, you must say: "Hello my name is Debby."'
+            ),
+        },
+    ]
+
+    async for token in _chat_completion_stream(messages, max_tokens=512):
+        yield token
+
+
+async def ai_neg_rebuttal_stream(
+    topic: str, neg_case: str, aff_speech: str
+) -> AsyncIterator[str]:
+    if not topic or not neg_case or not aff_speech:
+        raise ValueError("Topic, neg case, and aff speech are required")
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a negation parliamentary debater by the name of Debby. "
+                "You have already delivered your negative constructive case. "
+                "Your job is to add only the very next paragraph to that speech. "
+                + SPOKEN_PROSE_ONLY
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Given the following topic:\n"
+                + topic
+                + "\n\nYou have already delivered this negative case:\n"
+                + neg_case
+                + "\n\nThe affirmative gave the following speech:\n"
+                + aff_speech
+                + "\n\nWrite ONLY the next paragraph that comes after your case above. "
+                "This paragraph must: refute the affirmative's major contentions, "
+                "cross-apply your prepared case contentions by name as refutations where "
+                "they apply, and end with a brief conclusion. "
+                "Do NOT restate or summarize your case contentions. "
+                "Do NOT include a greeting. Output only this single paragraph."
+            ),
+        },
+    ]
+
+    async for token in _chat_completion_stream(messages, max_tokens=350):
+        yield token
+
+
+async def ai_aff_rebuttal_stream(
+    topic: str, aff_speech: str, neg_speech: str
+) -> AsyncIterator[str]:
+    if not topic or not aff_speech or not neg_speech:
+        raise ValueError("Topic, affirmative speech, and negative speech are required")
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an affirmative parliamentary debater by the name of Debby. "
+                "You are giving your second affirmative speech. "
+                "Do not introduce a new constructive case. Do not include a greeting. "
+                + SPOKEN_PROSE_ONLY
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Given the following topic:\n"
+                + topic
+                + "\n\nGiven Debby's affirmative constructive speech:\n"
+                + aff_speech
+                + "\n\nGiven the negative speech:\n"
+                + neg_speech
+                + "\n\nWrite ONE concise affirmative rebuttal speech. First rebut "
+                "the negative's strongest actual arguments, extend the "
+                "affirmative's best offense, and do clear impact comparison. "
+                "Then give a very brief overview that emphasizes the affirmative "
+                "contention that was least refuted by the negative. Do not invent "
+                "detailed negative arguments that were not actually made. Do not "
+                "include a new case or a greeting. Output only this single speech."
+            ),
+        },
+    ]
+
+    async for token in _chat_completion_stream(messages, max_tokens=450):
+        yield token
+
+
 # --- judgment -----------------------------------------------------------------
 
 

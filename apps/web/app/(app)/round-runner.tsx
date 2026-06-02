@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiFetch } from "../../lib/api";
+import { apiFetch, apiFetchResponse } from "../../lib/api";
 import { getBrowserSupabase } from "../../lib/supabase";
 import { RecordButton } from "../../components/RecordButton";
 import { RfdCard } from "../../components/RfdCard";
@@ -45,8 +45,20 @@ interface SpeechResponse {
   wpm_series: WpmPoint[];
 }
 
-interface AiSpeechResponse {
-  speech: string;
+type GeneratedAudioKind =
+  | "aff_speech"
+  | "neg_framework"
+  | "neg_rebuttal"
+  | "aff_rebuttal";
+
+interface GeneratedAudioStreamRequest {
+  kind: GeneratedAudioKind;
+  topic: string;
+  side?: Side;
+  aff_speech?: string;
+  neg_case?: string;
+  neg_speech?: string;
+  voice?: string;
 }
 
 interface JudgmentResponse {
@@ -80,6 +92,93 @@ const SIDE_LABEL: Record<Side, string> = {
   aff: "Affirmative",
   neg: "Negative",
 };
+
+function decodeBase64Audio(base64: string): ArrayBuffer {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function streamGeneratedSpeech(
+  request: GeneratedAudioStreamRequest,
+  onText: (text: string) => void,
+  onAudio?: (chunks: ArrayBuffer[], fullText: string) => Promise<void>,
+): Promise<string> {
+  const response = await apiFetchResponse("/api/ai/generate-audio-stream", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("Generated audio stream is not available");
+  }
+
+  const decoder = new TextDecoder();
+  let pending = "";
+  let text = "";
+  let doneText = "";
+  const audioChunks: ArrayBuffer[] = [];
+
+  const handleEvent = async (eventName: string, data: string) => {
+    if (eventName === "text") {
+      const payload = JSON.parse(data) as { text: string };
+      text += payload.text;
+      onText(text.trim());
+      return;
+    }
+    if (eventName === "audio") {
+      const payload = JSON.parse(data) as { audio_b64: string };
+      audioChunks.push(decodeBase64Audio(payload.audio_b64));
+      return;
+    }
+    if (eventName === "error") {
+      const payload = JSON.parse(data) as { message?: string };
+      throw new Error(payload.message || "Failed to generate Debby audio");
+    }
+    if (eventName === "done") {
+      const payload = JSON.parse(data) as { full_text?: string };
+      doneText = payload.full_text?.trim() ?? text.trim();
+      if (!doneText) doneText = text.trim();
+      onText(doneText);
+    }
+  };
+
+  const processPending = async () => {
+    while (pending.includes("\n\n")) {
+      const separatorIndex = pending.indexOf("\n\n");
+      const rawEvent = pending.slice(0, separatorIndex);
+      pending = pending.slice(separatorIndex + 2);
+      if (!rawEvent.trim()) continue;
+      const lines = rawEvent.split("\n");
+      const eventName =
+        lines.find((line) => line.startsWith("event:"))?.slice(6).trim() ?? "message";
+      const data = lines
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\n");
+      await handleEvent(eventName, data);
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    pending += decoder.decode(value, { stream: true });
+    await processPending();
+  }
+
+  pending += decoder.decode();
+  await processPending();
+
+  const finalText = doneText || text.trim();
+  if (onAudio && finalText && audioChunks.length > 0) {
+    await onAudio(audioChunks, finalText);
+  }
+  return finalText;
+}
 
 function countWords(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length;
@@ -517,14 +616,20 @@ export function RoundRunner() {
 
     setAffAiError(null);
     setAffLoading(true);
-    const promise = apiFetch<AiSpeechResponse>("/api/ai/speech", {
-        method: "POST",
-        body: JSON.stringify({ topic: topic.topic, side: "aff" }),
-      })
-      .then((res) => {
-        setAffTranscript(res.speech);
-        void speech.prefetch(res.speech);
-        return res.speech;
+    const promise = streamGeneratedSpeech(
+      {
+        kind: "aff_speech",
+        topic: topic.topic,
+        side: "aff",
+      },
+      (text) => {
+        setAffTranscript(text || null);
+      },
+      (audioChunks, finalText) => speech.cacheAudio(finalText, audioChunks),
+    )
+      .then((finalText) => {
+        setAffTranscript(finalText);
+        return finalText;
       })
       .catch((err) => {
         setAffAiError(
@@ -557,14 +662,19 @@ export function RoundRunner() {
 
     setNegError(null);
     setNegLoading(true);
-    const promise = apiFetch<AiSpeechResponse>("/api/ai/neg-framework", {
-        method: "POST",
-        body: JSON.stringify({ topic: topic.topic }),
-      })
-      .then((res) => {
-        setNegCase(res.speech);
-        void speech.prefetch(res.speech);
-        return res.speech;
+    const promise = streamGeneratedSpeech(
+      {
+        kind: "neg_framework",
+        topic: topic.topic,
+      },
+      (text) => {
+        setNegCase(text || null);
+      },
+      (audioChunks, finalText) => speech.cacheAudio(finalText, audioChunks),
+    )
+      .then((finalText) => {
+        setNegCase(finalText);
+        return finalText;
       })
       .catch((err) => {
         setNegError(err instanceof Error ? err.message : "Failed to generate neg case");
@@ -587,19 +697,22 @@ export function RoundRunner() {
     const caseText = await (negCaseRef.current ?? prefetchNegCase());
     if (!caseText.trim()) return "";
 
-    const promise = apiFetch<AiSpeechResponse>("/api/ai/neg-rebuttal", {
-        method: "POST",
-        body: JSON.stringify({
-          topic: topic.topic,
-          neg_case: caseText,
-          aff_speech: affTranscript,
-        }),
-      })
-      .then((res) => {
-        setNegRebuttalPara(res.speech);
+    const promise = streamGeneratedSpeech(
+      {
+        kind: "neg_rebuttal",
+        topic: topic.topic,
+        neg_case: caseText,
+        aff_speech: affTranscript,
+      },
+      (text) => {
+        setNegRebuttalPara(text || null);
+      },
+      (audioChunks, finalText) => speech.cacheAudio(finalText, audioChunks),
+    )
+      .then((finalText) => {
+        setNegRebuttalPara(finalText);
         setNegDone(true);
-        void speech.prefetch(res.speech);
-        return res.speech;
+        return finalText;
       })
       .catch((err) => {
         setNegError(
@@ -675,18 +788,21 @@ export function RoundRunner() {
 
     setAffTwoError(null);
     setAffTwoLoading(true);
-    const promise = apiFetch<AiSpeechResponse>("/api/ai/aff-rebuttal", {
-        method: "POST",
-        body: JSON.stringify({
-          topic: topic.topic,
-          aff_speech: affTranscript,
-          neg_speech: negTokens,
-        }),
-      })
-      .then((res) => {
-        setAffRebuttalPara(res.speech);
-        void speech.prefetch(res.speech);
-        return res.speech;
+    const promise = streamGeneratedSpeech(
+      {
+        kind: "aff_rebuttal",
+        topic: topic.topic,
+        aff_speech: affTranscript,
+        neg_speech: negTokens,
+      },
+      (text) => {
+        setAffRebuttalPara(text || null);
+      },
+      (audioChunks, finalText) => speech.cacheAudio(finalText, audioChunks),
+    )
+      .then((finalText) => {
+        setAffRebuttalPara(finalText);
+        return finalText;
       })
       .catch((err) => {
         setAffTwoError(
