@@ -26,26 +26,6 @@ function normalize(parts: string | string[]): string[] {
   return Array.isArray(parts) ? parts : [parts];
 }
 
-function concatBuffers(ctx: AudioContext, buffers: AudioBuffer[]): AudioBuffer {
-  const totalLength = buffers.reduce((sum, buffer) => sum + buffer.length, 0);
-  const channelCount = Math.max(...buffers.map((buffer) => buffer.numberOfChannels));
-  const sampleRate = buffers[0].sampleRate;
-  const output = ctx.createBuffer(channelCount, totalLength, sampleRate);
-
-  let offset = 0;
-  for (const buffer of buffers) {
-    for (let channel = 0; channel < channelCount; channel += 1) {
-      const outData = output.getChannelData(channel);
-      if (channel < buffer.numberOfChannels) {
-        outData.set(buffer.getChannelData(channel), offset);
-      }
-    }
-    offset += buffer.length;
-  }
-
-  return output;
-}
-
 export function useDebbySpeech(): UseDebbySpeechResult {
   const [state, setState] = useState<SpeechState>("idle");
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -152,9 +132,10 @@ export function useDebbySpeech(): UseDebbySpeechResult {
       setActiveKey(key);
       setError(null);
 
-      let buffers: AudioBuffer[];
+      const bufferPromises = texts.map((text) => loadBuffer(text, voice));
+      let firstBuffer: AudioBuffer;
       try {
-        buffers = await Promise.all(texts.map((text) => loadBuffer(text, voice)));
+        firstBuffer = await bufferPromises[0];
       } catch (err) {
         if (playTokenRef.current !== token) return;
         setState("error");
@@ -167,22 +148,39 @@ export function useDebbySpeech(): UseDebbySpeechResult {
       await ctx.resume();
       if (playTokenRef.current !== token) return;
 
-      const combined =
-        buffers.length === 1 ? buffers[0] : concatBuffers(ctx, buffers);
-      const source = ctx.createBufferSource();
-      source.buffer = combined;
-      source.connect(ctx.destination);
-      source.onended = () => {
-        if (playTokenRef.current === token) {
-          setState("idle");
-          setActiveKey(null);
+      setState("playing");
+
+      const playBuffer = (buffer: AudioBuffer, index: number) => {
+        if (playTokenRef.current !== token) return;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.onended = () => {
           sourceNodeRef.current = null;
-        }
+          if (playTokenRef.current !== token) return;
+          const nextIndex = index + 1;
+          if (nextIndex >= bufferPromises.length) {
+            setState("idle");
+            setActiveKey(null);
+            return;
+          }
+          void bufferPromises[nextIndex]
+            .then((nextBuffer) => {
+              if (playTokenRef.current !== token) return;
+              playBuffer(nextBuffer, nextIndex);
+            })
+            .catch((err) => {
+              if (playTokenRef.current !== token) return;
+              setState("error");
+              setError(err instanceof Error ? err.message : "TTS fetch failed");
+            });
+        };
+
+        sourceNodeRef.current = source;
+        source.start();
       };
 
-      sourceNodeRef.current = source;
-      setState("playing");
-      source.start();
+      playBuffer(firstBuffer, 0);
     },
     [activeKey, loadBuffer, state, stop],
   );

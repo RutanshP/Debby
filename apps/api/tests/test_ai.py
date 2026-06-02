@@ -67,6 +67,21 @@ async def test_ai_response_returns_string(patched_client: AsyncMock):
     assert out == "neg rebuttal"
 
 
+async def test_ai_neg_framework_prompt_treats_case_as_lead_in_not_full_close(
+    patched_client: AsyncMock,
+):
+    patched_client.return_value = _chat_completion("neg case")
+    out = await ai_service.ai_neg_framework("topic")
+    assert out == "neg case"
+
+    messages = patched_client.await_args.kwargs["messages"]
+    user_prompt = messages[1]["content"]
+    assert "first part of one continuous negative speech" in user_prompt
+    assert "later paragraph will refute the affirmative" in user_prompt
+    assert "brief transition into the upcoming refutation section" in user_prompt
+    assert "thank-you" in user_prompt
+
+
 async def test_ai_response_prompt_prioritizes_case_then_refutation(
     patched_client: AsyncMock,
 ):

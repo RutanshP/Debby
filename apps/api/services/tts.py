@@ -13,6 +13,8 @@ DEEPGRAM_SPEAK_URL = "https://api.deepgram.com/v1/speak"
 DEFAULT_VOICE = "aura-2-thalia-en"
 MAX_CHARS = 2000
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+_MARKDOWN_MARKERS = re.compile(r"[*_`#>~]")
 
 
 class TTSError(RuntimeError):
@@ -70,10 +72,17 @@ def _chunk(text: str) -> list[str]:
     return [chunk for chunk in chunks if chunk]
 
 
+def _clean_tts_text(text: str) -> str:
+    cleaned = _MARKDOWN_LINK.sub(r"\1", text)
+    cleaned = _MARKDOWN_MARKERS.sub("", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()
+
+
 async def synthesize(text: str, voice: str = DEFAULT_VOICE) -> bytes:
     key = _api_key()
     headers = {"Authorization": f"Token {key}"}
-    chunks = _chunk(text)
+    chunks = _chunk(_clean_tts_text(text))
 
     async def synthesize_chunk(client: httpx.AsyncClient, chunk: str) -> bytes:
         response = await client.post(
@@ -101,7 +110,7 @@ async def stream_synthesize(
 ) -> AsyncIterator[bytes]:
     key = _api_key()
     headers = {"Authorization": f"Token {key}"}
-    chunks = _chunk(text)
+    chunks = _chunk(_clean_tts_text(text))
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         for chunk in chunks:

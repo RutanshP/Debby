@@ -16,6 +16,10 @@ from services.openai_client import client
 MODEL = "gpt-4o-mini-2024-07-18"
 JUDGE_MODEL = "gpt-5.4-mini"
 JUDGE_FALLBACK_MODEL = MODEL
+SPOKEN_PROSE_ONLY = (
+    "Write plain spoken prose only. Do not use markdown, bullet points, "
+    "asterisks, headings, or numbered lists."
+)
 
 Side = Literal["aff", "neg"]
 
@@ -293,16 +297,20 @@ async def ai_neg_framework(topic: str) -> str:
 
     system = (
         "You are a negation parliamentary debater by the name of Debby. "
-        "Your job is to make a debate case for the topic you are given."
+        "Your job is to make a debate case for the topic you are given. "
+        + SPOKEN_PROSE_ONLY
     )
     user = (
         "Make the body of a two-minute negation constructive case for the topic: "
         + topic
         + " using a high school parliamentary debate case format style with evidence "
         "at average speaking pace. Include exactly three negative contentions with "
-        "clear labels, warranting, and impacts. Do NOT include a conclusion, summary "
-        "paragraph, or any closing/wrap-up sentence at the end — the speech ends "
-        "immediately after the third contention. In the start of your speech, you "
+        "clear labels, warranting, and impacts. This is only the first part of one "
+        "continuous negative speech, and a later paragraph will refute the "
+        "affirmative. Do NOT include a conclusion, summary paragraph, thank-you, "
+        "judge appeal, or any closing/wrap-up sentence. After the third contention, "
+        "end with a brief transition into the upcoming refutation section rather "
+        "than ending the speech. In the start of your speech, you "
         'must say: "Hello my name is Debby."'
     )
 
@@ -327,7 +335,8 @@ async def ai_neg_rebuttal(topic: str, neg_case: str, aff_speech: str) -> str:
     system = (
         "You are a negation parliamentary debater by the name of Debby. "
         "You have already delivered your negative constructive case. "
-        "Your job is to add only the very next paragraph to that speech."
+        "Your job is to add only the very next paragraph to that speech. "
+        + SPOKEN_PROSE_ONLY
     )
     user = (
         "Given the following topic:\n"
@@ -364,7 +373,8 @@ async def ai_aff_overview(topic: str, aff_speech: str) -> str:
 
     system = (
         "You are an affirmative parliamentary debater by the name of Debby. "
-        "Your job is to deliver a brief overview of the affirmative case."
+        "Your job is to deliver a brief overview of the affirmative case. "
+        + SPOKEN_PROSE_ONLY
     )
     user = (
         "Given the following topic:\n"
@@ -400,7 +410,8 @@ async def ai_speech(topic: str, side: Side = "aff") -> str:
         system = (
             "You are an affirmative parliamentary debater by the name of Debby. "
             "You are required to make a debate case and complementary speech "
-            "for the topic you are given."
+            "for the topic you are given. "
+            + SPOKEN_PROSE_ONLY
         )
         user = (
             "Make a two minute affirmative speech using a high school "
@@ -412,7 +423,8 @@ async def ai_speech(topic: str, side: Side = "aff") -> str:
         system = (
             "You are a negation parliamentary debater by the name of Debby. "
             "Your job is to make a debate case and a subsequent negation "
-            "speech on the topic you are given."
+            "speech on the topic you are given. "
+            + SPOKEN_PROSE_ONLY
         )
         user = (
             "Make a two minute negation speech on the topic: " + topic
@@ -444,10 +456,11 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
             {
                 "role": "system",
                 "content": (
-                    "You are a negation parliamentary debater by the name of "
-                    "Debby. Your job is to make a debate case and a subsequent "
-                    "negation speech on the topic you are given."
-                ),
+                "You are a negation parliamentary debater by the name of "
+                "Debby. Your job is to make a debate case and a subsequent "
+                "negation speech on the topic you are given. "
+                + SPOKEN_PROSE_ONLY
+            ),
             },
             {
                 "role": "user",
@@ -466,7 +479,8 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
                     "it as a refutation. For example, say that your money tradeoff "
                     "contention also refutes their innovation point because that money "
                     "can fund innovation elsewhere. Use clear signposting. In the "
-                    "start of your speech, you must say: \"Hello my name is Debby.\""
+                    "start of your speech, you must say: \"Hello my name is Debby.\" "
+                    + SPOKEN_PROSE_ONLY
                 ),
             },
         ],
@@ -491,7 +505,7 @@ async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
                     "You are an affirmative parliamentary debater by the name of "
                     "Debby. You are giving your second affirmative speech. "
                     "Do not introduce a new constructive case. Do not include a "
-                    "greeting."
+                    "greeting. " + SPOKEN_PROSE_ONLY
                 ),
             },
             {
@@ -531,10 +545,11 @@ async def ai_response_stream(
             {
                 "role": "system",
                 "content": (
-                    "You are a negation parliamentary debater by the name of "
-                    "Debby. Your job is to make a debate case and a subsequent "
-                    "negation speech on the topic you are given."
-                ),
+                "You are a negation parliamentary debater by the name of "
+                "Debby. Your job is to make a debate case and a subsequent "
+                "negation speech on the topic you are given. "
+                + SPOKEN_PROSE_ONLY
+            ),
             },
             {
                 "role": "user",
@@ -553,7 +568,8 @@ async def ai_response_stream(
                     "it as a refutation. For example, say that your money tradeoff "
                     "contention also refutes their innovation point because that money "
                     "can fund innovation elsewhere. Use clear signposting. In the "
-                    "start of your speech, you must say: \"Hello my name is Debby.\""
+                    "start of your speech, you must say: \"Hello my name is Debby.\" "
+                    + SPOKEN_PROSE_ONLY
                 ),
             },
         ],
