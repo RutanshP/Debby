@@ -346,6 +346,8 @@ export function RoundRunner() {
       ? assignmentDetail.assignment.payload
       : null;
   const assignmentLocked = Boolean(assignmentPayload);
+  const affSpeechReady = !affLoading && Boolean(affTranscript?.trim());
+  const affRebuttalReady = !affTwoLoading && Boolean(affTwoTranscript.trim());
   const customTopicWordCount = countWords(customTopic);
   const customTopicTooLong = customTopicWordCount > TOPIC_WORD_LIMIT;
   useEffect(() => {
@@ -1224,10 +1226,10 @@ export function RoundRunner() {
                     : "Generate Aff speech"}
                 </button>
                 {affAiError && <p className="text-sm text-red-600">{affAiError}</p>}
-                {affAiRequested && affTranscript && (
+                {affAiRequested && affSpeechReady && affTranscript && (
                   <DebbyAudioButton parts={affTranscript} speech={speech} />
                 )}
-                {step === 2 && affAiRequested && affTranscript && (
+                {step === 2 && affAiRequested && affSpeechReady && affTranscript && (
                   <button
                     type="button"
                     onClick={() => setStep(3)}
@@ -1236,7 +1238,7 @@ export function RoundRunner() {
                     Continue to Neg speech
                   </button>
                 )}
-                {affAiRequested && affTranscript && (
+                {affAiRequested && affSpeechReady && affTranscript && (
                   <div
                     data-testid="aff-transcript"
                     className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700"
@@ -1277,7 +1279,7 @@ export function RoundRunner() {
               {negRequested && negLoading ? "Generating..." : "Generate Neg speech"}
             </button>
             {negError && <p className="text-sm text-red-600">{negError}</p>}
-            {negRequested && negTokens && (
+            {negRequested && negDone && negTokens && (
               <div
                 data-testid="neg-tokens"
                 className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700"
@@ -1376,13 +1378,13 @@ export function RoundRunner() {
                     : "Generate Aff rebuttal"}
                 </button>
                 {affTwoError && <p className="text-sm text-red-600">{affTwoError}</p>}
-                {affTwoRequested && affTwoTranscript && (
+                {affTwoRequested && affRebuttalReady && affTwoTranscript && (
                   <DebbyAudioButton
                     parts={affTwoTranscript}
                     speech={speech}
                   />
                 )}
-                {affTwoRequested && affTwoTranscript && (
+                {affTwoRequested && affRebuttalReady && affTwoTranscript && (
                   <div className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                     <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
                       Debby's Aff rebuttal
@@ -1390,7 +1392,7 @@ export function RoundRunner() {
                     {affTwoTranscript}
                   </div>
                 )}
-                {step === 4 && affTwoRequested && affTwoTranscript && (
+                {step === 4 && affTwoRequested && affRebuttalReady && affTwoTranscript && (
                   <button
                     type="button"
                     onClick={() => setStep(5)}
