@@ -162,6 +162,12 @@ _PARAGRAPH_BREAK_RE = re.compile(r"\n\s*\n")
 _SENTENCE_BREAK_RE = re.compile(r"(?<=[.!?])(?:[\"')\]]*)\s+")
 _MIN_STREAM_CHARS = 80
 _MAX_STREAM_CHARS = 260
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
+_SSE_PRELUDE = ":" + (" " * 2048) + "\n\n"
 
 
 def _pick_streamer(body: GeneratedAudioStreamBody):
@@ -310,6 +316,7 @@ async def post_response_stream(
 ) -> StreamingResponse:
     async def event_source():
         try:
+            yield _SSE_PRELUDE
             async for token in ai_service.ai_response_stream(
                 body.topic, body.first_speech
             ):
@@ -324,7 +331,11 @@ async def post_response_stream(
         finally:
             yield "data: [DONE]\n\n"
 
-    return StreamingResponse(event_source(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
 
 
 @router.post("/judgment", response_model=JudgmentResponse)
@@ -412,6 +423,7 @@ async def post_tts_stream(
     async def event_source():
         index = 0
         try:
+            yield _SSE_PRELUDE
             async for audio_chunk in tts_service.stream_synthesize(
                 body.text, body.voice or tts_service.DEFAULT_VOICE
             ):
@@ -429,7 +441,11 @@ async def post_tts_stream(
         finally:
             yield "event: done\ndata: [DONE]\n\n"
 
-    return StreamingResponse(event_source(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
 
 
 @router.post("/generate-audio-stream")
@@ -445,6 +461,7 @@ async def post_generate_audio_stream(
         tts_tasks: list[asyncio.Task[bytes]] = []
 
         try:
+            yield _SSE_PRELUDE
             pending = ""
             async for token in _pick_streamer(body):
                 pending += token
@@ -458,6 +475,7 @@ async def post_generate_audio_stream(
                         {"index": text_index, "text": text_chunk}
                     )
                     yield f"event: text\ndata: {text_payload}\n\n"
+                    yield ": keepalive\n\n"
                     text_index += 1
                     tts_tasks.append(
                         asyncio.create_task(tts_service.synthesize(text_chunk, voice))
@@ -469,6 +487,7 @@ async def post_generate_audio_stream(
                     {"index": text_index, "text": text_chunk}
                 )
                 yield f"event: text\ndata: {text_payload}\n\n"
+                yield ": keepalive\n\n"
                 text_index += 1
                 tts_tasks.append(
                     asyncio.create_task(tts_service.synthesize(text_chunk, voice))
@@ -477,6 +496,7 @@ async def post_generate_audio_stream(
             full_text = "".join(full_text_parts).strip()
             text_done_payload = json.dumps({"full_text": full_text})
             yield f"event: text_done\ndata: {text_done_payload}\n\n"
+            yield ": keepalive\n\n"
 
             for task in tts_tasks:
                 audio_chunk = await task
@@ -487,6 +507,7 @@ async def post_generate_audio_stream(
                     }
                 )
                 yield f"event: audio\ndata: {audio_payload}\n\n"
+                yield ": keepalive\n\n"
                 audio_index += 1
         except HTTPException:
             raise
@@ -500,4 +521,8 @@ async def post_generate_audio_stream(
             done_payload = json.dumps({"full_text": "".join(full_text_parts).strip()})
             yield f"event: done\ndata: {done_payload}\n\n"
 
-    return StreamingResponse(event_source(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
