@@ -361,8 +361,8 @@ export function RoundRunner() {
       ? assignmentDetail.assignment.payload
       : null;
   const assignmentLocked = Boolean(assignmentPayload);
-  const affSpeechReady = !affLoading && Boolean(affTranscript?.trim());
-  const affRebuttalReady = !affTwoLoading && Boolean(affTwoTranscript.trim());
+  const affSpeechReady = Boolean(affTranscript?.trim());
+  const affRebuttalReady = Boolean(affTwoTranscript.trim());
   const customTopicWordCount = countWords(customTopic);
   const customTopicTooLong = customTopicWordCount > TOPIC_WORD_LIMIT;
   useEffect(() => {
@@ -1044,7 +1044,6 @@ export function RoundRunner() {
 
   useEffect(() => {
     if (
-      step === 5 &&
       topic &&
       affTranscript &&
       affTwoTranscript &&
@@ -1056,7 +1055,6 @@ export function RoundRunner() {
       void prefetchJudgment().catch(() => undefined);
     }
   }, [
-    step,
     topic,
     affTranscript,
     affTwoTranscript,

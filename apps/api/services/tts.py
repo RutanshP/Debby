@@ -12,6 +12,8 @@ import httpx
 DEEPGRAM_SPEAK_URL = "https://api.deepgram.com/v1/speak"
 DEFAULT_VOICE = "aura-2-thalia-en"
 MAX_CHARS = 2000
+MAX_RETRIES = 3
+RETRY_BASE_DELAY_SECONDS = 0.75
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 _MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 _MARKDOWN_MARKERS = re.compile(r"[*_`#>~]")
@@ -79,23 +81,48 @@ def _clean_tts_text(text: str) -> str:
     return cleaned.strip()
 
 
-async def synthesize(text: str, voice: str = DEFAULT_VOICE) -> bytes:
-    key = _api_key()
-    headers = {"Authorization": f"Token {key}"}
-    chunks = _chunk(_clean_tts_text(text))
+async def _post_tts_with_retry(
+    client: httpx.AsyncClient,
+    *,
+    headers: dict[str, str],
+    voice: str,
+    chunk: str,
+) -> bytes:
+    delay = RETRY_BASE_DELAY_SECONDS
+    last_error: str | None = None
 
-    async def synthesize_chunk(client: httpx.AsyncClient, chunk: str) -> bytes:
+    for attempt in range(MAX_RETRIES + 1):
         response = await client.post(
             DEEPGRAM_SPEAK_URL,
             params={"model": voice},
             headers=headers,
             json={"text": chunk},
         )
-        if response.status_code >= 400:
-            raise TTSError(
-                f"Deepgram TTS failed: {response.status_code} {response.text}"
-            )
-        return response.content
+        if response.status_code < 400:
+            return response.content
+
+        last_error = f"Deepgram TTS failed: {response.status_code} {response.text}"
+        if response.status_code == 429 and attempt < MAX_RETRIES:
+            await asyncio.sleep(delay)
+            delay *= 2
+            continue
+        raise TTSError(last_error)
+
+    raise TTSError(last_error or "Deepgram TTS failed")
+
+
+async def synthesize(text: str, voice: str = DEFAULT_VOICE) -> bytes:
+    key = _api_key()
+    headers = {"Authorization": f"Token {key}"}
+    chunks = _chunk(_clean_tts_text(text))
+
+    async def synthesize_chunk(client: httpx.AsyncClient, chunk: str) -> bytes:
+        return await _post_tts_with_retry(
+            client,
+            headers=headers,
+            voice=voice,
+            chunk=chunk,
+        )
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         segments = await asyncio.gather(
@@ -114,14 +141,9 @@ async def stream_synthesize(
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         for chunk in chunks:
-            response = await client.post(
-                DEEPGRAM_SPEAK_URL,
-                params={"model": voice},
+            yield await _post_tts_with_retry(
+                client,
                 headers=headers,
-                json={"text": chunk},
+                voice=voice,
+                chunk=chunk,
             )
-            if response.status_code >= 400:
-                raise TTSError(
-                    f"Deepgram TTS failed: {response.status_code} {response.text}"
-                )
-            yield response.content

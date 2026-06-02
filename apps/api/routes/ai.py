@@ -458,7 +458,7 @@ async def post_generate_audio_stream(
         voice = body.voice or tts_service.DEFAULT_VOICE
         text_index = 0
         audio_index = 0
-        tts_tasks: list[asyncio.Task[bytes]] = []
+        tts_chunks: list[str] = []
 
         try:
             yield _SSE_PRELUDE
@@ -477,9 +477,7 @@ async def post_generate_audio_stream(
                     yield f"event: text\ndata: {text_payload}\n\n"
                     yield ": keepalive\n\n"
                     text_index += 1
-                    tts_tasks.append(
-                        asyncio.create_task(tts_service.synthesize(text_chunk, voice))
-                    )
+                    tts_chunks.append(text_chunk)
             if pending.strip():
                 text_chunk = pending
                 full_text_parts.append(text_chunk)
@@ -489,17 +487,15 @@ async def post_generate_audio_stream(
                 yield f"event: text\ndata: {text_payload}\n\n"
                 yield ": keepalive\n\n"
                 text_index += 1
-                tts_tasks.append(
-                    asyncio.create_task(tts_service.synthesize(text_chunk, voice))
-                )
+                tts_chunks.append(text_chunk)
 
             full_text = "".join(full_text_parts).strip()
             text_done_payload = json.dumps({"full_text": full_text})
             yield f"event: text_done\ndata: {text_done_payload}\n\n"
             yield ": keepalive\n\n"
 
-            for task in tts_tasks:
-                audio_chunk = await task
+            for text_chunk in tts_chunks:
+                audio_chunk = await tts_service.synthesize(text_chunk, voice)
                 audio_payload = json.dumps(
                     {
                         "index": audio_index,
