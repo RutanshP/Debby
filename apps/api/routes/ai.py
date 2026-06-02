@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 from openai import APIStatusError, RateLimitError
 from pydantic import BaseModel, Field
@@ -24,6 +24,8 @@ from pydantic import BaseModel, Field
 from models.flow import FlowBallot, WinnerVerdict
 from services import ai as ai_service
 from services import rounds as rounds_service
+from services import tts as tts_service
+from services.tts import TTSError
 
 try:  # pragma: no cover — import-time fallback
     from deps.auth import User, get_current_user  # type: ignore
@@ -61,6 +63,26 @@ class SpeechResponse(BaseModel):
 class ResponseBody(BaseModel):
     topic: str = Field(..., min_length=1)
     first_speech: str = Field(..., min_length=1)
+
+
+class NegFrameworkBody(BaseModel):
+    topic: str = Field(..., min_length=1)
+
+
+class NegRebuttalBody(BaseModel):
+    topic: str = Field(..., min_length=1)
+    neg_case: str = Field(..., min_length=1)
+    aff_speech: str = Field(..., min_length=1)
+
+
+class AffOverviewBody(BaseModel):
+    topic: str = Field(..., min_length=1)
+    aff_speech: str = Field(..., min_length=1)
+
+
+class TtsBody(BaseModel):
+    text: str = Field(..., min_length=1)
+    voice: str | None = None
 
 
 class AffRebuttalBody(BaseModel):
@@ -144,6 +166,46 @@ async def post_response(
 ) -> SpeechResponse:
     try:
         text = await ai_service.ai_response(body.topic, body.first_speech)
+    except (RateLimitError, APIStatusError, ValueError) as exc:
+        raise _translate_openai_error(exc) from exc
+    return SpeechResponse(speech=text)
+
+
+@router.post("/neg-framework", response_model=SpeechResponse)
+async def post_neg_framework(
+    body: NegFrameworkBody,
+    user: User = Depends(get_current_user),
+) -> SpeechResponse:
+    try:
+        text = await ai_service.ai_neg_framework(body.topic)
+    except (RateLimitError, APIStatusError, ValueError) as exc:
+        raise _translate_openai_error(exc) from exc
+    return SpeechResponse(speech=text)
+
+
+@router.post("/neg-rebuttal", response_model=SpeechResponse)
+async def post_neg_rebuttal(
+    body: NegRebuttalBody,
+    user: User = Depends(get_current_user),
+) -> SpeechResponse:
+    try:
+        text = await ai_service.ai_neg_rebuttal(
+            body.topic,
+            body.neg_case,
+            body.aff_speech,
+        )
+    except (RateLimitError, APIStatusError, ValueError) as exc:
+        raise _translate_openai_error(exc) from exc
+    return SpeechResponse(speech=text)
+
+
+@router.post("/aff-overview", response_model=SpeechResponse)
+async def post_aff_overview(
+    body: AffOverviewBody,
+    user: User = Depends(get_current_user),
+) -> SpeechResponse:
+    try:
+        text = await ai_service.ai_aff_overview(body.topic, body.aff_speech)
     except (RateLimitError, APIStatusError, ValueError) as exc:
         raise _translate_openai_error(exc) from exc
     return SpeechResponse(speech=text)
@@ -250,3 +312,17 @@ async def post_judgment(
         winner_side=verdict.winner_side,
         flow=flow,
     )
+
+
+@router.post("/tts")
+async def post_tts(
+    body: TtsBody,
+    user: User = Depends(get_current_user),
+) -> Response:
+    try:
+        audio = await tts_service.synthesize(
+            body.text, body.voice or tts_service.DEFAULT_VOICE
+        )
+    except TTSError as exc:
+        raise HTTPException(status_code=502, detail=f"TTS failed: {exc}") from exc
+    return Response(content=audio, media_type="audio/mpeg")

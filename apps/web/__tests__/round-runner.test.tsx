@@ -68,6 +68,16 @@ function tournamentResponse() {
   return jsonResponse({ tournaments: ["Bargain Belt", "Berkeley HS"] });
 }
 
+function findFetchCall(path: string): [string, RequestInit] {
+  const match = (global.fetch as jest.Mock).mock.calls.find(([url]) =>
+    String(url).includes(path),
+  );
+  if (!match) {
+    throw new Error(`Expected fetch call containing ${path}`);
+  }
+  return match as [string, RequestInit];
+}
+
 beforeEach(() => {
   jest.resetAllMocks();
   global.fetch = jest.fn();
@@ -161,20 +171,24 @@ describe("RoundRunner", () => {
   });
 
   test("after recording the aff speech, fetch saves the realtime transcript", async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(tournamentResponse())
-      // GET topic
-      .mockResolvedValueOnce(
-        jsonResponse({ topic: "T", side: "aff", format: "parli" }),
-      )
-      // POST round
-      .mockResolvedValueOnce(jsonResponse({ id: "round-123" }))
-      // POST speech
-      .mockResolvedValueOnce(
-        jsonResponse({ transcript: "hello world", wpm_series: [] }),
-      )
-      // automatic AI opposition
-      .mockResolvedValueOnce(jsonResponse({ speech: "neg response" }));
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/topics/tournaments")) return Promise.resolve(tournamentResponse());
+      if (url.includes("/api/topics?")) {
+        return Promise.resolve(jsonResponse({ topic: "T", side: "aff", format: "parli" }));
+      }
+      if (url.endsWith("/api/rounds")) return Promise.resolve(jsonResponse({ id: "round-123" }));
+      if (url.includes("/api/ai/neg-framework")) {
+        return Promise.resolve(jsonResponse({ speech: "neg case" }));
+      }
+      if (url.includes("/api/rounds/round-123/speeches/text")) {
+        return Promise.resolve(jsonResponse({ transcript: "hello world", wpm_series: [] }));
+      }
+      if (url.includes("/api/ai/neg-rebuttal")) {
+        return Promise.resolve(jsonResponse({ speech: "neg rebuttal" }));
+      }
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
 
     render(<RoundRunner />);
     fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
@@ -186,10 +200,14 @@ describe("RoundRunner", () => {
       fireEvent.click(recordBtn);
     });
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(5);
-    });
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[3];
+    await waitFor(() =>
+      expect(
+        (global.fetch as jest.Mock).mock.calls.some(([url]) =>
+          String(url).includes("/api/ai/neg-rebuttal"),
+        ),
+      ).toBe(true),
+    );
+    const [url, init] = findFetchCall("/api/rounds/round-123/speeches/text");
     expect(url).toContain("/api/rounds/round-123/speeches/text");
     expect((init as RequestInit).method).toBe("POST");
     expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
@@ -202,17 +220,24 @@ describe("RoundRunner", () => {
   });
 
   test("the Neg speech step preloads but waits for Generate Neg speech click", async () => {
-    // Sequence: topic -> round -> aff speech
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(tournamentResponse())
-      .mockResolvedValueOnce(
-        jsonResponse({ topic: "T", side: "aff", format: "parli" }),
-      )
-      .mockResolvedValueOnce(jsonResponse({ id: "r1" }))
-      .mockResolvedValueOnce(
-        jsonResponse({ transcript: "aff text", wpm_series: [] }),
-      )
-      .mockResolvedValueOnce(jsonResponse({ speech: "Hello world" }));
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/topics/tournaments")) return Promise.resolve(tournamentResponse());
+      if (url.includes("/api/topics?")) {
+        return Promise.resolve(jsonResponse({ topic: "T", side: "aff", format: "parli" }));
+      }
+      if (url.endsWith("/api/rounds")) return Promise.resolve(jsonResponse({ id: "r1" }));
+      if (url.includes("/api/ai/neg-framework")) {
+        return Promise.resolve(jsonResponse({ speech: "Hello world" }));
+      }
+      if (url.includes("/api/rounds/r1/speeches/text")) {
+        return Promise.resolve(jsonResponse({ transcript: "aff text", wpm_series: [] }));
+      }
+      if (url.includes("/api/ai/neg-rebuttal")) {
+        return Promise.resolve(jsonResponse({ speech: "Neg rebuttal" }));
+      }
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
 
     render(<RoundRunner />);
     fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
@@ -224,12 +249,19 @@ describe("RoundRunner", () => {
     });
     await screen.findByText("aff text");
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(5));
+    await waitFor(() =>
+      expect(
+        (global.fetch as jest.Mock).mock.calls.some(([url]) =>
+          String(url).includes("/api/ai/neg-rebuttal"),
+        ),
+      ).toBe(true),
+    );
     expect(screen.queryByTestId("neg-tokens")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /generate neg speech/i }));
 
     const tokens = await screen.findByTestId("neg-tokens");
     expect(tokens).toHaveTextContent("Hello world");
+    expect(tokens).toHaveTextContent("Neg rebuttal");
   });
 
   test("negative side flips the flow: Debby aff, user neg, Debby aff rebuttal", async () => {
@@ -239,24 +271,34 @@ describe("RoundRunner", () => {
       ballot: { winner: "neg", explanation: "Neg wins." },
     };
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(tournamentResponse())
-      .mockResolvedValueOnce(
-        jsonResponse({ topic: "T", side: "neg", format: "parli" }),
-      )
-      .mockResolvedValueOnce(jsonResponse({ id: "r-neg" }))
-      .mockResolvedValueOnce(jsonResponse({ speech: "ai aff" }))
-      .mockResolvedValueOnce(
-        jsonResponse({ transcript: "user neg", wpm_series: [] }),
-      )
-      .mockResolvedValueOnce(jsonResponse({ speech: "ai aff rebuttal" }))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          rfd: "Negative wins on defense and turns.",
-          winner_side: "neg",
-          flow,
-        }),
-      );
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/topics/tournaments")) return Promise.resolve(tournamentResponse());
+      if (url.includes("/api/topics?")) {
+        return Promise.resolve(jsonResponse({ topic: "T", side: "neg", format: "parli" }));
+      }
+      if (url.endsWith("/api/rounds")) return Promise.resolve(jsonResponse({ id: "r-neg" }));
+      if (url.includes("/api/ai/speech")) return Promise.resolve(jsonResponse({ speech: "ai aff" }));
+      if (url.includes("/api/ai/aff-overview")) {
+        return Promise.resolve(jsonResponse({ speech: "aff overview" }));
+      }
+      if (url.includes("/api/rounds/r-neg/speeches/text")) {
+        return Promise.resolve(jsonResponse({ transcript: "user neg", wpm_series: [] }));
+      }
+      if (url.includes("/api/ai/aff-rebuttal")) {
+        return Promise.resolve(jsonResponse({ speech: "ai aff rebuttal" }));
+      }
+      if (url.includes("/api/ai/judgment")) {
+        return Promise.resolve(
+          jsonResponse({
+            rfd: "Negative wins on defense and turns.",
+            winner_side: "neg",
+            flow,
+          }),
+        );
+      }
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
 
     render(<RoundRunner />);
     fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
@@ -264,9 +306,15 @@ describe("RoundRunner", () => {
     expect(screen.getByText("Your side: Negative")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /accept topic/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
-    fireEvent.click(screen.getByRole("button", { name: /generate aff speech/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /generate aff speech/i }));
     expect(await screen.findByText("ai aff")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        (global.fetch as jest.Mock).mock.calls.some(([url]) =>
+          String(url).includes("/api/ai/aff-overview"),
+        ),
+      ).toBe(true),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /continue to neg speech/i }));
     const negBtn = await screen.findByTestId("record-record-neg-speech");
@@ -280,30 +328,25 @@ describe("RoundRunner", () => {
       expect.anything(),
     ));
     fireEvent.click(screen.getByRole("button", { name: /generate aff rebuttal/i }));
-    expect(await screen.findByText("ai aff rebuttal")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /continue to judgment/i }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /continue to judgment/i }));
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(7));
     fireEvent.click(screen.getByRole("button", { name: /judge debate/i }));
     expect(await screen.findByText("Negative wins on defense and turns.")).toBeInTheDocument();
     expect(screen.getByText("Winner: You (Negative)")).toBeInTheDocument();
 
-    const [, speechInit] = (global.fetch as jest.Mock).mock.calls[3] as [
-      string,
-      RequestInit,
-    ];
+    const [, speechInit] = findFetchCall("/api/ai/speech");
     expect(JSON.parse(speechInit.body as string)).toMatchObject({
       side: "aff",
     });
-    const [, judgmentInit] = (global.fetch as jest.Mock).mock.calls[6] as [
-      string,
-      RequestInit,
-    ];
+    const [, judgmentInit] = findFetchCall("/api/ai/judgment");
     expect(JSON.parse(judgmentInit.body as string)).toMatchObject({
       round_id: "r-neg",
       aff_speech: "ai aff",
       neg_speech: "user neg",
-      aff_two_speech: "ai aff rebuttal",
+      aff_two_speech: "aff overview\n\nai aff rebuttal",
     });
   });
 
@@ -314,26 +357,40 @@ describe("RoundRunner", () => {
       ballot: "Aff wins on probability.",
     };
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(tournamentResponse())
-      .mockResolvedValueOnce(
-        jsonResponse({ topic: "T", side: "aff", format: "parli" }),
-      ) // topic
-      .mockResolvedValueOnce(jsonResponse({ id: "r1" })) // round
-      .mockResolvedValueOnce(
-        jsonResponse({ transcript: "aff one", wpm_series: [] }),
-      ) // aff speech
-      .mockResolvedValueOnce(jsonResponse({ speech: "neg speech" })) // AI opposition
-      .mockResolvedValueOnce(
-        jsonResponse({ transcript: "aff two", wpm_series: [] }),
-      ) // aff_two speech
-      .mockResolvedValueOnce(
-        jsonResponse({
-          rfd: "Aff wins because of clear impact comparison.",
-          winner_side: "aff",
-          flow,
-        }),
-      ); // judgment
+    (global.fetch as jest.Mock).mockImplementation(
+      (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/topics/tournaments")) return Promise.resolve(tournamentResponse());
+      if (url.includes("/api/topics?")) {
+        return Promise.resolve(jsonResponse({ topic: "T", side: "aff", format: "parli" }));
+      }
+      if (url.endsWith("/api/rounds")) return Promise.resolve(jsonResponse({ id: "r1" }));
+      if (url.includes("/api/ai/neg-framework")) {
+        return Promise.resolve(jsonResponse({ speech: "neg case" }));
+      }
+      if (url.includes("/api/rounds/r1/speeches/text")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        if (body.speech_type === "aff") {
+          return Promise.resolve(jsonResponse({ transcript: "aff one", wpm_series: [] }));
+        }
+        if (body.speech_type === "aff_two") {
+          return Promise.resolve(jsonResponse({ transcript: "aff two", wpm_series: [] }));
+        }
+      }
+      if (url.includes("/api/ai/neg-rebuttal")) {
+        return Promise.resolve(jsonResponse({ speech: "neg speech" }));
+      }
+      if (url.includes("/api/ai/judgment")) {
+        return Promise.resolve(
+          jsonResponse({
+            rfd: "Aff wins because of clear impact comparison.",
+            winner_side: "aff",
+            flow,
+          }),
+        );
+      }
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
 
     render(<RoundRunner />);
     fireEvent.click(screen.getByRole("button", { name: /get topic/i }));
@@ -359,7 +416,6 @@ describe("RoundRunner", () => {
     });
     await screen.findByText("aff two");
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(7));
     expect(
       screen.queryByText("Aff wins because of clear impact comparison."),
     ).not.toBeInTheDocument();
@@ -368,13 +424,10 @@ describe("RoundRunner", () => {
     expect(
       await screen.findByText("Aff wins because of clear impact comparison."),
     ).toBeInTheDocument();
-    const [, judgmentInit] = (global.fetch as jest.Mock).mock.calls[6] as [
-      string,
-      RequestInit,
-    ];
+    const [, judgmentInit] = findFetchCall("/api/ai/judgment");
     expect(JSON.parse(judgmentInit.body as string)).toMatchObject({
       round_id: "r1",
-      neg_speech: "neg speech",
+      neg_speech: "neg case\n\nneg speech",
     });
     expect(screen.queryByText("Econ")).not.toBeInTheDocument();
     expect(screen.queryByText("growth good")).not.toBeInTheDocument();

@@ -288,6 +288,106 @@ def _has_filler_issue(speech_metrics: Any | None) -> bool:
 # --- speech generation --------------------------------------------------------
 
 
+async def ai_neg_framework(topic: str) -> str:
+    """Negative constructive case body only, generated from the topic."""
+
+    system = (
+        "You are a negation parliamentary debater by the name of Debby. "
+        "Your job is to make a debate case for the topic you are given."
+    )
+    user = (
+        "Make the body of a two-minute negation constructive case for the topic: "
+        + topic
+        + " using a high school parliamentary debate case format style with evidence "
+        "at average speaking pace. Include exactly three negative contentions with "
+        "clear labels, warranting, and impacts. Do NOT include a conclusion, summary "
+        "paragraph, or any closing/wrap-up sentence at the end — the speech ends "
+        "immediately after the third contention. In the start of your speech, you "
+        'must say: "Hello my name is Debby."'
+    )
+
+    message = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=512,
+        temperature=0.0,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return message.choices[0].message.content or ""
+
+
+async def ai_neg_rebuttal(topic: str, neg_case: str, aff_speech: str) -> str:
+    """Append-only negative rebuttal paragraph plus conclusion."""
+
+    if not topic or not neg_case or not aff_speech:
+        raise ValueError("Topic, neg case, and aff speech are required")
+
+    system = (
+        "You are a negation parliamentary debater by the name of Debby. "
+        "You have already delivered your negative constructive case. "
+        "Your job is to add only the very next paragraph to that speech."
+    )
+    user = (
+        "Given the following topic:\n"
+        + topic
+        + "\n\nYou have already delivered this negative case:\n"
+        + neg_case
+        + "\n\nThe affirmative gave the following speech:\n"
+        + aff_speech
+        + "\n\nWrite ONLY the next paragraph that comes after your case above. "
+        "This paragraph must: refute the affirmative's major contentions, "
+        "cross-apply your prepared case contentions by name as refutations where "
+        "they apply, and end with a brief conclusion. "
+        "Do NOT restate or summarize your case contentions. "
+        "Do NOT include a greeting. Output only this single paragraph."
+    )
+
+    message = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=350,
+        temperature=0.0,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return message.choices[0].message.content or ""
+
+
+async def ai_aff_overview(topic: str, aff_speech: str) -> str:
+    """One-paragraph roadmap of Debby's affirmative constructive."""
+
+    if not topic or not aff_speech:
+        raise ValueError("Topic and affirmative speech are required")
+
+    system = (
+        "You are an affirmative parliamentary debater by the name of Debby. "
+        "Your job is to deliver a brief overview of the affirmative case."
+    )
+    user = (
+        "Given the following topic:\n"
+        + topic
+        + "\n\nGiven Debby's affirmative constructive speech:\n"
+        + aff_speech
+        + "\n\nWrite exactly one paragraph that previews and roadmaps the "
+        "affirmative's contentions from that speech. Do not include a greeting. "
+        "Do not make any rebuttal. Output only this single overview paragraph."
+    )
+
+    message = await client.chat.completions.create(
+        model=MODEL,
+        max_tokens=250,
+        temperature=0.0,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return message.choices[0].message.content or ""
+
+
 async def ai_speech(topic: str, side: Side = "aff") -> str:
     """One-shot AI debate speech (legacy `ai_speech` / `ai_response` starter).
 
@@ -375,22 +475,23 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
 
 
 async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
-    """Short affirmative rebuttal after the human gives the NEG speech."""
+    """Append-only affirmative rebuttal paragraph after the human gives the NEG speech."""
 
     if not topic or not aff_speech or not neg_speech:
         raise ValueError("Topic, affirmative speech, and negative speech are required")
 
     message = await client.chat.completions.create(
         model=MODEL,
-        max_tokens=450,
+        max_tokens=350,
         temperature=0.0,
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are an affirmative parliamentary debater by the name of "
-                    "Debby. You are giving a short rebuttal-only speech. Do not "
-                    "introduce a new constructive case."
+                    "Debby. You are adding the next paragraph to your speech. "
+                    "Do not introduce a new constructive case. Do not include a "
+                    "greeting or an overview."
                 ),
             },
             {
@@ -402,10 +503,11 @@ async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
                     + aff_speech
                     + "\n\nGiven the negative speech:\n"
                     + neg_speech
-                    + "\n\nWrite a concise affirmative rebuttal speech that answers "
+                    + "\n\nWrite ONLY a single rebuttal paragraph that answers "
                     "the negative's strongest arguments, extends the affirmative's "
-                    "best offense, and does clear impact comparison. This should be "
-                    "rebuttal-only, not a new case."
+                    "best offense, and does clear impact comparison. "
+                    "Do not include an overview, a new case, or a greeting. "
+                    "Output only this single paragraph."
                 ),
             },
         ],

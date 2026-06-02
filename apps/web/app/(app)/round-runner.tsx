@@ -7,6 +7,11 @@ import { getBrowserSupabase } from "../../lib/supabase";
 import { RecordButton } from "../../components/RecordButton";
 import { RfdCard } from "../../components/RfdCard";
 import type { RealtimeTranscriptResult } from "../../hooks/useRealtimeTranscription";
+import {
+  speechKey,
+  useDebbySpeech,
+  type UseDebbySpeechResult,
+} from "../../hooks/useDebbySpeech";
 import type { FlowSheetData } from "../../components/FlowSheet";
 import { WpmChart, type WpmPoint } from "../../components/WpmChart";
 import {
@@ -132,9 +137,45 @@ function StepCard({
   );
 }
 
+function DebbyAudioButton({
+  parts,
+  speech,
+}: {
+  parts: string | string[];
+  speech: UseDebbySpeechResult;
+}) {
+  const list = (Array.isArray(parts) ? parts : [parts]).filter(
+    (part): part is string => Boolean(part && part.trim()),
+  );
+  if (list.length === 0) return null;
+  const playParts = list.length === 1 ? list[0] : list;
+  const key = speechKey(playParts);
+  const isActive = speech.activeKey === key;
+  const loading = isActive && speech.state === "loading";
+  const playing = isActive && speech.state === "playing";
+  const errored = isActive && speech.state === "error";
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => void speech.play(playParts)}
+        disabled={loading}
+        className={secondaryButtonClass}
+      >
+        {loading ? "Loading audio..." : playing ? "Stop audio" : "Play audio"}
+      </button>
+      {errored && speech.error && (
+        <span className="text-xs text-red-600">{speech.error}</span>
+      )}
+    </div>
+  );
+}
+
 export function RoundRunner() {
+  const speech = useDebbySpeech();
   const searchParams = useSearchParams();
-  const assignmentRecipientId = searchParams.get("assignment");
+  const assignmentRecipientId = searchParams?.get("assignment") ?? null;
   const [step, setStep] = useState<Step>(1);
 
   // Step 1
@@ -160,7 +201,8 @@ export function RoundRunner() {
   const [affAiError, setAffAiError] = useState<string | null>(null);
 
   // Step 3
-  const [negTokens, setNegTokens] = useState("");
+  const [negCase, setNegCase] = useState<string | null>(null);
+  const [negRebuttalPara, setNegRebuttalPara] = useState<string | null>(null);
   const [negDone, setNegDone] = useState(false);
   const [negLoading, setNegLoading] = useState(false);
   const [negRequested, setNegRequested] = useState(false);
@@ -168,7 +210,8 @@ export function RoundRunner() {
   const [negWpm, setNegWpm] = useState<WpmPoint[]>([]);
 
   // Step 4
-  const [affTwoTranscript, setAffTwoTranscript] = useState<string | null>(null);
+  const [affOverview, setAffOverview] = useState<string | null>(null);
+  const [affRebuttalPara, setAffRebuttalPara] = useState<string | null>(null);
   const [affTwoWpm, setAffTwoWpm] = useState<WpmPoint[]>([]);
   const [affTwoLoading, setAffTwoLoading] = useState(false);
   const [affTwoRequested, setAffTwoRequested] = useState(false);
@@ -184,14 +227,19 @@ export function RoundRunner() {
   const abortRef = useRef<AbortController | null>(null);
   const affStartedRef = useRef(false);
   const negStartedRef = useRef(false);
+  const negRebuttalStartedRef = useRef(false);
   const affTwoStartedRef = useRef(false);
   const judgmentStartedRef = useRef(false);
   const affPromiseRef = useRef<Promise<string> | null>(null);
-  const negPromiseRef = useRef<Promise<string> | null>(null);
-  const affTwoPromiseRef = useRef<Promise<string> | null>(null);
+  const negCaseRef = useRef<Promise<string> | null>(null);
+  const negRebuttalRef = useRef<Promise<string> | null>(null);
+  const affOverviewRef = useRef<Promise<string> | null>(null);
+  const affRebuttalRef = useRef<Promise<string> | null>(null);
   const judgmentPromiseRef = useRef<Promise<JudgmentResponse> | null>(null);
   const userSide = topic?.side ?? "aff";
   const userIsAff = userSide === "aff";
+  const negTokens = [negCase, negRebuttalPara].filter(Boolean).join("\n\n");
+  const affTwoTranscript = [affOverview, affRebuttalPara].filter(Boolean).join("\n\n");
   const assignmentPayload =
     assignmentDetail && isPracticePayload(assignmentDetail.assignment)
       ? assignmentDetail.assignment.payload
@@ -338,24 +386,30 @@ export function RoundRunner() {
       if (!nextRoundId) throw new Error("Failed to start round");
       setRoundId(nextRoundId);
       setStep(2);
+      speech.stop();
       affStartedRef.current = false;
       negStartedRef.current = false;
+      negRebuttalStartedRef.current = false;
       affTwoStartedRef.current = false;
       judgmentStartedRef.current = false;
       affPromiseRef.current = null;
-      negPromiseRef.current = null;
-      affTwoPromiseRef.current = null;
+      negCaseRef.current = null;
+      negRebuttalRef.current = null;
+      affOverviewRef.current = null;
+      affRebuttalRef.current = null;
       judgmentPromiseRef.current = null;
       setAffTranscript(null);
       setAffWpm([]);
       setAffAiRequested(false);
       setAffAiError(null);
-      setNegTokens("");
+      setNegCase(null);
+      setNegRebuttalPara(null);
       setNegDone(false);
       setNegRequested(false);
       setNegError(null);
       setNegWpm([]);
-      setAffTwoTranscript(null);
+      setAffOverview(null);
+      setAffRebuttalPara(null);
       setAffTwoWpm([]);
       setAffTwoRequested(false);
       setAffTwoError(null);
@@ -365,18 +419,22 @@ export function RoundRunner() {
     } catch (err) {
       setTopicError(err instanceof Error ? err.message : "Failed to start round");
     }
-  }, [assignmentRecipientId, topic]);
+  }, [assignmentRecipientId, speech, topic]);
 
   const handlePracticeAgain = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    speech.stop();
     affStartedRef.current = false;
     negStartedRef.current = false;
+    negRebuttalStartedRef.current = false;
     affTwoStartedRef.current = false;
     judgmentStartedRef.current = false;
     affPromiseRef.current = null;
-    negPromiseRef.current = null;
-    affTwoPromiseRef.current = null;
+    negCaseRef.current = null;
+    negRebuttalRef.current = null;
+    affOverviewRef.current = null;
+    affRebuttalRef.current = null;
     judgmentPromiseRef.current = null;
     setStep(1);
     setTopic(null);
@@ -389,13 +447,15 @@ export function RoundRunner() {
     setAffLoading(false);
     setAffAiRequested(false);
     setAffAiError(null);
-    setNegTokens("");
+    setNegCase(null);
+    setNegRebuttalPara(null);
     setNegDone(false);
     setNegLoading(false);
     setNegRequested(false);
     setNegError(null);
     setNegWpm([]);
-    setAffTwoTranscript(null);
+    setAffOverview(null);
+    setAffRebuttalPara(null);
     setAffTwoWpm([]);
     setAffTwoLoading(false);
     setAffTwoRequested(false);
@@ -404,7 +464,7 @@ export function RoundRunner() {
     setJudgmentLoading(false);
     setJudgmentRequested(false);
     setJudgmentError(null);
-  }, []);
+  }, [speech]);
 
   const uploadSpeech = useCallback(
     async (
@@ -437,7 +497,8 @@ export function RoundRunner() {
         setAffTranscript(res.transcript);
         setAffWpm(res.wpm_series ?? []);
         negStartedRef.current = false;
-        negPromiseRef.current = null;
+        negCaseRef.current = null;
+        negRebuttalRef.current = null;
         setNegRequested(false);
         setStep(3);
       } finally {
@@ -460,6 +521,20 @@ export function RoundRunner() {
       })
       .then((res) => {
         setAffTranscript(res.speech);
+        void speech.prefetch(res.speech);
+        affOverviewRef.current = apiFetch<AiSpeechResponse>("/api/ai/aff-overview", {
+            method: "POST",
+            body: JSON.stringify({ topic: topic.topic, aff_speech: res.speech }),
+          })
+          .then((overviewRes) => {
+            setAffOverview(overviewRes.speech);
+            void speech.prefetch(overviewRes.speech);
+            return overviewRes.speech;
+          })
+          .catch(() => "")
+          .finally(() => {
+            affOverviewRef.current = null;
+          });
         return res.speech;
       })
       .catch((err) => {
@@ -475,7 +550,7 @@ export function RoundRunner() {
 
     affPromiseRef.current = promise;
     return promise;
-  }, [topic, affTranscript]);
+  }, [topic, affTranscript, speech]);
 
   const revealAiAffSpeech = useCallback(async () => {
     setAffAiRequested(true);
@@ -486,56 +561,95 @@ export function RoundRunner() {
     }
   }, [prefetchAiAffSpeech]);
 
-  const prefetchAiOpposition = useCallback(async (): Promise<string> => {
-    if (!topic || !affTranscript) return "";
-    if (negTokens.trim()) return negTokens;
-    if (negPromiseRef.current) return negPromiseRef.current;
+  const prefetchNegCase = useCallback(async (): Promise<string> => {
+    if (!topic) return "";
+    if (negCase?.trim()) return negCase;
+    if (negCaseRef.current) return negCaseRef.current;
 
-    setNegTokens("");
-    setNegDone(false);
     setNegError(null);
     setNegLoading(true);
-    const promise = apiFetch<AiSpeechResponse>("/api/ai/response", {
+    const promise = apiFetch<AiSpeechResponse>("/api/ai/neg-framework", {
         method: "POST",
-        body: JSON.stringify({ topic: topic.topic, first_speech: affTranscript }),
+        body: JSON.stringify({ topic: topic.topic }),
       })
       .then((res) => {
-        setNegTokens(res.speech);
-        setNegDone(true);
+        setNegCase(res.speech);
+        void speech.prefetch(res.speech);
         return res.speech;
       })
       .catch((err) => {
-        setNegError(err instanceof Error ? err.message : "Failed to generate opposition");
+        setNegError(err instanceof Error ? err.message : "Failed to generate neg case");
         throw err;
       })
       .finally(() => {
         setNegLoading(false);
-        negPromiseRef.current = null;
+        negCaseRef.current = null;
       });
 
-    negPromiseRef.current = promise;
+    negCaseRef.current = promise;
     return promise;
-  }, [topic, affTranscript, negTokens]);
+  }, [topic, negCase, speech]);
+
+  const prefetchNegRebuttal = useCallback(async (): Promise<string> => {
+    if (!topic || !affTranscript) return "";
+    if (negRebuttalPara?.trim()) return negRebuttalPara;
+    if (negRebuttalRef.current) return negRebuttalRef.current;
+
+    const caseText = await (negCaseRef.current ?? prefetchNegCase());
+    if (!caseText.trim()) return "";
+
+    const promise = apiFetch<AiSpeechResponse>("/api/ai/neg-rebuttal", {
+        method: "POST",
+        body: JSON.stringify({
+          topic: topic.topic,
+          neg_case: caseText,
+          aff_speech: affTranscript,
+        }),
+      })
+      .then((res) => {
+        setNegRebuttalPara(res.speech);
+        setNegDone(true);
+        void speech.prefetch(res.speech);
+        return res.speech;
+      })
+      .catch((err) => {
+        setNegError(
+          err instanceof Error ? err.message : "Failed to generate neg rebuttal",
+        );
+        throw err;
+      })
+      .finally(() => {
+        negRebuttalRef.current = null;
+      });
+
+    negRebuttalRef.current = promise;
+    return promise;
+  }, [topic, affTranscript, negRebuttalPara, prefetchNegCase, speech]);
 
   const revealAiOpposition = useCallback(async () => {
     setNegRequested(true);
     try {
-      await prefetchAiOpposition();
+      await Promise.all([
+        negCaseRef.current ?? prefetchNegCase(),
+        negRebuttalRef.current ?? prefetchNegRebuttal(),
+      ]);
     } catch {
       // Error text is already stored for the UI.
     }
-  }, [prefetchAiOpposition]);
+  }, [prefetchNegCase, prefetchNegRebuttal]);
 
   const handleNegComplete = useCallback(
     async (blob: Blob, realtimeTranscript?: RealtimeTranscriptResult | null) => {
       setNegLoading(true);
       try {
         const res = await uploadSpeech(blob, "neg", realtimeTranscript);
-        setNegTokens(res.transcript);
+        setNegCase(res.transcript);
+        setNegRebuttalPara(null);
         setNegDone(true);
         setNegWpm(res.wpm_series ?? []);
         affTwoStartedRef.current = false;
-        affTwoPromiseRef.current = null;
+        affOverviewRef.current = null;
+        affRebuttalRef.current = null;
         setAffTwoRequested(false);
         setAffTwoError(null);
         setStep(4);
@@ -551,7 +665,8 @@ export function RoundRunner() {
       setAffTwoLoading(true);
       try {
         const res = await uploadSpeech(blob, "aff_two", realtimeTranscript);
-        setAffTwoTranscript(res.transcript);
+        setAffOverview(res.transcript);
+        setAffRebuttalPara(null);
         setAffTwoWpm(res.wpm_series ?? []);
         judgmentStartedRef.current = false;
         judgmentPromiseRef.current = null;
@@ -564,10 +679,10 @@ export function RoundRunner() {
     [uploadSpeech],
   );
 
-  const prefetchAiAffRebuttal = useCallback(async (): Promise<string> => {
+  const prefetchAffRebuttal = useCallback(async (): Promise<string> => {
     if (!topic || !affTranscript || !negTokens.trim()) return "";
-    if (affTwoTranscript?.trim()) return affTwoTranscript;
-    if (affTwoPromiseRef.current) return affTwoPromiseRef.current;
+    if (affRebuttalPara?.trim()) return affRebuttalPara;
+    if (affRebuttalRef.current) return affRebuttalRef.current;
 
     setAffTwoError(null);
     setAffTwoLoading(true);
@@ -580,7 +695,8 @@ export function RoundRunner() {
         }),
       })
       .then((res) => {
-        setAffTwoTranscript(res.speech);
+        setAffRebuttalPara(res.speech);
+        void speech.prefetch(res.speech);
         return res.speech;
       })
       .catch((err) => {
@@ -591,21 +707,24 @@ export function RoundRunner() {
       })
       .finally(() => {
         setAffTwoLoading(false);
-        affTwoPromiseRef.current = null;
+        affRebuttalRef.current = null;
       });
 
-    affTwoPromiseRef.current = promise;
+    affRebuttalRef.current = promise;
     return promise;
-  }, [topic, affTranscript, negTokens, affTwoTranscript]);
+  }, [topic, affTranscript, negTokens, affRebuttalPara, speech]);
 
   const revealAiAffRebuttal = useCallback(async () => {
     setAffTwoRequested(true);
     try {
-      await prefetchAiAffRebuttal();
+      await Promise.all([
+        affOverviewRef.current ?? Promise.resolve(affOverview ?? ""),
+        affRebuttalRef.current ?? prefetchAffRebuttal(),
+      ]);
     } catch {
       // Error text is already stored for the UI.
     }
-  }, [prefetchAiAffRebuttal]);
+  }, [affOverview, prefetchAffRebuttal]);
 
   const prefetchJudgment = useCallback(async (): Promise<JudgmentResponse> => {
     if (!topic || !affTranscript || !affTwoTranscript) {
@@ -687,24 +806,43 @@ export function RoundRunner() {
   useEffect(() => {
     if (
       userIsAff &&
-      step === 3 &&
+      step === 2 &&
       topic &&
-      affTranscript &&
-      !negTokens.trim() &&
+      !negCase?.trim() &&
       !negLoading &&
       !negStartedRef.current
     ) {
       negStartedRef.current = true;
-      void prefetchAiOpposition().catch(() => undefined);
+      void prefetchNegCase().catch(() => undefined);
+    }
+  }, [
+    userIsAff,
+    step,
+    topic,
+    negCase,
+    negLoading,
+    prefetchNegCase,
+  ]);
+
+  useEffect(() => {
+    if (
+      userIsAff &&
+      step === 3 &&
+      topic &&
+      affTranscript &&
+      !negRebuttalPara?.trim() &&
+      !negRebuttalStartedRef.current
+    ) {
+      negRebuttalStartedRef.current = true;
+      void prefetchNegRebuttal().catch(() => undefined);
     }
   }, [
     userIsAff,
     step,
     topic,
     affTranscript,
-    negTokens,
-    negLoading,
-    prefetchAiOpposition,
+    negRebuttalPara,
+    prefetchNegRebuttal,
   ]);
 
   useEffect(() => {
@@ -735,12 +873,12 @@ export function RoundRunner() {
       topic &&
       affTranscript &&
       negTokens.trim() &&
-      !affTwoTranscript?.trim() &&
+      !affRebuttalPara?.trim() &&
       !affTwoLoading &&
       !affTwoStartedRef.current
     ) {
       affTwoStartedRef.current = true;
-      void prefetchAiAffRebuttal().catch(() => undefined);
+      void prefetchAffRebuttal().catch(() => undefined);
     }
   }, [
     userIsAff,
@@ -748,13 +886,14 @@ export function RoundRunner() {
     topic,
     affTranscript,
     negTokens,
-    affTwoTranscript,
+    affRebuttalPara,
     affTwoLoading,
-    prefetchAiAffRebuttal,
+    prefetchAffRebuttal,
   ]);
 
   useEffect(() => {
     if (
+      step === 5 &&
       topic &&
       affTranscript &&
       affTwoTranscript &&
@@ -766,6 +905,7 @@ export function RoundRunner() {
       void prefetchJudgment().catch(() => undefined);
     }
   }, [
+    step,
     topic,
     affTranscript,
     affTwoTranscript,
@@ -982,6 +1122,9 @@ export function RoundRunner() {
                     : "Generate Aff speech"}
                 </button>
                 {affAiError && <p className="text-sm text-red-600">{affAiError}</p>}
+                {affAiRequested && affTranscript && (
+                  <DebbyAudioButton parts={affTranscript} speech={speech} />
+                )}
                 {step === 2 && affAiRequested && affTranscript && (
                   <button
                     type="button"
@@ -1039,6 +1182,12 @@ export function RoundRunner() {
               >
                 {negTokens}
               </div>
+            )}
+            {negRequested && negDone && negTokens.trim().length > 0 && (
+              <DebbyAudioButton
+                parts={[negCase, negRebuttalPara].filter(Boolean) as string[]}
+                speech={speech}
+              />
             )}
             {step === 3 && negRequested && negDone && negTokens.trim().length > 0 && (
               <button
@@ -1125,6 +1274,12 @@ export function RoundRunner() {
                     : "Generate Aff rebuttal"}
                 </button>
                 {affTwoError && <p className="text-sm text-red-600">{affTwoError}</p>}
+                {affTwoRequested && affTwoTranscript && (
+                  <DebbyAudioButton
+                    parts={[affOverview, affRebuttalPara].filter(Boolean) as string[]}
+                    speech={speech}
+                  />
+                )}
                 {affTwoRequested && affTwoTranscript && (
                   <div className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                     <div className="mb-1 text-xs font-semibold uppercase text-slate-500">
