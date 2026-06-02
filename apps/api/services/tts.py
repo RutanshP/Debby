@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -93,3 +94,25 @@ async def synthesize(text: str, voice: str = DEFAULT_VOICE) -> bytes:
         )
 
     return b"".join(segments)
+
+
+async def stream_synthesize(
+    text: str, voice: str = DEFAULT_VOICE
+) -> AsyncIterator[bytes]:
+    key = _api_key()
+    headers = {"Authorization": f"Token {key}"}
+    chunks = _chunk(text)
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for chunk in chunks:
+            response = await client.post(
+                DEEPGRAM_SPEAK_URL,
+                params={"model": voice},
+                headers=headers,
+                json={"text": chunk},
+            )
+            if response.status_code >= 400:
+                raise TTSError(
+                    f"Deepgram TTS failed: {response.status_code} {response.text}"
+                )
+            yield response.content
