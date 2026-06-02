@@ -33,6 +33,13 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
+  if (pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? "/workspace" : "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   if (user && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/workspace";
