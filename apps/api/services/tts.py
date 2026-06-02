@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 
@@ -71,20 +72,24 @@ def _chunk(text: str) -> list[str]:
 async def synthesize(text: str, voice: str = DEFAULT_VOICE) -> bytes:
     key = _api_key()
     headers = {"Authorization": f"Token {key}"}
-    segments: list[bytes] = []
+    chunks = _chunk(text)
+
+    async def synthesize_chunk(client: httpx.AsyncClient, chunk: str) -> bytes:
+        response = await client.post(
+            DEEPGRAM_SPEAK_URL,
+            params={"model": voice},
+            headers=headers,
+            json={"text": chunk},
+        )
+        if response.status_code >= 400:
+            raise TTSError(
+                f"Deepgram TTS failed: {response.status_code} {response.text}"
+            )
+        return response.content
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        for chunk in _chunk(text):
-            response = await client.post(
-                DEEPGRAM_SPEAK_URL,
-                params={"model": voice},
-                headers=headers,
-                json={"text": chunk},
-            )
-            if response.status_code >= 400:
-                raise TTSError(
-                    f"Deepgram TTS failed: {response.status_code} {response.text}"
-                )
-            segments.append(response.content)
+        segments = await asyncio.gather(
+            *(synthesize_chunk(client, chunk) for chunk in chunks)
+        )
 
     return b"".join(segments)

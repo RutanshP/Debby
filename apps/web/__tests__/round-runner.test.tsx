@@ -279,9 +279,6 @@ describe("RoundRunner", () => {
       }
       if (url.endsWith("/api/rounds")) return Promise.resolve(jsonResponse({ id: "r-neg" }));
       if (url.includes("/api/ai/speech")) return Promise.resolve(jsonResponse({ speech: "ai aff" }));
-      if (url.includes("/api/ai/aff-overview")) {
-        return Promise.resolve(jsonResponse({ speech: "aff overview" }));
-      }
       if (url.includes("/api/rounds/r-neg/speeches/text")) {
         return Promise.resolve(jsonResponse({ transcript: "user neg", wpm_series: [] }));
       }
@@ -308,13 +305,6 @@ describe("RoundRunner", () => {
     fireEvent.click(screen.getByRole("button", { name: /accept topic/i }));
     fireEvent.click(await screen.findByRole("button", { name: /generate aff speech/i }));
     expect(await screen.findByText("ai aff")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(
-        (global.fetch as jest.Mock).mock.calls.some(([url]) =>
-          String(url).includes("/api/ai/aff-overview"),
-        ),
-      ).toBe(true),
-    );
 
     fireEvent.click(screen.getByRole("button", { name: /continue to neg speech/i }));
     const negBtn = await screen.findByTestId("record-record-neg-speech");
@@ -346,7 +336,7 @@ describe("RoundRunner", () => {
       round_id: "r-neg",
       aff_speech: "ai aff",
       neg_speech: "user neg",
-      aff_two_speech: "aff overview\n\nai aff rebuttal",
+      aff_two_speech: "ai aff rebuttal",
     });
   });
 

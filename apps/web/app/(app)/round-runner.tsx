@@ -239,7 +239,9 @@ export function RoundRunner() {
   const userSide = topic?.side ?? "aff";
   const userIsAff = userSide === "aff";
   const negTokens = [negCase, negRebuttalPara].filter(Boolean).join("\n\n");
-  const affTwoTranscript = [affOverview, affRebuttalPara].filter(Boolean).join("\n\n");
+  const affTwoTranscript = userIsAff
+    ? [affOverview, affRebuttalPara].filter(Boolean).join("\n\n")
+    : (affRebuttalPara ?? "");
   const assignmentPayload =
     assignmentDetail && isPracticePayload(assignmentDetail.assignment)
       ? assignmentDetail.assignment.payload
@@ -522,19 +524,6 @@ export function RoundRunner() {
       .then((res) => {
         setAffTranscript(res.speech);
         void speech.prefetch(res.speech);
-        affOverviewRef.current = apiFetch<AiSpeechResponse>("/api/ai/aff-overview", {
-            method: "POST",
-            body: JSON.stringify({ topic: topic.topic, aff_speech: res.speech }),
-          })
-          .then((overviewRes) => {
-            setAffOverview(overviewRes.speech);
-            void speech.prefetch(overviewRes.speech);
-            return overviewRes.speech;
-          })
-          .catch(() => "")
-          .finally(() => {
-            affOverviewRef.current = null;
-          });
         return res.speech;
       })
       .catch((err) => {
@@ -717,14 +706,11 @@ export function RoundRunner() {
   const revealAiAffRebuttal = useCallback(async () => {
     setAffTwoRequested(true);
     try {
-      await Promise.all([
-        affOverviewRef.current ?? Promise.resolve(affOverview ?? ""),
-        affRebuttalRef.current ?? prefetchAffRebuttal(),
-      ]);
+      await (affRebuttalRef.current ?? prefetchAffRebuttal());
     } catch {
       // Error text is already stored for the UI.
     }
-  }, [affOverview, prefetchAffRebuttal]);
+  }, [prefetchAffRebuttal]);
 
   const prefetchJudgment = useCallback(async (): Promise<JudgmentResponse> => {
     if (!topic || !affTranscript || !affTwoTranscript) {
@@ -1276,7 +1262,7 @@ export function RoundRunner() {
                 {affTwoError && <p className="text-sm text-red-600">{affTwoError}</p>}
                 {affTwoRequested && affTwoTranscript && (
                   <DebbyAudioButton
-                    parts={[affOverview, affRebuttalPara].filter(Boolean) as string[]}
+                    parts={affTwoTranscript}
                     speech={speech}
                   />
                 )}

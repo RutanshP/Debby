@@ -475,23 +475,23 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
 
 
 async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
-    """Append-only affirmative rebuttal paragraph after the human gives the NEG speech."""
+    """Single affirmative rebuttal speech after the human gives the NEG speech."""
 
     if not topic or not aff_speech or not neg_speech:
         raise ValueError("Topic, affirmative speech, and negative speech are required")
 
     message = await client.chat.completions.create(
         model=MODEL,
-        max_tokens=350,
+        max_tokens=450,
         temperature=0.0,
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are an affirmative parliamentary debater by the name of "
-                    "Debby. You are adding the next paragraph to your speech. "
+                    "Debby. You are giving your second affirmative speech. "
                     "Do not introduce a new constructive case. Do not include a "
-                    "greeting or an overview."
+                    "greeting."
                 ),
             },
             {
@@ -503,11 +503,13 @@ async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
                     + aff_speech
                     + "\n\nGiven the negative speech:\n"
                     + neg_speech
-                    + "\n\nWrite ONLY a single rebuttal paragraph that answers "
-                    "the negative's strongest arguments, extends the affirmative's "
-                    "best offense, and does clear impact comparison. "
-                    "Do not include an overview, a new case, or a greeting. "
-                    "Output only this single paragraph."
+                    + "\n\nWrite ONE concise affirmative rebuttal speech. First rebut "
+                    "the negative's strongest actual arguments, extend the "
+                    "affirmative's best offense, and do clear impact comparison. "
+                    "Then give a very brief overview that emphasizes the affirmative "
+                    "contention that was least refuted by the negative. Do not invent "
+                    "detailed negative arguments that were not actually made. Do not "
+                    "include a new case or a greeting. Output only this single speech."
                 ),
             },
         ],

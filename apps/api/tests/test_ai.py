@@ -88,10 +88,11 @@ async def test_ai_aff_rebuttal_returns_short_rebuttal_only_prompt(
     assert out == "aff rebuttal"
 
     messages = patched_client.await_args.kwargs["messages"]
-    assert "adding the next paragraph to your speech" in messages[0]["content"]
+    assert "giving your second affirmative speech" in messages[0]["content"]
     assert "Do not introduce a new constructive case" in messages[0]["content"]
-    assert "Write ONLY a single rebuttal paragraph" in messages[1]["content"]
-    assert "Output only this single paragraph" in messages[1]["content"]
+    assert "First rebut the negative's strongest actual arguments" in messages[1]["content"]
+    assert "least refuted by the negative" in messages[1]["content"]
+    assert "Output only this single speech" in messages[1]["content"]
 
 
 async def test_ai_response_stream_yields_chunks(patched_client: AsyncMock):
