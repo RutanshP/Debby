@@ -438,48 +438,48 @@ async def post_generate_audio_stream(
     user: User = Depends(get_current_user),
 ) -> StreamingResponse:
     async def event_source():
-        queue: asyncio.Queue[str | Exception | None] = asyncio.Queue()
         full_text_parts: list[str] = []
         voice = body.voice or tts_service.DEFAULT_VOICE
         text_index = 0
         audio_index = 0
-
-        async def produce_text_chunks() -> None:
-            pending = ""
-            try:
-                async for token in _pick_streamer(body):
-                    pending += token
-                    while True:
-                        chunk, pending = _next_stream_chunk(pending)
-                        if chunk is None:
-                            break
-                        await queue.put(chunk)
-                if pending.strip():
-                    await queue.put(pending)
-            except Exception as exc:  # pragma: no cover - exercised via route behavior
-                await queue.put(exc)
-            finally:
-                await queue.put(None)
-
-        producer = asyncio.create_task(produce_text_chunks())
+        tts_tasks: list[asyncio.Task[bytes]] = []
 
         try:
-            while True:
-                item = await queue.get()
-                if item is None:
-                    break
-                if isinstance(item, Exception):
-                    raise item
-
-                text_chunk = item
+            pending = ""
+            async for token in _pick_streamer(body):
+                pending += token
+                while True:
+                    chunk, pending = _next_stream_chunk(pending)
+                    if chunk is None:
+                        break
+                    text_chunk = chunk
+                    full_text_parts.append(text_chunk)
+                    text_payload = json.dumps(
+                        {"index": text_index, "text": text_chunk}
+                    )
+                    yield f"event: text\ndata: {text_payload}\n\n"
+                    text_index += 1
+                    tts_tasks.append(
+                        asyncio.create_task(tts_service.synthesize(text_chunk, voice))
+                    )
+            if pending.strip():
+                text_chunk = pending
                 full_text_parts.append(text_chunk)
                 text_payload = json.dumps(
                     {"index": text_index, "text": text_chunk}
                 )
                 yield f"event: text\ndata: {text_payload}\n\n"
                 text_index += 1
+                tts_tasks.append(
+                    asyncio.create_task(tts_service.synthesize(text_chunk, voice))
+                )
 
-                audio_chunk = await tts_service.synthesize(text_chunk, voice)
+            full_text = "".join(full_text_parts).strip()
+            text_done_payload = json.dumps({"full_text": full_text})
+            yield f"event: text_done\ndata: {text_done_payload}\n\n"
+
+            for task in tts_tasks:
+                audio_chunk = await task
                 audio_payload = json.dumps(
                     {
                         "index": audio_index,
@@ -497,7 +497,6 @@ async def post_generate_audio_stream(
             payload = json.dumps({"message": _translate_openai_error(exc).detail})
             yield f"event: error\ndata: {payload}\n\n"
         finally:
-            producer.cancel()
             done_payload = json.dumps({"full_text": "".join(full_text_parts).strip()})
             yield f"event: done\ndata: {done_payload}\n\n"
 

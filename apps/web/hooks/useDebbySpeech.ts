@@ -9,6 +9,9 @@ export interface UseDebbySpeechResult {
   play: (parts: string | string[], voice?: string) => Promise<void>;
   prefetch: (parts: string | string[], voice?: string) => Promise<void>;
   cacheAudio: (text: string, chunks: ArrayBuffer[], voice?: string) => Promise<void>;
+  beginStreamingAudio: (text: string, initialChunks?: ArrayBuffer[], voice?: string) => void;
+  appendStreamingAudio: (text: string, chunk: ArrayBuffer, voice?: string) => void;
+  finishStreamingAudio: (text: string, chunks: ArrayBuffer[], voice?: string) => Promise<void>;
   stop: () => void;
   state: SpeechState;
   activeKey: string | null;
@@ -25,6 +28,12 @@ function audioCacheKey(text: string, voice?: string): string {
 
 function normalize(parts: string | string[]): string[] {
   return Array.isArray(parts) ? parts : [parts];
+}
+
+interface StreamingAudioEntry {
+  chunks: ArrayBuffer[];
+  complete: boolean;
+  listeners: Set<() => void>;
 }
 
 function concatBuffers(ctx: AudioContext, buffers: AudioBuffer[]): AudioBuffer {
@@ -64,6 +73,7 @@ export function useDebbySpeech(): UseDebbySpeechResult {
   const ctxRef = useRef<AudioContext | null>(null);
   const bufferCacheRef = useRef<Map<string, AudioBuffer>>(new Map());
   const pendingRef = useRef<Map<string, Promise<AudioBuffer>>>(new Map());
+  const streamingRef = useRef<Map<string, StreamingAudioEntry>>(new Map());
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const playTokenRef = useRef(0);
 
@@ -138,6 +148,70 @@ export function useDebbySpeech(): UseDebbySpeechResult {
     }
   }, []);
 
+  const beginStreamingAudio = useCallback(
+    (text: string, initialChunks: ArrayBuffer[] = [], voice?: string) => {
+      const normalizedText = text.trim();
+      if (!normalizedText) return;
+      const key = audioCacheKey(normalizedText, voice);
+      const existing = streamingRef.current.get(key);
+      if (existing) {
+        existing.chunks = initialChunks.slice();
+        existing.complete = false;
+        existing.listeners.forEach((listener) => listener());
+        return;
+      }
+      streamingRef.current.set(key, {
+        chunks: initialChunks.slice(),
+        complete: false,
+        listeners: new Set(),
+      });
+    },
+    [],
+  );
+
+  const appendStreamingAudio = useCallback((text: string, chunk: ArrayBuffer, voice?: string) => {
+    const normalizedText = text.trim();
+    if (!normalizedText) return;
+    const key = audioCacheKey(normalizedText, voice);
+    const entry =
+      streamingRef.current.get(key) ??
+      (() => {
+        const created: StreamingAudioEntry = {
+          chunks: [],
+          complete: false,
+          listeners: new Set(),
+        };
+        streamingRef.current.set(key, created);
+        return created;
+      })();
+    entry.chunks.push(chunk);
+    entry.listeners.forEach((listener) => listener());
+  }, []);
+
+  const finishStreamingAudio = useCallback(
+    async (text: string, chunks: ArrayBuffer[], voice?: string) => {
+      const normalizedText = text.trim();
+      if (!normalizedText) return;
+      const key = audioCacheKey(normalizedText, voice);
+      const entry =
+        streamingRef.current.get(key) ??
+        (() => {
+          const created: StreamingAudioEntry = {
+            chunks: [],
+            complete: false,
+            listeners: new Set(),
+          };
+          streamingRef.current.set(key, created);
+          return created;
+        })();
+      entry.chunks = chunks.slice();
+      entry.complete = true;
+      entry.listeners.forEach((listener) => listener());
+      await cacheAudio(normalizedText, chunks, voice);
+    },
+    [cacheAudio],
+  );
+
   const stop = useCallback(() => {
     playTokenRef.current += 1;
     if (sourceNodeRef.current) {
@@ -201,6 +275,35 @@ export function useDebbySpeech(): UseDebbySpeechResult {
           setState("playing");
           source.start();
         });
+
+      const waitForStreamingUpdate = (entry: StreamingAudioEntry) =>
+        new Promise<void>((resolve) => {
+          const listener = () => {
+            entry.listeners.delete(listener);
+            resolve();
+          };
+          entry.listeners.add(listener);
+        });
+
+      const playPendingStream = async (text: string) => {
+        const partKey = audioCacheKey(text, voice);
+        const entry = streamingRef.current.get(partKey);
+        if (!entry) return false;
+
+        let index = 0;
+        while (true) {
+          while (index < entry.chunks.length) {
+            const decoded = await ctx.decodeAudioData(entry.chunks[index].slice(0));
+            await playWholeBuffer(decoded);
+            index += 1;
+            if (playTokenRef.current !== token) return true;
+          }
+          if (entry.complete) {
+            return true;
+          }
+          await waitForStreamingUpdate(entry);
+        }
+      };
 
       const playStreamedPart = async (text: string) => {
         const partKey = audioCacheKey(text, voice);
@@ -324,6 +427,9 @@ export function useDebbySpeech(): UseDebbySpeechResult {
             await playWholeBuffer(cached);
             continue;
           }
+          if (await playPendingStream(text)) {
+            continue;
+          }
           await playStreamedPart(text);
         }
       } catch (err) {
@@ -358,8 +464,20 @@ export function useDebbySpeech(): UseDebbySpeechResult {
       }
       bufferCacheRef.current.clear();
       pendingRef.current.clear();
+      streamingRef.current.clear();
     };
   }, []);
 
-  return { play, prefetch, cacheAudio, stop, state, activeKey, error };
+  return {
+    play,
+    prefetch,
+    cacheAudio,
+    beginStreamingAudio,
+    appendStreamingAudio,
+    finishStreamingAudio,
+    stop,
+    state,
+    activeKey,
+    error,
+  };
 }

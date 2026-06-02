@@ -104,8 +104,11 @@ function decodeBase64Audio(base64: string): ArrayBuffer {
 
 async function streamGeneratedSpeech(
   request: GeneratedAudioStreamRequest,
-  onText: (text: string) => void,
-  onAudio?: (chunks: ArrayBuffer[], fullText: string) => Promise<void>,
+  callbacks: {
+    onTextReady: (text: string, initialAudioChunks: ArrayBuffer[]) => void;
+    onAudioChunk?: (chunk: ArrayBuffer, fullText: string) => void;
+    onComplete?: (chunks: ArrayBuffer[], fullText: string) => Promise<void>;
+  },
 ): Promise<string> {
   const response = await apiFetchResponse("/api/ai/generate-audio-stream", {
     method: "POST",
@@ -119,19 +122,29 @@ async function streamGeneratedSpeech(
   const decoder = new TextDecoder();
   let pending = "";
   let text = "";
-  let doneText = "";
+  let readyText = "";
   const audioChunks: ArrayBuffer[] = [];
 
   const handleEvent = async (eventName: string, data: string) => {
     if (eventName === "text") {
       const payload = JSON.parse(data) as { text: string };
       text += payload.text;
-      onText(text.trim());
       return;
     }
     if (eventName === "audio") {
       const payload = JSON.parse(data) as { audio_b64: string };
-      audioChunks.push(decodeBase64Audio(payload.audio_b64));
+      const chunk = decodeBase64Audio(payload.audio_b64);
+      audioChunks.push(chunk);
+      if (readyText && callbacks.onAudioChunk) {
+        callbacks.onAudioChunk(chunk, readyText);
+      }
+      return;
+    }
+    if (eventName === "text_done") {
+      const payload = JSON.parse(data) as { full_text?: string };
+      readyText = payload.full_text?.trim() ?? text.trim();
+      if (!readyText) readyText = text.trim();
+      callbacks.onTextReady(readyText, [...audioChunks]);
       return;
     }
     if (eventName === "error") {
@@ -140,9 +153,11 @@ async function streamGeneratedSpeech(
     }
     if (eventName === "done") {
       const payload = JSON.parse(data) as { full_text?: string };
-      doneText = payload.full_text?.trim() ?? text.trim();
-      if (!doneText) doneText = text.trim();
-      onText(doneText);
+      if (!readyText) {
+        readyText = payload.full_text?.trim() ?? text.trim();
+        if (!readyText) readyText = text.trim();
+        callbacks.onTextReady(readyText, [...audioChunks]);
+      }
     }
   };
 
@@ -173,9 +188,9 @@ async function streamGeneratedSpeech(
   pending += decoder.decode();
   await processPending();
 
-  const finalText = doneText || text.trim();
-  if (onAudio && finalText && audioChunks.length > 0) {
-    await onAudio(audioChunks, finalText);
+  const finalText = readyText || text.trim();
+  if (callbacks.onComplete && finalText && audioChunks.length > 0) {
+    await callbacks.onComplete(audioChunks, finalText);
   }
   return finalText;
 }
@@ -624,23 +639,31 @@ export function RoundRunner() {
         topic: topic.topic,
         side: "aff",
       },
-      (text) => {
-        setAffTranscript(text || null);
+      {
+        onTextReady: (finalText, initialAudioChunks) => {
+          setAffTranscript(finalText || null);
+          speech.beginStreamingAudio(finalText, initialAudioChunks);
+          setAffLoading(false);
+        },
+        onAudioChunk: (chunk, finalText) => {
+          speech.appendStreamingAudio(finalText, chunk);
+        },
+        onComplete: (audioChunks, finalText) =>
+          speech.finishStreamingAudio(finalText, audioChunks),
       },
-      (audioChunks, finalText) => speech.cacheAudio(finalText, audioChunks),
     )
       .then((finalText) => {
         setAffTranscript(finalText);
         return finalText;
       })
       .catch((err) => {
+        setAffLoading(false);
         setAffAiError(
           err instanceof Error ? err.message : "Failed to generate affirmative speech",
         );
         throw err;
       })
       .finally(() => {
-        setAffLoading(false);
         affPromiseRef.current = null;
       });
 
@@ -669,21 +692,29 @@ export function RoundRunner() {
         kind: "neg_framework",
         topic: topic.topic,
       },
-      (text) => {
-        setNegCase(text || null);
+      {
+        onTextReady: (finalText, initialAudioChunks) => {
+          setNegCase(finalText || null);
+          speech.beginStreamingAudio(finalText, initialAudioChunks);
+          setNegLoading(false);
+        },
+        onAudioChunk: (chunk, finalText) => {
+          speech.appendStreamingAudio(finalText, chunk);
+        },
+        onComplete: (audioChunks, finalText) =>
+          speech.finishStreamingAudio(finalText, audioChunks),
       },
-      (audioChunks, finalText) => speech.cacheAudio(finalText, audioChunks),
     )
       .then((finalText) => {
         setNegCase(finalText);
         return finalText;
       })
       .catch((err) => {
+        setNegLoading(false);
         setNegError(err instanceof Error ? err.message : "Failed to generate neg case");
         throw err;
       })
       .finally(() => {
-        setNegLoading(false);
         negCaseRef.current = null;
       });
 
@@ -706,10 +737,18 @@ export function RoundRunner() {
         neg_case: caseText,
         aff_speech: affTranscript,
       },
-      (text) => {
-        setNegRebuttalPara(text || null);
+      {
+        onTextReady: (finalText, initialAudioChunks) => {
+          setNegRebuttalPara(finalText || null);
+          setNegDone(true);
+          speech.beginStreamingAudio(finalText, initialAudioChunks);
+        },
+        onAudioChunk: (chunk, finalText) => {
+          speech.appendStreamingAudio(finalText, chunk);
+        },
+        onComplete: (audioChunks, finalText) =>
+          speech.finishStreamingAudio(finalText, audioChunks),
       },
-      (audioChunks, finalText) => speech.cacheAudio(finalText, audioChunks),
     )
       .then((finalText) => {
         setNegRebuttalPara(finalText);
@@ -797,23 +836,31 @@ export function RoundRunner() {
         aff_speech: affTranscript,
         neg_speech: negTokens,
       },
-      (text) => {
-        setAffRebuttalPara(text || null);
+      {
+        onTextReady: (finalText, initialAudioChunks) => {
+          setAffRebuttalPara(finalText || null);
+          speech.beginStreamingAudio(finalText, initialAudioChunks);
+          setAffTwoLoading(false);
+        },
+        onAudioChunk: (chunk, finalText) => {
+          speech.appendStreamingAudio(finalText, chunk);
+        },
+        onComplete: (audioChunks, finalText) =>
+          speech.finishStreamingAudio(finalText, audioChunks),
       },
-      (audioChunks, finalText) => speech.cacheAudio(finalText, audioChunks),
     )
       .then((finalText) => {
         setAffRebuttalPara(finalText);
         return finalText;
       })
       .catch((err) => {
+        setAffTwoLoading(false);
         setAffTwoError(
           err instanceof Error ? err.message : "Failed to generate affirmative rebuttal",
         );
         throw err;
       })
       .finally(() => {
-        setAffTwoLoading(false);
         affRebuttalRef.current = null;
       });
 
