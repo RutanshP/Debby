@@ -47,6 +47,13 @@ async function buildRequest(
   return res;
 }
 
+export async function apiFetchResponse(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  return buildRequest(path, init);
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},

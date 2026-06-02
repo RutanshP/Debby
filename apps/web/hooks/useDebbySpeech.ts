@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiFetchBlob } from "@/lib/api";
+import { apiFetchBlob, apiFetchResponse } from "@/lib/api";
 
 export type SpeechState = "idle" | "loading" | "playing" | "error";
 
@@ -24,6 +24,35 @@ function audioCacheKey(text: string, voice?: string): string {
 
 function normalize(parts: string | string[]): string[] {
   return Array.isArray(parts) ? parts : [parts];
+}
+
+function concatBuffers(ctx: AudioContext, buffers: AudioBuffer[]): AudioBuffer {
+  const totalLength = buffers.reduce((sum, buffer) => sum + buffer.length, 0);
+  const channelCount = Math.max(...buffers.map((buffer) => buffer.numberOfChannels));
+  const sampleRate = buffers[0].sampleRate;
+  const output = ctx.createBuffer(channelCount, totalLength, sampleRate);
+
+  let offset = 0;
+  for (const buffer of buffers) {
+    for (let channel = 0; channel < channelCount; channel += 1) {
+      const outData = output.getChannelData(channel);
+      if (channel < buffer.numberOfChannels) {
+        outData.set(buffer.getChannelData(channel), offset);
+      }
+    }
+    offset += buffer.length;
+  }
+
+  return output;
+}
+
+function decodeBase64Audio(base64: string): ArrayBuffer {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
 }
 
 export function useDebbySpeech(): UseDebbySpeechResult {
@@ -132,10 +161,153 @@ export function useDebbySpeech(): UseDebbySpeechResult {
       setActiveKey(key);
       setError(null);
 
-      const bufferPromises = texts.map((text) => loadBuffer(text, voice));
-      let firstBuffer: AudioBuffer;
+      if (playTokenRef.current !== token) return;
+      const ctx = getCtx();
+      await ctx.resume();
+      if (playTokenRef.current !== token) return;
+
+      setState("playing");
+
+      const playWholeBuffer = (buffer: AudioBuffer) =>
+        new Promise<void>((resolve) => {
+          if (playTokenRef.current !== token) {
+            resolve();
+            return;
+          }
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.onended = () => {
+            sourceNodeRef.current = null;
+            resolve();
+          };
+          sourceNodeRef.current = source;
+          source.start();
+        });
+
+      const playStreamedPart = async (text: string) => {
+        const partKey = audioCacheKey(text, voice);
+        const res = await apiFetchResponse("/api/ai/tts-stream", {
+          method: "POST",
+          body: JSON.stringify({ text, ...(voice ? { voice } : {}) }),
+        });
+        const reader = res.body?.getReader();
+        if (!reader) {
+          throw new Error("Streaming audio not available");
+        }
+
+        const decoder = new TextDecoder();
+        let pending = "";
+        const queued: AudioBuffer[] = [];
+        const collected: AudioBuffer[] = [];
+        let playing = false;
+        let streamDone = false;
+
+        const waitForPlayback = new Promise<void>((resolve, reject) => {
+          const maybePlayNext = () => {
+            if (playTokenRef.current !== token) {
+              resolve();
+              return;
+            }
+            if (playing) return;
+            const next = queued.shift();
+            if (!next) {
+              if (streamDone) resolve();
+              return;
+            }
+
+            playing = true;
+            const source = ctx.createBufferSource();
+            source.buffer = next;
+            source.connect(ctx.destination);
+            source.onended = () => {
+              sourceNodeRef.current = null;
+              playing = false;
+              maybePlayNext();
+            };
+            sourceNodeRef.current = source;
+            source.start();
+          };
+
+          const handleEvent = async (eventName: string, data: string) => {
+            if (eventName === "audio") {
+              const payload = JSON.parse(data) as { audio_b64: string };
+              const arrayBuffer = decodeBase64Audio(payload.audio_b64);
+              const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+              queued.push(decoded);
+              collected.push(decoded);
+              maybePlayNext();
+              return;
+            }
+            if (eventName === "error") {
+              const payload = JSON.parse(data) as { message?: string };
+              reject(new Error(payload.message || "TTS stream failed"));
+              return;
+            }
+            if (eventName === "done") {
+              streamDone = true;
+              if (!playing && queued.length === 0) {
+                resolve();
+              }
+            }
+          };
+
+          const processPending = async () => {
+            while (pending.includes("\n\n")) {
+              const separatorIndex = pending.indexOf("\n\n");
+              const rawEvent = pending.slice(0, separatorIndex);
+              pending = pending.slice(separatorIndex + 2);
+              if (!rawEvent.trim()) continue;
+              const lines = rawEvent.split("\n");
+              const eventName =
+                lines.find((line) => line.startsWith("event:"))?.slice(6).trim() ??
+                "message";
+              const data = lines
+                .filter((line) => line.startsWith("data:"))
+                .map((line) => line.slice(5).trim())
+                .join("\n");
+              await handleEvent(eventName, data);
+            }
+          };
+
+          void (async () => {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                pending += decoder.decode(value, { stream: true });
+                await processPending();
+              }
+              pending += decoder.decode();
+              await processPending();
+              streamDone = true;
+              if (!playing && queued.length === 0) {
+                resolve();
+              }
+            } catch (err) {
+              reject(err instanceof Error ? err : new Error("TTS stream failed"));
+            }
+          })();
+        });
+
+        await waitForPlayback;
+        if (collected.length > 0) {
+          const combined =
+            collected.length === 1 ? collected[0] : concatBuffers(ctx, collected);
+          bufferCacheRef.current.set(partKey, combined);
+        }
+      };
+
       try {
-        firstBuffer = await bufferPromises[0];
+        for (const text of texts) {
+          if (playTokenRef.current !== token) return;
+          const cached = bufferCacheRef.current.get(audioCacheKey(text, voice));
+          if (cached) {
+            await playWholeBuffer(cached);
+            continue;
+          }
+          await playStreamedPart(text);
+        }
       } catch (err) {
         if (playTokenRef.current !== token) return;
         setState("error");
@@ -144,45 +316,10 @@ export function useDebbySpeech(): UseDebbySpeechResult {
       }
 
       if (playTokenRef.current !== token) return;
-      const ctx = getCtx();
-      await ctx.resume();
-      if (playTokenRef.current !== token) return;
-
-      setState("playing");
-
-      const playBuffer = (buffer: AudioBuffer, index: number) => {
-        if (playTokenRef.current !== token) return;
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.onended = () => {
-          sourceNodeRef.current = null;
-          if (playTokenRef.current !== token) return;
-          const nextIndex = index + 1;
-          if (nextIndex >= bufferPromises.length) {
-            setState("idle");
-            setActiveKey(null);
-            return;
-          }
-          void bufferPromises[nextIndex]
-            .then((nextBuffer) => {
-              if (playTokenRef.current !== token) return;
-              playBuffer(nextBuffer, nextIndex);
-            })
-            .catch((err) => {
-              if (playTokenRef.current !== token) return;
-              setState("error");
-              setError(err instanceof Error ? err.message : "TTS fetch failed");
-            });
-        };
-
-        sourceNodeRef.current = source;
-        source.start();
-      };
-
-      playBuffer(firstBuffer, 0);
+      setState("idle");
+      setActiveKey(null);
     },
-    [activeKey, loadBuffer, state, stop],
+    [activeKey, state, stop],
   );
 
   useEffect(() => {

@@ -13,6 +13,8 @@ which matches the contract closely enough for boot checks and unit tests
 
 from __future__ import annotations
 
+import base64
+import json
 import logging
 from typing import Literal
 
@@ -326,3 +328,31 @@ async def post_tts(
     except TTSError as exc:
         raise HTTPException(status_code=502, detail=f"TTS failed: {exc}") from exc
     return Response(content=audio, media_type="audio/mpeg")
+
+
+@router.post("/tts-stream")
+async def post_tts_stream(
+    body: TtsBody,
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    async def event_source():
+        index = 0
+        try:
+            async for audio_chunk in tts_service.stream_synthesize(
+                body.text, body.voice or tts_service.DEFAULT_VOICE
+            ):
+                payload = json.dumps(
+                    {
+                        "index": index,
+                        "audio_b64": base64.b64encode(audio_chunk).decode("ascii"),
+                    }
+                )
+                yield f"event: audio\ndata: {payload}\n\n"
+                index += 1
+        except TTSError as exc:
+            payload = json.dumps({"message": f"TTS failed: {exc}"})
+            yield f"event: error\ndata: {payload}\n\n"
+        finally:
+            yield "event: done\ndata: [DONE]\n\n"
+
+    return StreamingResponse(event_source(), media_type="text/event-stream")
