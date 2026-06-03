@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { StreamTab } from "@/components/classroom/StreamTab";
 import { useSearchParams } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import { ClassSettings } from "@/components/classroom/ClassSettings";
@@ -681,12 +682,7 @@ export function ClassesClient() {
                       ))}
                     </div>
                   ) : tab === "stream" ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-                      <h3 className="font-semibold text-slate-900">Stream</h3>
-                      <p className="mt-1 text-sm text-slate-600">
-                        Class messages will live here later.
-                      </p>
-                    </div>
+                    <StreamTab classDetail={classDetail} />
                   ) : tab === "settings" ? (
                     <ClassSettings
                       classDetail={classDetail}
