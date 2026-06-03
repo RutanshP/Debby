@@ -21,8 +21,9 @@ import {
   type PracticeFormat,
   type PracticeSide,
 } from "@/lib/classroom";
+import { ClassProgressDashboard } from "@/components/classroom/ClassProgressDashboard";
 
-type Tab = "classwork" | "people" | "stream" | "results";
+type Tab = "classwork" | "people" | "stream" | "results" | "progress";
 
 const fieldClass =
   "h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
@@ -259,7 +260,8 @@ export function ClassesClient() {
       requestedTab === "classwork" ||
       requestedTab === "people" ||
       requestedTab === "stream" ||
-      requestedTab === "results"
+      requestedTab === "results" ||
+      requestedTab === "progress"
     ) {
       setTab(requestedTab);
     }
@@ -669,6 +671,12 @@ export function ClassesClient() {
                       <p className="mt-1 text-sm text-slate-600">
                         Class messages will live here later.
                       </p>
+                    </div>
+                  ) : tab === "progress" && classDetail.role === "coach" ? (
+                    <ClassProgressDashboard classId={classDetail.class_room.id} />
+                  ) : tab === "progress" ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+                      <p className="text-sm text-slate-600">Progress view is available for coaches only.</p>
                     </div>
                   ) : classDetail.role === "coach" ? (
                     <div className="overflow-x-auto">
