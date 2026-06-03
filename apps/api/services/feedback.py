@@ -63,6 +63,11 @@ async def get_feedback(user_id: str, recipient_id: str) -> SubmissionFeedback | 
     row = await _fetch_feedback(recipient_id)
     if row is None:
         return None
+
+    # Students may only see feedback that has been explicitly returned to them.
+    if is_owner and not row.get("returned"):
+        return None
+
     return SubmissionFeedback.model_validate(row)
 
 

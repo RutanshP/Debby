@@ -44,15 +44,20 @@ export function FeedbackPanel({
     // If we already have initial data skip the fetch.
     if (initialFeedback !== undefined) return;
     let cancelled = false;
-    getFeedback(recipientId).then((fb) => {
-      if (cancelled) return;
-      if (fb) {
-        setFeedback(fb);
-        setGrade(fb.grade != null ? String(fb.grade) : "");
-        setText(fb.feedback ?? "");
-        setReturned(fb.returned);
-      }
-    });
+    getFeedback(recipientId)
+      .then((fb) => {
+        if (cancelled) return;
+        if (fb) {
+          setFeedback(fb);
+          setGrade(fb.grade != null ? String(fb.grade) : "");
+          setText(fb.feedback ?? "");
+          setReturned(fb.returned);
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Failed to load feedback");
+      });
     return () => {
       cancelled = true;
     };

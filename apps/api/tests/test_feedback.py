@@ -271,3 +271,19 @@ def test_other_student_cannot_read_feedback(client: TestClient) -> None:
     CURRENT_USER = OTHER
     resp = client.get(f"/api/recipients/{recipient_id}/feedback")
     assert resp.status_code in (403, 404)
+
+
+def test_owning_student_cannot_read_unreturned_feedback(client: TestClient) -> None:
+    global CURRENT_USER
+    recipient_id = _setup_class_and_recipient(client)
+
+    CURRENT_USER = COACH
+    client.put(
+        f"/api/recipients/{recipient_id}/feedback",
+        json={"grade": 7.0, "feedback": "Needs work.", "returned": False},
+    )
+
+    CURRENT_USER = STUDENT
+    resp = client.get(f"/api/recipients/{recipient_id}/feedback")
+    assert resp.status_code == 200
+    assert resp.json() is None

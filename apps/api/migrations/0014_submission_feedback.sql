@@ -44,12 +44,13 @@ create policy "submission_feedback: coach write"
         )
     );
 
--- The student who owns the recipient can read their own feedback.
+-- The student who owns the recipient can read their own feedback, but only once returned.
 drop policy if exists "submission_feedback: student read own" on public.submission_feedback;
 create policy "submission_feedback: student read own"
     on public.submission_feedback for select
     using (
-        exists (
+        submission_feedback.returned = true
+        and exists (
             select 1
             from public.assignment_recipients r
             where r.id = submission_feedback.recipient_id
