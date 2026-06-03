@@ -40,3 +40,6 @@ apps/web/tsconfig.tsbuildinfo
 apps/api/.venv/
 apps/api/__pycache__/
 apps/api/.pytest_cache/
+
+# Claude Code local worktrees/plans
+.claude/
