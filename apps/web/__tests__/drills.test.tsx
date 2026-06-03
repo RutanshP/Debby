@@ -2,6 +2,11 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DrillsClient } from "@/app/(app)/drills/drills-client";
 
+jest.mock("next/navigation", () => ({
+  useSearchParams: () => ({ get: (_k: string) => null }),
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
 jest.mock("@/lib/supabase", () => ({
   getBrowserSupabase: () => ({
     auth: { getSession: async () => ({ data: { session: null } }) },
@@ -127,13 +132,15 @@ describe("DrillsClient", () => {
       strengths: ["Clear framing"],
       improvements: ["Add more warrants"],
     });
+    // completeDrillAssignment fires a background call after scoring
+    mockFetchOnce(null);
 
     const textarea = screen.getByPlaceholderText(/Your response goes here/i);
     await user.type(textarea, "My rebuttal");
     await user.click(screen.getByRole("button", { name: /Submit Response/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenCalledTimes(3);
     });
     const [scoreUrl, scoreInit] = (global.fetch as jest.Mock).mock.calls[1];
     expect(String(scoreUrl)).toMatch(/\/api\/drills\/42\/score$/);
@@ -228,10 +235,12 @@ describe("DrillsClient", () => {
       strengths: ["No filler"],
       improvements: [],
     });
+    // completeDrillAssignment fires a background call after scoring
+    mockFetchOnce(null);
     await user.click(screen.getByTestId("record-Start Filler Drill"));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenCalledTimes(3);
     });
     const [scoreUrl, scoreInit] = (global.fetch as jest.Mock).mock.calls[1];
     expect(String(scoreUrl)).toMatch(/\/api\/drills\/55\/score-filler$/);
@@ -262,6 +271,8 @@ describe("DrillsClient", () => {
       strengths: [],
       improvements: [],
     });
+    // completeDrillAssignment fires a background call after scoring
+    mockFetchOnce(null);
     await user.type(screen.getByPlaceholderText(/Your response goes here/i), "One tagline");
 
     await act(async () => {
@@ -270,7 +281,7 @@ describe("DrillsClient", () => {
     });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenCalledTimes(3);
     });
     const [scoreUrl, scoreInit] = (global.fetch as jest.Mock).mock.calls[1];
     expect(String(scoreUrl)).toMatch(/\/api\/drills\/42\/score$/);
@@ -421,6 +432,8 @@ describe("DrillsClient", () => {
       strengths: [],
       improvements: [],
     });
+    // completeDrillAssignment fires a background call after scoring
+    mockFetchOnce(null);
     await user.click(screen.getByTestId("record-Record Response"));
     await screen.findByText("Done.");
 
@@ -430,7 +443,8 @@ describe("DrillsClient", () => {
     expect(await screen.findByText("New drill.")).toBeInTheDocument();
     expect(screen.queryByText("Old drill.")).not.toBeInTheDocument();
     expect(screen.queryByText("Done.")).not.toBeInTheDocument();
-    const [, redoInit] = (global.fetch as jest.Mock).mock.calls[2];
+    // calls[0]=generate, calls[1]=score, calls[2]=complete-matching-drill, calls[3]=redo
+    const [, redoInit] = (global.fetch as jest.Mock).mock.calls[3];
     expect(JSON.parse(redoInit.body as string)).toEqual({
       drill_type: "rebuttal",
       timer_seconds: 60,

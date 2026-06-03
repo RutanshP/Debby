@@ -150,3 +150,11 @@ export function formatDate(value?: string | null): string {
     minute: "2-digit",
   }).format(date);
 }
+
+export function assignmentHref(detail: AssignmentRecipientDetail): string {
+  const id = detail.recipient.id;
+  const classId = detail.class_room.id;
+  return detail.assignment.type === "drill"
+    ? `/drills?class=${classId}&assignment=${id}`
+    : `/practice?class=${classId}&assignment=${id}`;
+}

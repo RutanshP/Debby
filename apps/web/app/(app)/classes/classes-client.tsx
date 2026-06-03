@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import {
+  assignmentHref,
   assignmentTypeLabel,
   formatDate,
   isCoachAssignmentSummary,
@@ -116,14 +117,6 @@ function resultSummary(result?: Record<string, unknown> | null): string {
     return result.rfd.trim().slice(0, 80);
   }
   return "Result saved";
-}
-
-function assignmentHref(detail: AssignmentRecipientDetail): string {
-  const id = detail.recipient.id;
-  const classId = detail.class_room.id;
-  return detail.assignment.type === "drill"
-    ? `/drills?class=${classId}&assignment=${id}`
-    : `/practice?class=${classId}&assignment=${id}`;
 }
 
 export function ClassesClient() {
@@ -346,6 +339,25 @@ export function ClassesClient() {
         </div>
       ) : (
         <section className="flex flex-col gap-5">
+            {classes.length > 1 && (
+              <nav aria-label="Class list" className="flex flex-wrap gap-2">
+                {classes.map((cls) => (
+                  <button
+                    key={cls.id}
+                    type="button"
+                    onClick={() => { setSelectedClassId(cls.id); void loadClass(cls.id); }}
+                    className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                      selectedClassId === cls.id
+                        ? "bg-teal text-white shadow-sm"
+                        : "border border-slate-300 bg-white text-slate-700 hover:border-teal hover:text-teal"
+                    }`}
+                  >
+                    {cls.name}
+                  </button>
+                ))}
+              </nav>
+            )}
+
             {classDetail && (
               <section className="flex flex-col gap-5">
                 <ClassBanner
@@ -364,7 +376,6 @@ export function ClassesClient() {
                         <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
                           <UpcomingCard
                             assignments={assignments}
-                            onViewAll={() => setTab("classwork")}
                           />
 
                           <div className="flex flex-col gap-3">

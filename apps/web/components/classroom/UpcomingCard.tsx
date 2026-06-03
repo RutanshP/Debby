@@ -2,19 +2,11 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { formatDate, type AssignmentRecipientDetail } from "@/lib/classroom";
+import { assignmentHref, formatDate, type AssignmentRecipientDetail } from "@/lib/classroom";
 
 interface UpcomingCardProps {
   assignments: AssignmentRecipientDetail[];
   onViewAll?: () => void;
-}
-
-function assignmentHref(detail: AssignmentRecipientDetail): string {
-  const id = detail.recipient.id;
-  const classId = detail.class_room.id;
-  return detail.assignment.type === "drill"
-    ? `/drills?class=${classId}&assignment=${id}`
-    : `/practice?class=${classId}&assignment=${id}`;
 }
 
 const MAX_UPCOMING = 3;

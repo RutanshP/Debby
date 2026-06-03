@@ -86,7 +86,7 @@ describe("CaseBuilder", () => {
     expect(url).toContain("/api/saved-cases");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toMatchObject({
-      title: "Affirmative Case: Topic",
+      title: "My Case",
       topic: "Topic",
       format: "parli",
       side: "aff",
