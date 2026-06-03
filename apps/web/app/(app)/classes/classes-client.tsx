@@ -21,6 +21,9 @@ import {
   type PracticeFormat,
   type PracticeSide,
 } from "@/lib/classroom";
+import { ClassBanner } from "@/components/classroom/ClassBanner";
+import { UpcomingCard } from "@/components/classroom/UpcomingCard";
+import { ClassworkCard } from "@/components/classroom/ClassworkCard";
 
 type Tab = "classwork" | "people" | "stream" | "results";
 
@@ -317,13 +320,8 @@ export function ClassesClient() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 p-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-teal-dark">Classroom</h1>
-          <p className="text-slate-600">
-            {unfinishedCount} unfinished assignment{unfinishedCount === 1 ? "" : "s"}
-          </p>
-        </div>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-bold text-teal-dark">Classroom</h1>
         <Link
           href="/workspace"
           className="inline-flex h-10 w-fit items-center justify-center rounded-md border border-teal px-4 text-sm font-medium text-teal transition hover:bg-teal/5"
@@ -348,303 +346,272 @@ export function ClassesClient() {
         </div>
       ) : (
         <section className="flex flex-col gap-5">
-            {tab === "classwork" && (
-              <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold text-slate-900">
-                      Assignments
-                    </h2>
-                    <p className="text-sm text-slate-600">
-                      {unfinishedCount} unfinished
-                    </p>
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {assignments.map((item) => (
-                    <article
-                      key={item.recipient.id}
-                      className="rounded-lg border border-slate-200 bg-slate-50 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="font-semibold text-slate-900">
-                            {item.assignment.title}
-                          </h3>
-                          <p className="text-sm text-slate-600">
-                            {item.class_room.name} / {payloadSummary(item)}
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
-                          {statusLabel(item.recipient.status)}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                        <span className="text-slate-500">
-                          Due {formatDate(item.assignment.due_at)}
-                        </span>
-                        {item.recipient.status === "completed" ? (
-                          <span className="font-medium text-teal-dark">Done</span>
-                        ) : (
-                          <Link href={assignmentHref(item)} className={primaryButtonClass}>
-                            Start
-                          </Link>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-                  {assignments.length === 0 && (
-                    <p className="text-sm text-slate-600">No assignments yet.</p>
-                  )}
-                </div>
-              </section>
-            )}
-
             {classDetail && (
-              <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <header className="border-b border-slate-200 p-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold text-slate-900">
-                        {classDetail.class_room.name}
-                      </h2>
-                      <p className="text-sm capitalize text-slate-600">
-                        {classDetail.role}
-                      </p>
-                    </div>
-                    {classDetail.role === "coach" && (
-                      <div className="rounded-md bg-slate-100 px-3 py-2 font-mono text-sm text-slate-700">
-                        {classDetail.class_room.join_code}
-                      </div>
-                    )}
-                  </div>
-                </header>
+              <section className="flex flex-col gap-5">
+                <ClassBanner
+                  className={classDetail.class_room.name}
+                  role={classDetail.role}
+                  joinCode={classDetail.role === "coach" ? classDetail.class_room.join_code : undefined}
+                />
 
-                <div className="p-5">
+                <div>
                   {classLoading ? (
                     <p className="text-sm text-slate-600">Loading class...</p>
                   ) : tab === "classwork" ? (
                     <div className="flex flex-col gap-5">
-                      {classDetail.role === "coach" && (
-                        <form
-                          onSubmit={handleCreateAssignment}
-                          className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-2"
-                        >
-                          <label className={labelClass}>
-                            Title
-                            <input
-                              value={title}
-                              onChange={(event) => setTitle(event.target.value)}
-                              className={fieldClass}
-                              placeholder="Rebuttal drill"
-                              required
-                            />
-                          </label>
-                          <label className={labelClass}>
-                            Type
-                            <select
-                              value={type}
-                              onChange={(event) => setType(event.target.value as AssignmentType)}
-                              className={fieldClass}
-                            >
-                              <option value="drill">Drill</option>
-                              <option value="practice_round">Practice round</option>
-                            </select>
-                          </label>
+                      {/* Student: Upcoming widget + classwork feed */}
+                      {classDetail.role === "competitor" && (
+                        <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+                          <UpcomingCard
+                            assignments={assignments}
+                            onViewAll={() => setTab("classwork")}
+                          />
 
-                          {type === "drill" ? (
-                            <>
-                              <label className={labelClass}>
-                                Drill
-                                <select
-                                  value={drillType}
-                                  onChange={(event) => {
-                                    const nextType = event.target.value as DrillAssignmentType;
-                                    setDrillType(nextType);
-                                    if (nextType === "filler") setDrillTimer(60);
-                                  }}
-                                  className={fieldClass}
-                                >
-                                  <option value="rebuttal">Rebuttal</option>
-                                  <option value="speed">Speed</option>
-                                  <option value="impact">Impact</option>
-                                  <option value="contention">Contention</option>
-                                  <option value="filler">Filler</option>
-                                </select>
-                              </label>
-                              <label className={labelClass}>
-                                Timer
-                                <select
-                                  value={drillTimer}
-                                  onChange={(event) => setDrillTimer(Number(event.target.value))}
-                                  disabled={drillType === "filler"}
-                                  className={fieldClass}
-                                >
-                                  {[30, 60, 120].map((seconds) => (
-                                    <option key={seconds} value={seconds}>
-                                      {seconds}s
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                            </>
-                          ) : (
-                            <>
-                              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 lg:col-span-2">
-                                Topic
-                                <input
-                                  value={practiceTopic}
-                                  onChange={(event) => setPracticeTopic(event.target.value)}
-                                  className={fieldClass}
-                                  placeholder="Ban the AfD"
-                                  required={type === "practice_round"}
+                          <div className="flex flex-col gap-3">
+                            <h2 className="text-base font-semibold text-slate-900">
+                              All assignments{" "}
+                              <span className="font-normal text-slate-500">
+                                ({unfinishedCount} unfinished)
+                              </span>
+                            </h2>
+                            {assignments.length === 0 ? (
+                              <p className="text-sm text-slate-600">No assignments yet.</p>
+                            ) : (
+                              assignments.map((item) => (
+                                <ClassworkCard
+                                  key={item.recipient.id}
+                                  item={item}
+                                  href={assignmentHref(item)}
                                 />
-                              </label>
-                              <label className={labelClass}>
-                                Format
-                                <select
-                                  value={practiceFormat}
-                                  onChange={(event) =>
-                                    setPracticeFormat(event.target.value as PracticeFormat)
-                                  }
-                                  className={fieldClass}
-                                >
-                                  <option value="parli">Parli</option>
-                                  <option value="mspdp">MSPDP</option>
-                                </select>
-                              </label>
-                              <label className={labelClass}>
-                                Side
-                                <select
-                                  value={practiceSide}
-                                  onChange={(event) =>
-                                    setPracticeSide(event.target.value as PracticeSide)
-                                  }
-                                  className={fieldClass}
-                                >
-                                  <option value="aff">Affirmative</option>
-                                  <option value="neg">Negative</option>
-                                </select>
-                              </label>
-                              <label className={labelClass}>
-                                Speech length
-                                <select
-                                  value={practiceTimer}
-                                  onChange={(event) =>
-                                    setPracticeTimer(Number(event.target.value))
-                                  }
-                                  className={fieldClass}
-                                >
-                                  {[30, 45, 60, 90, 120, 180, 240, 300].map((seconds) => (
-                                    <option key={seconds} value={seconds}>
-                                      {seconds}s
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                            </>
-                          )}
-
-                          <label className={labelClass}>
-                            Due date
-                            <input
-                              type="date"
-                              value={dueAt}
-                              onChange={(event) => setDueAt(event.target.value)}
-                              className={fieldClass}
-                            />
-                          </label>
-
-                          <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-white p-3 lg:col-span-2">
-                            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                              <input
-                                type="checkbox"
-                                checked={assignAll}
-                                onChange={(event) => setAssignAll(event.target.checked)}
-                                className="h-4 w-4 rounded border-slate-300 text-teal"
-                              />
-                              Assign to all competitors
-                            </label>
-                            {!assignAll && (
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                {competitors.map((member) => (
-                                  <label
-                                    key={member.user_id}
-                                    className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedRecipients.includes(member.user_id)}
-                                      onChange={() => toggleRecipient(member.user_id)}
-                                      className="h-4 w-4 rounded border-slate-300 text-teal"
-                                    />
-                                    Competitor {shortId(member.user_id)}
-                                  </label>
-                                ))}
-                              </div>
+                              ))
                             )}
                           </div>
-
-                          <div className="lg:col-span-2">
-                            {competitors.length === 0 && (
-                              <p className="mb-3 text-sm font-medium text-amber-700">
-                                Add at least one competitor with the class code before
-                                creating assignments.
-                              </p>
-                            )}
-                            <button
-                              type="submit"
-                              disabled={savingAssignment || competitors.length === 0}
-                              className={primaryButtonClass}
-                            >
-                              {savingAssignment ? "Creating..." : "Create assignment"}
-                            </button>
-                          </div>
-                        </form>
+                        </div>
                       )}
 
-                      <div className="grid gap-3">
-                        {classDetail.assignments.map((item) => {
-                          if (isCoachAssignmentSummary(item)) {
-                            const completed = item.recipients.filter(
-                              (recipient) => recipient.status === "completed",
-                            ).length;
-                            return (
-                              <article
-                                key={item.assignment.id}
-                                className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                      {/* Coach: create assignment form + summary list */}
+                      {classDetail.role === "coach" && (
+                        <>
+                          <form
+                            onSubmit={handleCreateAssignment}
+                            className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-2"
+                          >
+                            <label className={labelClass}>
+                              Title
+                              <input
+                                value={title}
+                                onChange={(event) => setTitle(event.target.value)}
+                                className={fieldClass}
+                                placeholder="Rebuttal drill"
+                                required
+                              />
+                            </label>
+                            <label className={labelClass}>
+                              Type
+                              <select
+                                value={type}
+                                onChange={(event) => setType(event.target.value as AssignmentType)}
+                                className={fieldClass}
                               >
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                  <div>
-                                    <h3 className="font-semibold text-slate-900">
-                                      {item.assignment.title}
-                                    </h3>
-                                    <p className="text-sm text-slate-600">
-                                      {payloadSummary(item)}
-                                    </p>
-                                  </div>
-                                  <span className="text-sm font-semibold text-teal-dark">
-                                    {completed}/{item.recipients.length} completed
-                                  </span>
+                                <option value="drill">Drill</option>
+                                <option value="practice_round">Practice round</option>
+                              </select>
+                            </label>
+
+                            {type === "drill" ? (
+                              <>
+                                <label className={labelClass}>
+                                  Drill
+                                  <select
+                                    value={drillType}
+                                    onChange={(event) => {
+                                      const nextType = event.target.value as DrillAssignmentType;
+                                      setDrillType(nextType);
+                                      if (nextType === "filler") setDrillTimer(60);
+                                    }}
+                                    className={fieldClass}
+                                  >
+                                    <option value="rebuttal">Rebuttal</option>
+                                    <option value="speed">Speed</option>
+                                    <option value="impact">Impact</option>
+                                    <option value="contention">Contention</option>
+                                    <option value="filler">Filler</option>
+                                  </select>
+                                </label>
+                                <label className={labelClass}>
+                                  Timer
+                                  <select
+                                    value={drillTimer}
+                                    onChange={(event) => setDrillTimer(Number(event.target.value))}
+                                    disabled={drillType === "filler"}
+                                    className={fieldClass}
+                                  >
+                                    {[30, 60, 120].map((seconds) => (
+                                      <option key={seconds} value={seconds}>
+                                        {seconds}s
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </>
+                            ) : (
+                              <>
+                                <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 lg:col-span-2">
+                                  Topic
+                                  <input
+                                    value={practiceTopic}
+                                    onChange={(event) => setPracticeTopic(event.target.value)}
+                                    className={fieldClass}
+                                    placeholder="Ban the AfD"
+                                    required={type === "practice_round"}
+                                  />
+                                </label>
+                                <label className={labelClass}>
+                                  Format
+                                  <select
+                                    value={practiceFormat}
+                                    onChange={(event) =>
+                                      setPracticeFormat(event.target.value as PracticeFormat)
+                                    }
+                                    className={fieldClass}
+                                  >
+                                    <option value="parli">Parli</option>
+                                    <option value="mspdp">MSPDP</option>
+                                  </select>
+                                </label>
+                                <label className={labelClass}>
+                                  Side
+                                  <select
+                                    value={practiceSide}
+                                    onChange={(event) =>
+                                      setPracticeSide(event.target.value as PracticeSide)
+                                    }
+                                    className={fieldClass}
+                                  >
+                                    <option value="aff">Affirmative</option>
+                                    <option value="neg">Negative</option>
+                                  </select>
+                                </label>
+                                <label className={labelClass}>
+                                  Speech length
+                                  <select
+                                    value={practiceTimer}
+                                    onChange={(event) =>
+                                      setPracticeTimer(Number(event.target.value))
+                                    }
+                                    className={fieldClass}
+                                  >
+                                    {[30, 45, 60, 90, 120, 180, 240, 300].map((seconds) => (
+                                      <option key={seconds} value={seconds}>
+                                        {seconds}s
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </>
+                            )}
+
+                            <label className={labelClass}>
+                              Due date
+                              <input
+                                type="date"
+                                value={dueAt}
+                                onChange={(event) => setDueAt(event.target.value)}
+                                className={fieldClass}
+                              />
+                            </label>
+
+                            <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-white p-3 lg:col-span-2">
+                              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={assignAll}
+                                  onChange={(event) => setAssignAll(event.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 text-teal"
+                                />
+                                Assign to all competitors
+                              </label>
+                              {!assignAll && (
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {competitors.map((member) => (
+                                    <label
+                                      key={member.user_id}
+                                      className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedRecipients.includes(member.user_id)}
+                                        onChange={() => toggleRecipient(member.user_id)}
+                                        className="h-4 w-4 rounded border-slate-300 text-teal"
+                                      />
+                                      Competitor {shortId(member.user_id)}
+                                    </label>
+                                  ))}
                                 </div>
-                              </article>
-                            );
-                          }
-                          return (
-                            <article
-                              key={item.recipient.id}
-                              className="rounded-lg border border-slate-200 bg-slate-50 p-4"
-                            >
-                              <h3 className="font-semibold text-slate-900">
-                                {item.assignment.title}
-                              </h3>
-                              <p className="text-sm text-slate-600">
-                                {payloadSummary(item)}
-                              </p>
-                            </article>
-                          );
-                        })}
-                      </div>
+                              )}
+                            </div>
+
+                            <div className="lg:col-span-2">
+                              {competitors.length === 0 && (
+                                <p className="mb-3 text-sm font-medium text-amber-700">
+                                  Add at least one competitor with the class code before
+                                  creating assignments.
+                                </p>
+                              )}
+                              <button
+                                type="submit"
+                                disabled={savingAssignment || competitors.length === 0}
+                                className={primaryButtonClass}
+                              >
+                                {savingAssignment ? "Creating..." : "Create assignment"}
+                              </button>
+                            </div>
+                          </form>
+
+                          <div className="grid gap-3">
+                            {classDetail.assignments.map((item) => {
+                              if (isCoachAssignmentSummary(item)) {
+                                const completed = item.recipients.filter(
+                                  (recipient) => recipient.status === "completed",
+                                ).length;
+                                return (
+                                  <article
+                                    key={item.assignment.id}
+                                    className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                                  >
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                      <div>
+                                        <h3 className="font-semibold text-slate-900">
+                                          {item.assignment.title}
+                                        </h3>
+                                        <p className="text-sm text-slate-600">
+                                          {payloadSummary(item)}
+                                        </p>
+                                      </div>
+                                      <span className="text-sm font-semibold text-teal-dark">
+                                        {completed}/{item.recipients.length} completed
+                                      </span>
+                                    </div>
+                                  </article>
+                                );
+                              }
+                              return (
+                                <article
+                                  key={item.recipient.id}
+                                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                                >
+                                  <h3 className="font-semibold text-slate-900">
+                                    {item.assignment.title}
+                                  </h3>
+                                  <p className="text-sm text-slate-600">
+                                    {payloadSummary(item)}
+                                  </p>
+                                </article>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                   ) : tab === "people" ? (
                     <div className="grid gap-3 sm:grid-cols-2">
