@@ -8,6 +8,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { ClassSettings } from "@/components/classroom/ClassSettings";
 import { getBrowserSupabase } from "@/lib/supabase";
 import { CommentThread } from "@/components/classroom/CommentThread";
+import { FeedbackPanel } from "@/components/classroom/FeedbackPanel";
 import {
   assignmentHref,
   assignmentTypeLabel,
@@ -150,6 +151,7 @@ export function ClassesClient() {
   const [practiceTimer, setPracticeTimer] = useState(120);
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
+  const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
 
   // Resolve the authenticated user's ID once on mount for comment authorship.
   useEffect(() => {
@@ -703,31 +705,64 @@ export function ClassesClient() {
                             <th className="px-3 py-2">Status</th>
                             <th className="px-3 py-2">Completed</th>
                             <th className="px-3 py-2">Result</th>
+                            <th className="px-3 py-2">Feedback</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {coachAssignments.flatMap((summary) =>
-                            summary.recipients.map((recipient) => (
-                              <tr key={recipient.id}>
-                                <td className="px-3 py-2 font-medium text-slate-900">
-                                  {summary.assignment.title}
-                                </td>
-                                <td className="px-3 py-2 text-slate-700">
-                                  {shortId(recipient.user_id)}
-                                </td>
-                                <td className="px-3 py-2 text-slate-700">
-                                  {statusLabel(recipient.status)}
-                                </td>
-                                <td className="px-3 py-2 text-slate-700">
-                                  {recipient.completed_at
-                                    ? formatDate(recipient.completed_at)
-                                    : "-"}
-                                </td>
-                                <td className="px-3 py-2 text-slate-700">
-                                  {resultSummary(summary.results[recipient.id])}
-                                </td>
-                              </tr>
-                            )),
+                            summary.recipients.flatMap((recipient) => {
+                              const isOpen = expandedFeedback.has(recipient.id);
+                              return [
+                                <tr key={recipient.id}>
+                                  <td className="px-3 py-2 font-medium text-slate-900">
+                                    {summary.assignment.title}
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-700">
+                                    {shortId(recipient.user_id)}
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-700">
+                                    {statusLabel(recipient.status)}
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-700">
+                                    {recipient.completed_at
+                                      ? formatDate(recipient.completed_at)
+                                      : "-"}
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-700">
+                                    {resultSummary(summary.results[recipient.id])}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedFeedback((prev) => {
+                                          const next = new Set(prev);
+                                          if (next.has(recipient.id)) {
+                                            next.delete(recipient.id);
+                                          } else {
+                                            next.add(recipient.id);
+                                          }
+                                          return next;
+                                        })
+                                      }
+                                      className="text-xs text-teal underline hover:text-teal-dark"
+                                    >
+                                      {isOpen ? "Close" : "Feedback"}
+                                    </button>
+                                  </td>
+                                </tr>,
+                                isOpen && (
+                                  <tr key={`${recipient.id}-feedback`}>
+                                    <td colSpan={6} className="px-3 pb-3">
+                                      <FeedbackPanel
+                                        recipientId={recipient.id}
+                                        isCoach={true}
+                                      />
+                                    </td>
+                                  </tr>
+                                ),
+                              ].filter(Boolean);
+                            }),
                           )}
                         </tbody>
                       </table>
@@ -754,6 +789,10 @@ export function ClassesClient() {
                                 {statusLabel(item.recipient.status)}
                               </span>
                             </div>
+                            <FeedbackPanel
+                              recipientId={item.recipient.id}
+                              isCoach={false}
+                            />
                           </article>
                         );
                       })}
