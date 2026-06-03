@@ -45,9 +45,7 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
   // --- archive ---
   const [archiving, setArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
-  const [archived, setArchived] = useState(
-    (class_room as { archived?: boolean }).archived ?? false,
-  );
+  const [archived, setArchived] = useState(class_room.archived ?? false);
 
   // --- remove member ---
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -127,6 +125,7 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
       if (onClose) onClose();
     } catch (err) {
       setLeaveError(err instanceof Error ? err.message : "Failed to leave class");
+    } finally {
       setLeaving(false);
     }
   }

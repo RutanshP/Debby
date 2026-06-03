@@ -14,4 +14,6 @@ class UpdateClassRequest(BaseModel):
 
 class UpdateAssignmentRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=180)
-    due_at: datetime | None = None
+    # Callers may send due_at: null to explicitly clear an existing deadline.
+    # The service uses model_fields_set to distinguish "not sent" from "sent as null".
+    due_at: datetime | None = Field(default=None)

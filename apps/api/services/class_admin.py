@@ -130,8 +130,9 @@ async def update_assignment(
     patch: dict[str, Any] = {}
     if req.title is not None:
         patch["title"] = req.title.strip()
-    if req.due_at is not None:
-        patch["due_at"] = req.due_at.isoformat()
+    # Use model_fields_set to distinguish "not provided" from "explicitly set to null".
+    if "due_at" in req.model_fields_set:
+        patch["due_at"] = req.due_at.isoformat() if req.due_at is not None else None
     if not patch:
         return Assignment.model_validate(assignment_row)
     row = await _update(_ASSIGNMENTS, {"id": assignment_id}, patch)
