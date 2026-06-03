@@ -31,8 +31,9 @@ import { ClassCalendar } from "@/components/classroom/ClassCalendar";
 import { ClassBanner } from "@/components/classroom/ClassBanner";
 import { UpcomingCard } from "@/components/classroom/UpcomingCard";
 import { ClassworkCard } from "@/components/classroom/ClassworkCard";
+import { ClassProgressDashboard } from "@/components/classroom/ClassProgressDashboard";
 
-type Tab = "classwork" | "people" | "stream" | "results" | "settings" | "calendar";
+type Tab = "classwork" | "people" | "stream" | "results" | "settings" | "calendar" | "progress";
 
 const fieldClass =
   "h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
@@ -274,7 +275,8 @@ export function ClassesClient() {
       requestedTab === "people" ||
       requestedTab === "stream" ||
       requestedTab === "results" ||
-      requestedTab === "calendar"
+      requestedTab === "calendar" ||
+      requestedTab === "progress"
     ) {
       setTab(requestedTab);
     }
@@ -695,6 +697,12 @@ export function ClassesClient() {
                     />
                   ) : tab === "calendar" ? (
                     <ClassCalendar assignments={assignments} />
+                  ) : tab === "progress" && classDetail.role === "coach" ? (
+                    <ClassProgressDashboard classId={classDetail.class_room.id} />
+                  ) : tab === "progress" ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+                      <p className="text-sm text-slate-600">Progress view is available for coaches only.</p>
+                    </div>
                   ) : classDetail.role === "coach" ? (
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-slate-200 text-sm">
