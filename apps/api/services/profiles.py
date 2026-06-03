@@ -62,7 +62,7 @@ async def upsert_profile(user_id: str, display_name: str) -> dict[str, Any]:
         _PROFILES,
         {
             "user_id": user_id,
-            "display_name": display_name.strip(),
+            "display_name": display_name,
             "updated_at": now,
         },
     )

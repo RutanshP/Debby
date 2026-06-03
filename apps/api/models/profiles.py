@@ -15,7 +15,7 @@ class Profile(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
-    display_name: str = Field(min_length=1)
+    display_name: str = Field(min_length=1, max_length=100)
 
     @field_validator("display_name")
     @classmethod
@@ -27,4 +27,4 @@ class UpdateProfileRequest(BaseModel):
 
 
 class ProfileLookupRequest(BaseModel):
-    user_ids: list[str]
+    user_ids: list[str] = Field(max_length=200)
