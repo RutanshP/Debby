@@ -65,19 +65,23 @@ export function formatPostDate(value?: string | null): string {
   }).format(date);
 }
 
+/** Regex for a valid YouTube video ID (exactly 11 URL-safe chars). */
+const YOUTUBE_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+
 /** Detect a YouTube URL and return the video ID, or null. */
 export function youtubeVideoId(url: string): string | null {
   try {
     const parsed = new URL(url);
+    let id: string | null = null;
     if (
       parsed.hostname === "www.youtube.com" ||
       parsed.hostname === "youtube.com"
     ) {
-      return parsed.searchParams.get("v");
+      id = parsed.searchParams.get("v");
+    } else if (parsed.hostname === "youtu.be") {
+      id = parsed.pathname.slice(1) || null;
     }
-    if (parsed.hostname === "youtu.be") {
-      return parsed.pathname.slice(1) || null;
-    }
+    if (id && YOUTUBE_ID_RE.test(id)) return id;
   } catch {
     // Not a valid URL.
   }

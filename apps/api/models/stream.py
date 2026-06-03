@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 PostType = Literal["announcement", "material"]
 
@@ -26,3 +27,13 @@ class CreatePostRequest(BaseModel):
     title: str | None = None
     body: str | None = None
     link_url: str | None = None
+
+    @field_validator("link_url")
+    @classmethod
+    def _validate_link_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("link_url must use http or https scheme")
+        return v

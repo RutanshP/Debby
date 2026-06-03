@@ -104,6 +104,8 @@ async def delete_post(user_id: str, class_id: str, post_id: str) -> None:
         raise LookupError("Post not found")
 
     post = rows[0]
+    # Verify the user is still a member of the class before any deletion.
+    await _require_member(class_id, user_id)
     # Allow if the user is the author.
     if post.get("author_id") == user_id:
         await _delete(_POSTS, {"id": post_id})

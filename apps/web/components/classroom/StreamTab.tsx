@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import {
   authorShortId,
   createPost,
@@ -27,13 +27,13 @@ interface AuthorNames {
 async function lookupAuthorNames(userIds: string[]): Promise<AuthorNames> {
   if (userIds.length === 0) return {};
   try {
-    const res = await fetch("/api/profiles/lookup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_ids: userIds }),
-    });
-    if (!res.ok) return {};
-    const data = (await res.json()) as Record<string, { name?: string; email?: string }>;
+    const data = await apiFetch<Record<string, { name?: string; email?: string }>>(
+      "/api/profiles/lookup",
+      {
+        method: "POST",
+        body: JSON.stringify({ user_ids: userIds }),
+      },
+    );
     const names: AuthorNames = {};
     for (const [id, profile] of Object.entries(data)) {
       names[id] = profile.name ?? profile.email ?? authorShortId(id);
@@ -48,7 +48,19 @@ function AuthorLabel({ userId, names }: { userId: string; names: AuthorNames }) 
   return <span>{names[userId] ?? authorShortId(userId)}</span>;
 }
 
+/** Returns true only for http: or https: URLs to prevent javascript: XSS. */
+function isSafeUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function LinkPreview({ url }: { url: string }) {
+  if (!isSafeUrl(url)) return null;
+
   const videoId = youtubeVideoId(url);
   if (videoId) {
     return (
