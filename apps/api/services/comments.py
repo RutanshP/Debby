@@ -10,7 +10,6 @@ from services.classroom import _require_member, _get_member
 from services.supabase_client import get_supabase
 
 _COMMENTS = "comments"
-_MEMBERS = "class_members"
 
 
 def _client() -> Any:

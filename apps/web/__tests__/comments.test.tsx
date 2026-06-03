@@ -83,10 +83,9 @@ describe("CommentThread", () => {
   it("posts a new comment and shows it in the list", async () => {
     const user = userEvent.setup();
 
-    // Initial list (empty).
+    // Initial list (empty) — resolveUserNames short-circuits for an empty author
+    // list, so no extra mock is needed here.
     mockFetchOnce([]);
-    // resolveUserNames for empty list
-    mockFetchOnce({}, 200);
 
     render(
       <CommentThread
