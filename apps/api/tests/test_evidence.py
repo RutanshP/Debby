@@ -81,7 +81,7 @@ async def test_get_topic_evidence_fetches_then_caches(monkeypatch: pytest.Monkey
     async def fake_create(**_kwargs):
         return SimpleNamespace(
             output_text=(
-                '{"cards":[{"tag":"Deterrence works","evidence":"NATO deterrence raises costs.","source_title":"Brookings","source_url":"https://example.com/brookings","source_type":"ngo"}]}'
+                '{"cards":[{"tag":"Deterrence works","evidence":"NATO members spent 2% of GDP on defense in 2024, raising deterrence costs.","source_title":"Brookings","source_url":"https://example.com/brookings","source_type":"ngo"}]}'
             )
         )
 
@@ -98,6 +98,33 @@ async def test_get_topic_evidence_fetches_then_caches(monkeypatch: pytest.Monkey
     assert len(first.cards) == 1
     assert second.cards[0].source_title == "Brookings"
     assert len(fake_supabase.table("topic_evidence_cache").rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_topic_evidence_filters_non_quantitative_cards(monkeypatch: pytest.MonkeyPatch):
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setattr(evidence_service, "get_supabase", lambda: fake_supabase)
+
+    async def fake_create(**_kwargs):
+        return SimpleNamespace(
+            output_text=(
+                '{"cards":['
+                '{"tag":"Too vague","evidence":"Infrastructure can improve trade and investment.","source_title":"Think Tank","source_url":"https://example.com/vague","source_type":"ngo"},'
+                '{"tag":"Quantified","evidence":"Trade volume rose 18% between 2021 and 2024 after border reforms.","source_title":"World Bank","source_url":"https://example.com/worldbank","source_type":"academic"}'
+                ']}'
+            )
+        )
+
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(create=fake_create)
+    )
+    monkeypatch.setattr(evidence_service, "client", fake_client)
+
+    evidence = await evidence_service.get_topic_evidence("Test topic", "aff")
+
+    assert evidence is not None
+    assert len(evidence.cards) == 1
+    assert evidence.cards[0].tag == "Quantified"
 
 
 @pytest.mark.asyncio

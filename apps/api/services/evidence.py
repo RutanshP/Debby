@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -14,15 +15,19 @@ from services.supabase_client import get_supabase
 _TABLE = "topic_evidence_cache"
 _SEARCH_MODEL = "gpt-4o-mini"
 _CACHE_TTL_DAYS = 30
+_QUANTITATIVE_SIGNAL_RE = re.compile(r"\d")
 
 _SYSTEM = (
     "You are a debate research assistant. Use web search to gather a small set "
     "of reliable evidence cards for one side of a debate topic. Return JSON "
     "only with this shape: "
     '{"cards":[{"tag":"short claim","evidence":"2-4 sentence factual summary","source_title":"title","source_url":"https://...","source_type":"government|ngo|academic|news|industry|other"}]}. '
-    "Use at most 3 cards. Prefer recent and reputable sources. Do not invent "
-    "studies, statistics, institutions, or URLs. If the evidence is genuinely "
-    'unclear, return {"cards":[]}.'
+    "Use at most 3 cards. Prefer recent and reputable sources. Every card's "
+    "evidence field must include at least one concrete quantitative datapoint "
+    "such as a number, percentage, ranking, dollar figure, year, count, or "
+    "measured comparison from the source. Do not return purely qualitative or "
+    "analytical summaries without a numeric datapoint. Do not invent studies, "
+    'statistics, institutions, or URLs. If the evidence is genuinely unclear, return {"cards":[]}.'
 )
 
 
@@ -55,6 +60,10 @@ def _row_to_topic_evidence(row: dict[str, Any]) -> TopicEvidence:
             "updated_at": row.get("updated_at"),
         }
     )
+
+
+def _looks_quantitative(text: str) -> bool:
+    return bool(_QUANTITATIVE_SIGNAL_RE.search(text or ""))
 
 
 async def _get_cached(topic: str, side: str) -> TopicEvidence | None:
@@ -141,6 +150,8 @@ async def _fetch_from_openai(topic: str, side: str) -> list[dict[str, Any]]:
         source_url = str(card.get("source_url") or "").strip()
         source_type = str(card.get("source_type") or "").strip() or None
         if not tag or not evidence or not source_title or not source_url:
+            continue
+        if not _looks_quantitative(evidence):
             continue
         normalized.append(
             {
