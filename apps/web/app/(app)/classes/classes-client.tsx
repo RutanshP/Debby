@@ -24,13 +24,6 @@ import {
 
 type Tab = "classwork" | "people" | "stream" | "results";
 
-const TAB_LABELS: Record<Tab, string> = {
-  classwork: "Assignments",
-  people: "People",
-  stream: "Stream",
-  results: "Results",
-};
-
 const fieldClass =
   "h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
 const labelClass = "flex flex-col gap-1 text-sm font-medium text-slate-700";
@@ -349,93 +342,63 @@ export function ClassesClient() {
         <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
           Loading classes...
         </div>
+      ) : classes.length === 0 ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+          No classes yet.
+        </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-          <aside className="flex flex-col gap-3">
-            {classes.map((item) => {
-              const active = item.id === selectedClassId;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => void loadClass(item.id)}
-                  className={`rounded-lg border p-4 text-left shadow-sm transition ${
-                    active
-                      ? "border-teal bg-teal/5 ring-2 ring-teal"
-                      : "border-slate-200 bg-white hover:border-teal/60"
-                  }`}
-                >
-                  <div className="font-semibold text-slate-900">{item.name}</div>
-                  <div className="mt-1 text-sm capitalize text-slate-600">{item.role}</div>
-                  {item.role === "coach" ? (
-                    <div className="mt-3 rounded-md bg-slate-100 px-3 py-2 font-mono text-sm text-slate-700">
-                      {item.join_code}
-                    </div>
-                  ) : (
-                    <div className="mt-3 text-sm font-medium text-teal-dark">
-                      {item.open_assignments} open
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-            {classes.length === 0 && (
-              <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-                No classes yet.
-              </div>
-            )}
-          </aside>
-
-          <section className="flex flex-col gap-5">
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900">
-                    Assignments
-                  </h2>
-                  <p className="text-sm text-slate-600">
-                    {unfinishedCount} unfinished
-                  </p>
+        <section className="flex flex-col gap-5">
+            {tab === "classwork" && (
+              <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900">
+                      Assignments
+                    </h2>
+                    <p className="text-sm text-slate-600">
+                      {unfinishedCount} unfinished
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                {assignments.map((item) => (
-                  <article
-                    key={item.recipient.id}
-                    className="rounded-lg border border-slate-200 bg-slate-50 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="font-semibold text-slate-900">
-                          {item.assignment.title}
-                        </h3>
-                        <p className="text-sm text-slate-600">
-                          {item.class_room.name} / {payloadSummary(item)}
-                        </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {assignments.map((item) => (
+                    <article
+                      key={item.recipient.id}
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold text-slate-900">
+                            {item.assignment.title}
+                          </h3>
+                          <p className="text-sm text-slate-600">
+                            {item.class_room.name} / {payloadSummary(item)}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
+                          {statusLabel(item.recipient.status)}
+                        </span>
                       </div>
-                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
-                        {statusLabel(item.recipient.status)}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                      <span className="text-slate-500">
-                        Due {formatDate(item.assignment.due_at)}
-                      </span>
-                      {item.recipient.status === "completed" ? (
-                        <span className="font-medium text-teal-dark">Done</span>
-                      ) : (
-                        <Link href={assignmentHref(item)} className={primaryButtonClass}>
-                          Start
-                        </Link>
-                      )}
-                    </div>
-                  </article>
-                ))}
-                {assignments.length === 0 && (
-                  <p className="text-sm text-slate-600">No assignments yet.</p>
-                )}
-              </div>
-            </section>
+                      <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                        <span className="text-slate-500">
+                          Due {formatDate(item.assignment.due_at)}
+                        </span>
+                        {item.recipient.status === "completed" ? (
+                          <span className="font-medium text-teal-dark">Done</span>
+                        ) : (
+                          <Link href={assignmentHref(item)} className={primaryButtonClass}>
+                            Start
+                          </Link>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                  {assignments.length === 0 && (
+                    <p className="text-sm text-slate-600">No assignments yet.</p>
+                  )}
+                </div>
+              </section>
+            )}
 
             {classDetail && (
               <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -455,26 +418,6 @@ export function ClassesClient() {
                       </div>
                     )}
                   </div>
-                  <nav className="mt-5 flex gap-2" aria-label="Class tabs">
-                    {(
-                      classDetail.role === "coach"
-                        ? (["classwork", "people", "stream", "results"] as Tab[])
-                        : (["classwork", "stream", "results"] as Tab[])
-                    ).map((nextTab) => (
-                      <button
-                        key={nextTab}
-                        type="button"
-                        onClick={() => setTab(nextTab)}
-                        className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize ${
-                          tab === nextTab
-                            ? "bg-teal text-white"
-                            : "bg-slate-100 text-slate-700 hover:bg-teal/10"
-                        }`}
-                      >
-                        {TAB_LABELS[nextTab]}
-                      </button>
-                    ))}
-                  </nav>
                 </header>
 
                 <div className="p-5">
@@ -796,8 +739,7 @@ export function ClassesClient() {
                 </div>
               </section>
             )}
-          </section>
-        </div>
+        </section>
       )}
     </main>
   );

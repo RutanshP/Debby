@@ -32,6 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         { href: `/classes?class=${classId}&tab=classwork`, label: "Assignments" },
         { href: `/classes?class=${classId}&tab=people`, label: "People" },
         { href: `/classes?class=${classId}&tab=stream`, label: "Stream" },
+        { href: `/classes?class=${classId}&tab=results`, label: "Results" },
       ]
     : [{ href: "/classes", label: "Assignments" }];
   const studentNavItems = [

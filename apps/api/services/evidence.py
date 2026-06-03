@@ -181,6 +181,9 @@ async def get_prompt_block(topic: str, side: str) -> str:
 
     lines = [
         "Use only the evidence cards below for outside factual support. Do not invent any additional studies, statistics, expert claims, source names, or URLs.",
+        "Use a card only if it genuinely supports the contention you are making. Do not force unrelated evidence into background or an unrelated contention.",
+        "Prefer spreading different relevant cards across different major contentions when possible.",
+        "If no card fits a contention, rely on logical warranting instead of stretching an unrelated card.",
     ]
     for index, card in enumerate(evidence.cards, start=1):
         source_type = f" ({card.source_type})" if card.source_type else ""

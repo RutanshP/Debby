@@ -20,6 +20,12 @@ _NO_FAKE_EVIDENCE = (
     "Do not invent studies, statistics, institutions, source names, quotes, or URLs. "
     "If the evidence cache is empty, rely on logical warranting and qualified analysis instead."
 )
+_RELEVANT_EVIDENCE_ONLY = (
+    "Use a supplied evidence card only when it genuinely supports that contention. "
+    "Do not force unrelated evidence into background, definitions, or an unrelated contention. "
+    "Prefer different relevant cards for different major contentions when possible, "
+    "and use logic instead when no card fits."
+)
 
 _BASE_SYSTEM_PROMPT = (
     "You are a debate coach and competitive debater. You are required to make a debate case "
@@ -256,6 +262,8 @@ async def make_case(topic: str, side: str) -> str:
         + "\n\nEvidence grounding rules:\n"
         + _NO_FAKE_EVIDENCE
         + "\n"
+        + _RELEVANT_EVIDENCE_ONLY
+        + "\n"
         + grounding
         + _PARLI_OUTPUT_RULES
     )
@@ -268,6 +276,8 @@ async def make_mspdp_case(topic: str, side: str) -> str:
     grounding_block = (
         "\n\nEvidence grounding rules:\n"
         + _NO_FAKE_EVIDENCE
+        + "\n"
+        + _RELEVANT_EVIDENCE_ONLY
         + "\n"
         + grounding
     )

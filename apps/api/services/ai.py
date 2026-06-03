@@ -26,6 +26,12 @@ NO_FAKE_EVIDENCE = (
     "historical examples. If no reliable evidence is supplied, use logical "
     "warranting instead of fabricated factual claims."
 )
+RELEVANT_EVIDENCE_ONLY = (
+    "Use supplied evidence only when it is actually relevant to the specific "
+    "contention being made. Do not force unrelated evidence into background, "
+    "definitions, or an unrelated contention. If no evidence card fits a "
+    "point, rely on logical warranting instead."
+)
 
 Side = Literal["aff", "neg"]
 
@@ -309,6 +315,8 @@ async def ai_neg_framework(topic: str) -> str:
         + SPOKEN_PROSE_ONLY
         + " "
         + NO_FAKE_EVIDENCE
+        + " "
+        + RELEVANT_EVIDENCE_ONLY
     )
     user = (
         "Make the body of a two-minute negation constructive case for the topic: "
@@ -426,6 +434,8 @@ async def ai_speech(topic: str, side: Side = "aff") -> str:
             + SPOKEN_PROSE_ONLY
             + " "
             + NO_FAKE_EVIDENCE
+            + " "
+            + RELEVANT_EVIDENCE_ONLY
         )
         user = (
             "Make a two minute affirmative speech using a high school "
@@ -442,6 +452,8 @@ async def ai_speech(topic: str, side: Side = "aff") -> str:
             + SPOKEN_PROSE_ONLY
             + " "
             + NO_FAKE_EVIDENCE
+            + " "
+            + RELEVANT_EVIDENCE_ONLY
         )
         user = (
             "Make a two minute negation speech on the topic: " + topic
@@ -482,6 +494,8 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
                 + SPOKEN_PROSE_ONLY
                 + " "
                 + NO_FAKE_EVIDENCE
+                + " "
+                + RELEVANT_EVIDENCE_ONLY
             ),
             },
             {
@@ -648,6 +662,8 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     + SPOKEN_PROSE_ONLY
                     + " "
                     + NO_FAKE_EVIDENCE
+                    + " "
+                    + RELEVANT_EVIDENCE_ONLY
                 ),
             },
             {
@@ -673,6 +689,8 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     + SPOKEN_PROSE_ONLY
                     + " "
                     + NO_FAKE_EVIDENCE
+                    + " "
+                    + RELEVANT_EVIDENCE_ONLY
                 ),
             },
             {
@@ -703,6 +721,8 @@ async def ai_neg_framework_stream(topic: str) -> AsyncIterator[str]:
                 + SPOKEN_PROSE_ONLY
                 + " "
                 + NO_FAKE_EVIDENCE
+                + " "
+                + RELEVANT_EVIDENCE_ONLY
             ),
         },
         {
