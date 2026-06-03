@@ -9,11 +9,17 @@ Ports `backend/parligpt.py`'s `make_case` (Parliamentary) and
 
 from __future__ import annotations
 
+from services import evidence as evidence_service
 from services.openai_client import client
 
 _MODEL = "gpt-4o-mini-2024-07-18"
 _MAX_TOKENS = 2500
 _TEMPERATURE = 0.0
+_NO_FAKE_EVIDENCE = (
+    "Use only the supplied evidence cards for outside factual support. "
+    "Do not invent studies, statistics, institutions, source names, quotes, or URLs. "
+    "If the evidence cache is empty, rely on logical warranting and qualified analysis instead."
+)
 
 _BASE_SYSTEM_PROMPT = (
     "You are a debate coach and competitive debater. You are required to make a debate case "
@@ -241,17 +247,40 @@ async def make_case(topic: str, side: str) -> str:
     `side` is "aff" for affirmative or "neg" for negation.
     """
     template = _PARLI_AFF_USER if side == "aff" else _PARLI_NEG_USER
+    grounding = await evidence_service.get_prompt_block(topic, side)
     # The prompt templates contain literal "{...}" braces that aren't
     # format-string placeholders, so substitute the topic with plain
     # replacement instead of .format().
-    user = template.replace("{topic}", topic) + _PARLI_OUTPUT_RULES
+    user = (
+        template.replace("{topic}", topic)
+        + "\n\nEvidence grounding rules:\n"
+        + _NO_FAKE_EVIDENCE
+        + "\n"
+        + grounding
+        + _PARLI_OUTPUT_RULES
+    )
     return await _chat(_PARLI_SYSTEM_PROMPT, user)
 
 
 async def make_mspdp_case(topic: str, side: str) -> str:
     """Generate an MSPDP debate case in markdown."""
+    grounding = await evidence_service.get_prompt_block(topic, side)
+    grounding_block = (
+        "\n\nEvidence grounding rules:\n"
+        + _NO_FAKE_EVIDENCE
+        + "\n"
+        + grounding
+    )
     if side == "aff":
-        user = _MSPDP_AFF_USER.replace("{topic}", topic) + _MSPDP_OUTPUT_RULES
+        user = (
+            _MSPDP_AFF_USER.replace("{topic}", topic)
+            + grounding_block
+            + _MSPDP_OUTPUT_RULES
+        )
         return await _chat(_MSPDP_SYSTEM_PROMPT, user)
-    user = _MSPDP_NEG_USER.replace("{topic}", topic) + _MSPDP_OUTPUT_RULES
+    user = (
+        _MSPDP_NEG_USER.replace("{topic}", topic)
+        + grounding_block
+        + _MSPDP_OUTPUT_RULES
+    )
     return await _chat(_MSPDP_SYSTEM_PROMPT, user)

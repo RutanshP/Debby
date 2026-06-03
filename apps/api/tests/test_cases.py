@@ -34,13 +34,29 @@ def _mock_completion(text: str) -> SimpleNamespace:
     return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=text))])
 
 
+@pytest.fixture(autouse=True)
+def stub_evidence_prompt(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        cases_service.evidence_service,
+        "get_prompt_block",
+        AsyncMock(return_value="TEST CASE EVIDENCE"),
+    )
+
+
 # --- Service ---------------------------------------------------------------
 
 
 @pytest.mark.parametrize("side", ["aff", "neg"])
 async def test_make_case_returns_markdown(side: str):
     mock = AsyncMock(return_value=_mock_completion("# Parli case\nbody"))
-    with patch.object(cases_service.client.chat.completions, "create", mock):
+    with (
+        patch.object(cases_service.client.chat.completions, "create", mock),
+        patch.object(
+            cases_service.evidence_service,
+            "get_prompt_block",
+            AsyncMock(return_value="CASE GROUNDING"),
+        ),
+    ):
         out = await cases_service.make_case("UBI", side)
     assert "Parli case" in out
     assert mock.await_count == 1
@@ -48,7 +64,14 @@ async def test_make_case_returns_markdown(side: str):
 
 async def test_make_case_instructs_complex_parli_tuli():
     mock = AsyncMock(return_value=_mock_completion("# Parli case\nbody"))
-    with patch.object(cases_service.client.chat.completions, "create", mock):
+    with (
+        patch.object(cases_service.client.chat.completions, "create", mock),
+        patch.object(
+            cases_service.evidence_service,
+            "get_prompt_block",
+            AsyncMock(return_value="PARLI EVIDENCE CACHE"),
+        ),
+    ):
         await cases_service.make_case(
             "The United States should provide military aid to Nigeria", "aff"
         )
@@ -89,19 +112,36 @@ async def test_make_case_instructs_complex_parli_tuli():
     assert "Under each evidence bullet, add logical reasoning" in user_prompt
     assert "one event can create several downstream consequences" in user_prompt
     assert "dense casefile-style impact paragraphs" in user_prompt
+    assert "Evidence grounding rules" in user_prompt
+    assert "PARLI EVIDENCE CACHE" in user_prompt
+    assert "Do not invent studies" in user_prompt
 
 
 @pytest.mark.parametrize("side", ["aff", "neg"])
 async def test_make_mspdp_case_returns_markdown(side: str):
     mock = AsyncMock(return_value=_mock_completion("# MSPDP case\nbody"))
-    with patch.object(cases_service.client.chat.completions, "create", mock):
+    with (
+        patch.object(cases_service.client.chat.completions, "create", mock),
+        patch.object(
+            cases_service.evidence_service,
+            "get_prompt_block",
+            AsyncMock(return_value="MSPDP GROUNDING"),
+        ),
+    ):
         out = await cases_service.make_mspdp_case("phones", side)
     assert "MSPDP case" in out
 
 
 async def test_mspdp_uses_mspdp_prompt_not_parli_tuli_rules():
     mock = AsyncMock(return_value=_mock_completion("# MSPDP case\nbody"))
-    with patch.object(cases_service.client.chat.completions, "create", mock):
+    with (
+        patch.object(cases_service.client.chat.completions, "create", mock),
+        patch.object(
+            cases_service.evidence_service,
+            "get_prompt_block",
+            AsyncMock(return_value="MSPDP EVIDENCE CACHE"),
+        ),
+    ):
         await cases_service.make_mspdp_case(
             "The United States should substantially increase housing subsidies",
             "aff",
@@ -118,6 +158,8 @@ async def test_mspdp_uses_mspdp_prompt_not_parli_tuli_rules():
     assert "AFF Contention Template" in user_prompt
     assert "Below is an MSPDP case template" in user_prompt
     assert "Below is a parliamentary case template" not in user_prompt
+    assert "Evidence grounding rules" in user_prompt
+    assert "MSPDP EVIDENCE CACHE" in user_prompt
 
 
 # --- Routes ---------------------------------------------------------------
