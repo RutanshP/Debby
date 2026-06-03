@@ -680,6 +680,7 @@ export function ClassesClient() {
                             <th className="px-3 py-2">Status</th>
                             <th className="px-3 py-2">Completed</th>
                             <th className="px-3 py-2">Result</th>
+                            <th className="px-3 py-2">Review</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -702,6 +703,18 @@ export function ClassesClient() {
                                 </td>
                                 <td className="px-3 py-2 text-slate-700">
                                   {resultSummary(summary.results[recipient.id])}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {recipient.status === "completed" && classDetail ? (
+                                    <Link
+                                      href={`/classes/submissions/${recipient.id}?class=${classDetail.class_room.id}`}
+                                      className="text-sm font-medium text-teal transition hover:text-teal-dark"
+                                    >
+                                      View
+                                    </Link>
+                                  ) : (
+                                    <span className="text-sm text-slate-400">—</span>
+                                  )}
                                 </td>
                               </tr>
                             )),
