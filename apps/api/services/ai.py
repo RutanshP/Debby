@@ -11,6 +11,7 @@ import json
 from typing import Any, AsyncIterator, Literal
 
 from models.flow import FlowBallot, WinnerVerdict
+from services import evidence as evidence_service
 from services.openai_client import client
 
 MODEL = "gpt-4o-mini-2024-07-18"
@@ -19,6 +20,11 @@ JUDGE_FALLBACK_MODEL = MODEL
 SPOKEN_PROSE_ONLY = (
     "Write plain spoken prose only. Do not use markdown, bullet points, "
     "asterisks, headings, or numbered lists."
+)
+NO_FAKE_EVIDENCE = (
+    "Do not invent studies, statistics, source names, expert quotes, or "
+    "historical examples. If no reliable evidence is supplied, use logical "
+    "warranting instead of fabricated factual claims."
 )
 
 Side = Literal["aff", "neg"]
@@ -295,10 +301,14 @@ def _has_filler_issue(speech_metrics: Any | None) -> bool:
 async def ai_neg_framework(topic: str) -> str:
     """Negative constructive case body only, generated from the topic."""
 
+    grounding = await evidence_service.get_prompt_block(topic, "neg")
+
     system = (
         "You are a negation parliamentary debater by the name of Debby. "
         "Your job is to make a debate case for the topic you are given. "
         + SPOKEN_PROSE_ONLY
+        + " "
+        + NO_FAKE_EVIDENCE
     )
     user = (
         "Make the body of a two-minute negation constructive case for the topic: "
@@ -311,7 +321,8 @@ async def ai_neg_framework(topic: str) -> str:
         "judge appeal, or any closing/wrap-up sentence. After the third contention, "
         "end with a brief transition into the upcoming refutation section rather "
         "than ending the speech. In the start of your speech, you "
-        'must say: "Hello my name is Debby."'
+        'must say: "Hello my name is Debby."\n\n'
+        + grounding
     )
 
     message = await client.chat.completions.create(
@@ -406,18 +417,22 @@ async def ai_speech(topic: str, side: Side = "aff") -> str:
     the human picks AFF and Debby plays NEG with no transcript yet.
     """
 
+    grounding = await evidence_service.get_prompt_block(topic, side)
     if side == "aff":
         system = (
             "You are an affirmative parliamentary debater by the name of Debby. "
             "You are required to make a debate case and complementary speech "
             "for the topic you are given. "
             + SPOKEN_PROSE_ONLY
+            + " "
+            + NO_FAKE_EVIDENCE
         )
         user = (
             "Make a two minute affirmative speech using a high school "
             "parliamentary debate case format style with evidence at average "
             "speaking pace about the following topic: " + topic
-            + ". In the start of your speech, you must say: \"Hello my name is Debby.\""
+            + '. In the start of your speech, you must say: "Hello my name is Debby."\n\n'
+            + grounding
         )
     else:
         system = (
@@ -425,12 +440,15 @@ async def ai_speech(topic: str, side: Side = "aff") -> str:
             "Your job is to make a debate case and a subsequent negation "
             "speech on the topic you are given. "
             + SPOKEN_PROSE_ONLY
+            + " "
+            + NO_FAKE_EVIDENCE
         )
         user = (
             "Make a two minute negation speech on the topic: " + topic
             + " using a high school parliamentary debate case format style "
             "with evidence at average speaking pace. In the start of your "
-            "speech, you must say: \"Hello my name is Debby.\""
+            'speech, you must say: "Hello my name is Debby."\n\n'
+            + grounding
         )
 
     message = await client.chat.completions.create(
@@ -448,6 +466,8 @@ async def ai_speech(topic: str, side: Side = "aff") -> str:
 async def ai_response(topic: str, first_speech_transcription: str) -> str:
     """Negation response to a transcribed AFF constructive (non-streaming)."""
 
+    grounding = await evidence_service.get_prompt_block(topic, "neg")
+
     message = await client.chat.completions.create(
         model=MODEL,
         max_tokens=700,
@@ -460,6 +480,8 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
                 "Debby. Your job is to make a debate case and a subsequent "
                 "negation speech on the topic you are given. "
                 + SPOKEN_PROSE_ONLY
+                + " "
+                + NO_FAKE_EVIDENCE
             ),
             },
             {
@@ -481,6 +503,8 @@ async def ai_response(topic: str, first_speech_transcription: str) -> str:
                     "can fund innovation elsewhere. Use clear signposting. In the "
                     "start of your speech, you must say: \"Hello my name is Debby.\" "
                     + SPOKEN_PROSE_ONLY
+                    + "\n\n"
+                    + grounding
                 ),
             },
         ],
@@ -502,13 +526,13 @@ async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
             {
                 "role": "system",
                 "content": (
-                    "You are an affirmative parliamentary debater by the name of "
-                    "Debby. You are giving your second affirmative speech. "
-                    "Do not introduce a new constructive case. Do not include a "
-                    "greeting. " + SPOKEN_PROSE_ONLY
-                ),
-            },
-            {
+                "You are an affirmative parliamentary debater by the name of "
+                "Debby. You are giving your second affirmative speech. "
+                "Do not introduce a new constructive case. Do not include a "
+                "greeting. " + SPOKEN_PROSE_ONLY + " " + NO_FAKE_EVIDENCE
+            ),
+        },
+        {
                 "role": "user",
                 "content": (
                     "Given the following topic:\n"
@@ -523,7 +547,9 @@ async def ai_aff_rebuttal(topic: str, aff_speech: str, neg_speech: str) -> str:
                     "Then give a very brief overview that emphasizes the affirmative "
                     "contention that was least refuted by the negative. Do not invent "
                     "detailed negative arguments that were not actually made. Do not "
-                    "include a new case or a greeting. Output only this single speech."
+                    "include a new case or a greeting. Do not introduce new outside "
+                    "evidence that was not already in the earlier affirmative speech. "
+                    "Output only this single speech."
                 ),
             },
         ],
@@ -610,6 +636,7 @@ async def _chat_completion_stream(
 
 
 async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]:
+    grounding = await evidence_service.get_prompt_block(topic, side)
     if side == "aff":
         messages = [
             {
@@ -619,6 +646,8 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     "You are required to make a debate case and complementary speech "
                     "for the topic you are given. "
                     + SPOKEN_PROSE_ONLY
+                    + " "
+                    + NO_FAKE_EVIDENCE
                 ),
             },
             {
@@ -628,7 +657,8 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     "parliamentary debate case format style with evidence at average "
                     "speaking pace about the following topic: "
                     + topic
-                    + '. In the start of your speech, you must say: "Hello my name is Debby."'
+                    + '. In the start of your speech, you must say: "Hello my name is Debby."\n\n'
+                    + grounding
                 ),
             },
         ]
@@ -641,6 +671,8 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     "Your job is to make a debate case and a subsequent negation "
                     "speech on the topic you are given. "
                     + SPOKEN_PROSE_ONLY
+                    + " "
+                    + NO_FAKE_EVIDENCE
                 ),
             },
             {
@@ -650,7 +682,8 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     + topic
                     + " using a high school parliamentary debate case format style "
                     "with evidence at average speaking pace. In the start of your "
-                    'speech, you must say: "Hello my name is Debby."'
+                    'speech, you must say: "Hello my name is Debby."\n\n'
+                    + grounding
                 ),
             },
         ]
@@ -660,6 +693,7 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
 
 
 async def ai_neg_framework_stream(topic: str) -> AsyncIterator[str]:
+    grounding = await evidence_service.get_prompt_block(topic, "neg")
     messages = [
         {
             "role": "system",
@@ -667,6 +701,8 @@ async def ai_neg_framework_stream(topic: str) -> AsyncIterator[str]:
                 "You are a negation parliamentary debater by the name of Debby. "
                 "Your job is to make a debate case for the topic you are given. "
                 + SPOKEN_PROSE_ONLY
+                + " "
+                + NO_FAKE_EVIDENCE
             ),
         },
         {
@@ -681,7 +717,8 @@ async def ai_neg_framework_stream(topic: str) -> AsyncIterator[str]:
                 "affirmative. Do NOT include a conclusion, summary paragraph, thank-you, "
                 "judge appeal, or any closing/wrap-up sentence. After the third contention, "
                 "end with a brief transition into the upcoming refutation section rather "
-                'than ending the speech. In the start of your speech, you must say: "Hello my name is Debby."'
+                'than ending the speech. In the start of your speech, you must say: "Hello my name is Debby."\n\n'
+                + grounding
             ),
         },
     ]
@@ -704,6 +741,8 @@ async def ai_neg_rebuttal_stream(
                 "You have already delivered your negative constructive case. "
                 "Your job is to add only the very next paragraph to that speech. "
                 + SPOKEN_PROSE_ONLY
+                + " "
+                + NO_FAKE_EVIDENCE
             ),
         },
         {
@@ -720,7 +759,8 @@ async def ai_neg_rebuttal_stream(
                 "cross-apply your prepared case contentions by name as refutations where "
                 "they apply, and end with a brief conclusion. "
                 "Do NOT restate or summarize your case contentions. "
-                "Do NOT include a greeting. Output only this single paragraph."
+                "Do NOT include a greeting. Do not introduce new outside evidence "
+                "not already present in your negative case. Output only this single paragraph."
             ),
         },
     ]
@@ -743,6 +783,8 @@ async def ai_aff_rebuttal_stream(
                 "You are giving your second affirmative speech. "
                 "Do not introduce a new constructive case. Do not include a greeting. "
                 + SPOKEN_PROSE_ONLY
+                + " "
+                + NO_FAKE_EVIDENCE
             ),
         },
         {
@@ -760,7 +802,9 @@ async def ai_aff_rebuttal_stream(
                 "Then give a very brief overview that emphasizes the affirmative "
                 "contention that was least refuted by the negative. Do not invent "
                 "detailed negative arguments that were not actually made. Do not "
-                "include a new case or a greeting. Output only this single speech."
+                "include a new case or a greeting. Do not introduce new outside "
+                "evidence that was not already in the earlier affirmative speech. "
+                "Output only this single speech."
             ),
         },
     ]

@@ -48,17 +48,31 @@ def patched_client(monkeypatch: pytest.MonkeyPatch):
     fake = MagicMock()
     fake.chat.completions.create = fake_create
     monkeypatch.setattr(ai_service, "client", fake)
+    monkeypatch.setattr(
+        ai_service.evidence_service,
+        "get_prompt_block",
+        AsyncMock(return_value="TEST GROUNDING"),
+    )
     return fake_create
 
 
 # --- service unit tests -------------------------------------------------------
 
 
-async def test_ai_speech_returns_string(patched_client: AsyncMock):
+async def test_ai_speech_returns_string(
+    patched_client: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        ai_service.evidence_service,
+        "get_prompt_block",
+        AsyncMock(return_value="GROUNDING"),
+    )
     patched_client.return_value = _chat_completion("hello debaters")
     out = await ai_service.ai_speech("AI in schools")
     assert out == "hello debaters"
     patched_client.assert_awaited_once()
+    assert "GROUNDING" in patched_client.await_args.kwargs["messages"][1]["content"]
 
 
 async def test_ai_response_returns_string(patched_client: AsyncMock):
@@ -69,7 +83,13 @@ async def test_ai_response_returns_string(patched_client: AsyncMock):
 
 async def test_ai_neg_framework_prompt_treats_case_as_lead_in_not_full_close(
     patched_client: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        ai_service.evidence_service,
+        "get_prompt_block",
+        AsyncMock(return_value="NEG GROUNDING"),
+    )
     patched_client.return_value = _chat_completion("neg case")
     out = await ai_service.ai_neg_framework("topic")
     assert out == "neg case"
@@ -80,6 +100,7 @@ async def test_ai_neg_framework_prompt_treats_case_as_lead_in_not_full_close(
     assert "later paragraph will refute the affirmative" in user_prompt
     assert "brief transition into the upcoming refutation section" in user_prompt
     assert "thank-you" in user_prompt
+    assert "NEG GROUNDING" in user_prompt
 
 
 async def test_ai_response_prompt_prioritizes_case_then_refutation(

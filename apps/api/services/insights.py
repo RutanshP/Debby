@@ -29,31 +29,51 @@ _SYSTEM = (
 
 
 def _build_corpus(rounds: list[Any]) -> tuple[str, int]:
-    """Concatenate the user's AFF constructive + rebuttal from each round.
+    """Concatenate only the student's own speeches from each round.
 
-    We never include Debby's `neg_speech` so the model evaluates only the
-    student's own speaking.
+    For AFF rounds, the student owns `aff_speech` and `aff_two_speech`.
+    For NEG rounds, the student owns `neg_speech`.
+    Debby's speeches must never be included or the generated insights will
+    evaluate the AI instead of the user.
     """
     blocks: list[str] = []
     used = 0
     for r in rounds:
+        side = getattr(r, "side", None)
         speeches: list[str] = []
-        aff = _truncate_for_flow(getattr(r, "aff_speech", None), _PER_SPEECH_CHAR_LIMIT)
-        rebuttal = _truncate_for_flow(
-            getattr(r, "aff_two_speech", None), _PER_SPEECH_CHAR_LIMIT
-        )
-        if aff:
-            speeches.append(f"CONSTRUCTIVE:\n{aff}")
-        if rebuttal:
-            speeches.append(f"REBUTTAL:\n{rebuttal}")
+        if side == "aff":
+            aff = _truncate_for_flow(
+                getattr(r, "aff_speech", None),
+                _PER_SPEECH_CHAR_LIMIT,
+            )
+            rebuttal = _truncate_for_flow(
+                getattr(r, "aff_two_speech", None),
+                _PER_SPEECH_CHAR_LIMIT,
+            )
+            if aff:
+                speeches.append(f"CONSTRUCTIVE:\n{aff}")
+            if rebuttal:
+                speeches.append(f"REBUTTAL:\n{rebuttal}")
+        elif side == "neg":
+            neg = _truncate_for_flow(
+                getattr(r, "neg_speech", None),
+                _PER_SPEECH_CHAR_LIMIT,
+            )
+            if neg:
+                speeches.append(f"NEGATIVE SPEECH:\n{neg}")
         if not speeches:
             continue
         metrics = getattr(r, "speech_metrics", None)
         metric_line = ""
         if isinstance(metrics, dict):
             filler_bits = []
+            relevant_speech_types = (
+                {"aff", "aff_two"} if side == "aff" else {"neg"} if side == "neg" else set()
+            )
             for speech_type, value in metrics.items():
                 if not isinstance(value, dict):
+                    continue
+                if speech_type not in relevant_speech_types:
                     continue
                 filler_count = int(value.get("filler_count") or 0)
                 pause_count = int(value.get("major_pause_count") or 0)
