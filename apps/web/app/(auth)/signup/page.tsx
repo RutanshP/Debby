@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getBrowserSupabase } from "@/lib/supabase";
+import { updateProfile } from "@/lib/profiles";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -16,6 +17,7 @@ function SignupForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -47,11 +49,28 @@ function SignupForm() {
     setSubmitting(true);
     try {
       const supabase = getBrowserSupabase();
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: displayName.trim()
+          ? { data: { display_name: displayName.trim() } }
+          : undefined,
+      });
       if (error) {
         setFormError(error.message);
         return;
       }
+
+      // If we have a session (email confirmation not required), persist the
+      // display name via the profiles API. Best-effort: ignore failures.
+      if (data?.session && displayName.trim()) {
+        try {
+          await updateProfile(displayName.trim());
+        } catch {
+          // Non-fatal — the display name can be set later in settings.
+        }
+      }
+
       if (data?.session) {
         router.push("/workspace");
       } else {
@@ -69,6 +88,22 @@ function SignupForm() {
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-md">
         <h1 className="mb-6 text-2xl font-semibold text-teal-dark">Create your Debby account</h1>
         <form noValidate onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="display-name" className="mb-1 block text-sm font-medium text-slate-700">
+              Display name <span className="text-slate-400">(optional)</span>
+            </label>
+            <input
+              id="display-name"
+              name="display_name"
+              type="text"
+              autoComplete="name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="How you'll appear to teammates"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal"
+            />
+          </div>
+
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
               Email
