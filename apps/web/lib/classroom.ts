@@ -16,6 +16,7 @@ export interface ClassRoom {
   join_code: string;
   created_by: string;
   created_at?: string | null;
+  archived?: boolean;
 }
 
 export interface ClassMember {

@@ -23,6 +23,7 @@ class ClassRoom(BaseModel):
     join_code: str
     created_by: str
     created_at: datetime | str | None = None
+    archived: bool = False
 
 
 class ClassMember(BaseModel):
