@@ -100,6 +100,7 @@ async def test_ai_neg_framework_prompt_treats_case_as_lead_in_not_full_close(
     assert "later paragraph will refute the affirmative" in user_prompt
     assert "brief transition into the upcoming refutation section" in user_prompt
     assert "thank-you" in user_prompt
+    assert "genuinely distinct arguments" in user_prompt
     assert "NEG GROUNDING" in user_prompt
 
 

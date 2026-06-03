@@ -79,7 +79,7 @@ async def test_make_case_instructs_complex_parli_tuli():
     kwargs = mock.await_args.kwargs
     system_prompt = kwargs["messages"][0]["content"]
     user_prompt = kwargs["messages"][1]["content"]
-    assert "**Tagline**" in system_prompt
+    assert "**Tagline**" not in system_prompt
     assert "classify the round as policy, value, or fact" in system_prompt
     assert "Always use TULI for policy and value rounds" in system_prompt
     assert "For fact rounds, use Claim/Warrant/Impact" in system_prompt
@@ -107,7 +107,9 @@ async def test_make_case_instructs_complex_parli_tuli():
     assert "Do not use Claim/Warrant/Impact headings" in user_prompt
     assert "For Parli fact rounds, use Claim/Warrant/Impact" in user_prompt
     assert "around 5 words" in user_prompt
+    assert "separate **Tagline:** subsection" in user_prompt
     assert "Make 3 contentions if" in user_prompt
+    assert "Do not split one broader thesis" in user_prompt
     assert "directly support the overall contention" in user_prompt
     assert "Under each evidence bullet, add logical reasoning" in user_prompt
     assert "one event can create several downstream consequences" in user_prompt

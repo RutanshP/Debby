@@ -32,6 +32,12 @@ RELEVANT_EVIDENCE_ONLY = (
     "definitions, or an unrelated contention. If no evidence card fits a "
     "point, rely on logical warranting instead."
 )
+DISTINCT_CONTENTIONS_ONLY = (
+    "Major contentions must be genuinely different arguments or mechanisms. "
+    "Do not split one broader thesis into multiple contentions just because "
+    "you have several statistics, examples, or budget figures for it. Those "
+    "belong under one contention as support."
+)
 
 Side = Literal["aff", "neg"]
 
@@ -317,13 +323,17 @@ async def ai_neg_framework(topic: str) -> str:
         + NO_FAKE_EVIDENCE
         + " "
         + RELEVANT_EVIDENCE_ONLY
+        + " "
+        + DISTINCT_CONTENTIONS_ONLY
     )
     user = (
         "Make the body of a two-minute negation constructive case for the topic: "
         + topic
         + " using a high school parliamentary debate case format style with evidence "
         "at average speaking pace. Include exactly three negative contentions with "
-        "clear labels, warranting, and impacts. This is only the first part of one "
+        "clear labels, warranting, and impacts. Those contentions must be genuinely "
+        "distinct arguments, not multiple statistics or examples under the same "
+        "broader point. This is only the first part of one "
         "continuous negative speech, and a later paragraph will refute the "
         "affirmative. Do NOT include a conclusion, summary paragraph, thank-you, "
         "judge appeal, or any closing/wrap-up sentence. After the third contention, "
@@ -436,11 +446,15 @@ async def ai_speech(topic: str, side: Side = "aff") -> str:
             + NO_FAKE_EVIDENCE
             + " "
             + RELEVANT_EVIDENCE_ONLY
+            + " "
+            + DISTINCT_CONTENTIONS_ONLY
         )
         user = (
             "Make a two minute affirmative speech using a high school "
             "parliamentary debate case format style with evidence at average "
             "speaking pace about the following topic: " + topic
+            + ". If you give multiple contentions, they must be genuinely "
+            "distinct arguments, not several statistics proving the same claim."
             + '. In the start of your speech, you must say: "Hello my name is Debby."\n\n'
             + grounding
         )
@@ -454,11 +468,15 @@ async def ai_speech(topic: str, side: Side = "aff") -> str:
             + NO_FAKE_EVIDENCE
             + " "
             + RELEVANT_EVIDENCE_ONLY
+            + " "
+            + DISTINCT_CONTENTIONS_ONLY
         )
         user = (
             "Make a two minute negation speech on the topic: " + topic
             + " using a high school parliamentary debate case format style "
-            "with evidence at average speaking pace. In the start of your "
+            "with evidence at average speaking pace. If you give multiple "
+            "contentions, they must be genuinely distinct arguments, not several "
+            "statistics proving the same claim. In the start of your "
             'speech, you must say: "Hello my name is Debby."\n\n'
             + grounding
         )
@@ -664,6 +682,8 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     + NO_FAKE_EVIDENCE
                     + " "
                     + RELEVANT_EVIDENCE_ONLY
+                    + " "
+                    + DISTINCT_CONTENTIONS_ONLY
                 ),
             },
             {
@@ -673,6 +693,8 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     "parliamentary debate case format style with evidence at average "
                     "speaking pace about the following topic: "
                     + topic
+                    + ". If you give multiple contentions, they must be genuinely "
+                    "distinct arguments, not several statistics proving the same claim."
                     + '. In the start of your speech, you must say: "Hello my name is Debby."\n\n'
                     + grounding
                 ),
@@ -691,6 +713,8 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     + NO_FAKE_EVIDENCE
                     + " "
                     + RELEVANT_EVIDENCE_ONLY
+                    + " "
+                    + DISTINCT_CONTENTIONS_ONLY
                 ),
             },
             {
@@ -699,7 +723,9 @@ async def ai_speech_stream(topic: str, side: Side = "aff") -> AsyncIterator[str]
                     "Make a two minute negation speech on the topic: "
                     + topic
                     + " using a high school parliamentary debate case format style "
-                    "with evidence at average speaking pace. In the start of your "
+                    "with evidence at average speaking pace. If you give multiple "
+                    "contentions, they must be genuinely distinct arguments, not several "
+                    "statistics proving the same claim. In the start of your "
                     'speech, you must say: "Hello my name is Debby."\n\n'
                     + grounding
                 ),

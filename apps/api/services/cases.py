@@ -26,6 +26,12 @@ _RELEVANT_EVIDENCE_ONLY = (
     "Prefer different relevant cards for different major contentions when possible, "
     "and use logic instead when no card fits."
 )
+_DISTINCT_CONTENTIONS_ONLY = (
+    "Major contentions must be genuinely different arguments or mechanisms. "
+    "Do not split one broader thesis into several near-duplicate contentions "
+    "just because you have multiple statistics or examples for it; those belong "
+    "under one contention as support."
+)
 
 _BASE_SYSTEM_PROMPT = (
     "You are a debate coach and competitive debater. You are required to make a debate case "
@@ -39,7 +45,7 @@ _STRUCTURE_SYSTEM_PROMPT = (
     _BASE_SYSTEM_PROMPT
     + " Write a tournament-style parliamentary debate case. For Parli format, "
     "classify the round as policy, value, or fact. Always use TULI for policy "
-    "and value rounds: **Tagline**, **Uniqueness**, **Links**, and **Impacts** "
+    "and value rounds: **Uniqueness**, **Links**, and **Impacts** "
     "for each contention, advantage, or disadvantage. For fact rounds, use "
     "Claim/Warrant/Impact. Prefer specific link chains, solvency, "
     "internal links, and impact calculus over generic explanation. In AFF "
@@ -75,8 +81,8 @@ _PARLI_OUTPUT_RULES = (
     "- Plan text must be specific enough to implement. If the plan increases funding, name the amount or percentage increase, identify the funding recipient, and explain why that amount is greater than the status quo baseline. Do not use Normal Ways and Means as a substitute for an amount when the resolution asks to increase funding.\n"
     "- Classify the round as exactly one of: **Policy**, **Value**, or **Fact**.\n"
     "- For Parli policy and value rounds, write 2-3 contentions/advantages/disadvantages using this TULI structure. Make 3 contentions if the topic naturally supports 3 distinct arguments; otherwise use 2 stronger contentions.\n"
-    "  - Use the contention/advantage/disadvantage heading itself as the tagline, around 5 words, rather than writing a generic heading plus a separate tagline.\n"
-    "  - **Tagline:** one strategic phrase around 5 words naming the contention.\n"
+    "  - Use the contention/advantage/disadvantage heading itself as the tagline, around 5 words, rather than writing a generic heading plus a separate **Tagline:** subsection.\n"
+    "  - Do not split one broader thesis into several near-duplicate contentions just because you have multiple statistics or examples for it.\n"
     "  - **Uniqueness:** multiple U1/U2/U3 sub-uniquenesses. Every uniqueness must directly support the overall contention/tagline. If a uniqueness is strong but unrelated, make it a separate contention instead of forcing it into the wrong contention. Each U point must have a short claim/tagline followed by at least 4 evidence bullets underneath it; use more than 4 when the topic is complex or the claim needs more support. Under each evidence bullet, add logical reasoning explaining why the evidence proves the uniqueness claim. Those evidence bullets must include concrete statistics, named institutions, recent events, comparative baselines, rankings, percentages, dollar figures, or clearly labeled analytical warrants. For AFF policy cases, prove the status quo harm exists now and is bad enough to justify the plan. For NEG policy cases, prove the status quo has good things worth preserving, such as innovation, stability, jobs, effective institutions, markets, deterrence, diplomacy, or existing reforms.\n"
     "  - **Links:** multiple L1/L2 link chains. Format every link as `L1 short name: cause → effect → effect`, not as a paragraph. Use the arrow symbol `→`. For AFF policy cases, links should prove the plan creates good effects: `L1 renewables: AFF plan passes → more money available for renewable energy → US spending on renewables increases`. For NEG policy cases, links should prove AFF creates bad effects: `L1 spending tradeoff: AFF plan passes → funding diverted from effective status quo programs → current benefits weaken`.\n"
     "  - **Internal Links:** after each major link, include multiple IL bullets branching from that link because one event can create several downstream consequences. Format them as `- IL1 - label: chain → chain`, `- IL2 - label: chain → chain`, etc. Example:\n"
@@ -95,7 +101,7 @@ _PARLI_OUTPUT_RULES = (
 
 _PARLI_TULI_CONTENTION_TEMPLATE = (
     "Contention Template:\n"
-    "Contention Heading / Tagline { write the contention name as a brief strategic tagline, around 5 words }\n"
+    "Contention Heading { write the contention name as a brief strategic tagline, around 5 words }\n"
     "Uniqueness { include U1/U2/U3 sub-uniquenesses. Each U point needs a short claim plus at least 4 evidence/stat bullets underneath it. }\n"
     "Links { include L1/L2 link chains formatted as `L1 short name: cause → effect → effect`. }\n"
     "Internal Links { under each link, include IL bullets formatted as `- IL1 - label: chain → chain`; one link can have multiple ILs. }\n"
@@ -264,6 +270,8 @@ async def make_case(topic: str, side: str) -> str:
         + "\n"
         + _RELEVANT_EVIDENCE_ONLY
         + "\n"
+        + _DISTINCT_CONTENTIONS_ONLY
+        + "\n"
         + grounding
         + _PARLI_OUTPUT_RULES
     )
@@ -278,6 +286,8 @@ async def make_mspdp_case(topic: str, side: str) -> str:
         + _NO_FAKE_EVIDENCE
         + "\n"
         + _RELEVANT_EVIDENCE_ONLY
+        + "\n"
+        + _DISTINCT_CONTENTIONS_ONLY
         + "\n"
         + grounding
     )
