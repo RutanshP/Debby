@@ -21,8 +21,9 @@ import {
   type PracticeFormat,
   type PracticeSide,
 } from "@/lib/classroom";
+import { ClassCalendar } from "@/components/classroom/ClassCalendar";
 
-type Tab = "classwork" | "people" | "stream" | "results";
+type Tab = "classwork" | "people" | "stream" | "results" | "calendar";
 
 const fieldClass =
   "h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
@@ -259,7 +260,8 @@ export function ClassesClient() {
       requestedTab === "classwork" ||
       requestedTab === "people" ||
       requestedTab === "stream" ||
-      requestedTab === "results"
+      requestedTab === "results" ||
+      requestedTab === "calendar"
     ) {
       setTab(requestedTab);
     }
@@ -670,6 +672,8 @@ export function ClassesClient() {
                         Class messages will live here later.
                       </p>
                     </div>
+                  ) : tab === "calendar" ? (
+                    <ClassCalendar assignments={assignments} />
                   ) : classDetail.role === "coach" ? (
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-slate-200 text-sm">
