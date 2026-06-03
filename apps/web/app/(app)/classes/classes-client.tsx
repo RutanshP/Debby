@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
+import { CommentThread } from "@/components/classroom/CommentThread";
 import {
   assignmentTypeLabel,
   formatDate,
@@ -641,6 +642,12 @@ export function ClassesClient() {
                               <p className="text-sm text-slate-600">
                                 {payloadSummary(item)}
                               </p>
+                              <CommentThread
+                                classId={item.class_room.id}
+                                targetType="assignment"
+                                targetId={item.recipient.id}
+                                allowPrivate
+                              />
                             </article>
                           );
                         })}
