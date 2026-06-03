@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
+import { ClassSettings } from "@/components/classroom/ClassSettings";
 import {
   assignmentTypeLabel,
   formatDate,
@@ -22,7 +23,7 @@ import {
   type PracticeSide,
 } from "@/lib/classroom";
 
-type Tab = "classwork" | "people" | "stream" | "results";
+type Tab = "classwork" | "people" | "stream" | "results" | "settings";
 
 const fieldClass =
   "h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
@@ -412,11 +413,25 @@ export function ClassesClient() {
                         {classDetail.role}
                       </p>
                     </div>
-                    {classDetail.role === "coach" && (
-                      <div className="rounded-md bg-slate-100 px-3 py-2 font-mono text-sm text-slate-700">
-                        {classDetail.class_room.join_code}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {classDetail.role === "coach" && (
+                        <div className="rounded-md bg-slate-100 px-3 py-2 font-mono text-sm text-slate-700">
+                          {classDetail.class_room.join_code}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        aria-label="Class settings"
+                        title="Class settings"
+                        onClick={() => setTab("settings")}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-700"
+                      >
+                        {/* Gear icon (SVG) */}
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                          <path fillRule="evenodd" d="M7.84 1.804A1 1 0 0 1 8.82 1h2.36a1 1 0 0 1 .98.804l.331 1.652a6.993 6.993 0 0 1 1.929 1.115l1.598-.54a1 1 0 0 1 1.186.447l1.18 2.044a1 1 0 0 1-.205 1.251l-1.267 1.113a7.047 7.047 0 0 1 0 2.228l1.267 1.113a1 1 0 0 1 .206 1.25l-1.18 2.045a1 1 0 0 1-1.187.447l-1.598-.54a6.993 6.993 0 0 1-1.929 1.115l-.33 1.652a1 1 0 0 1-.98.804H8.82a1 1 0 0 1-.98-.804l-.331-1.652a6.993 6.993 0 0 1-1.929-1.115l-1.598.54a1 1 0 0 1-1.186-.447l-1.18-2.044a1 1 0 0 1 .205-1.251l1.267-1.114a7.05 7.05 0 0 1 0-2.227L1.821 7.773a1 1 0 0 1-.206-1.25l1.18-2.045a1 1 0 0 1 1.187-.447l1.598.54A6.993 6.993 0 0 1 7.51 3.456l.33-1.652ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </header>
 
@@ -670,6 +685,15 @@ export function ClassesClient() {
                         Class messages will live here later.
                       </p>
                     </div>
+                  ) : tab === "settings" ? (
+                    <ClassSettings
+                      classDetail={classDetail}
+                      onRefresh={() => loadBase(classDetail.class_room.id)}
+                      onClose={() => {
+                        setTab("classwork");
+                        void loadBase();
+                      }}
+                    />
                   ) : classDetail.role === "coach" ? (
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-slate-200 text-sm">
