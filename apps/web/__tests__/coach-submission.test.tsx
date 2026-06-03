@@ -191,7 +191,8 @@ describe("CoachSubmissionPage", () => {
 
     // Stats.
     expect(screen.getByText("1st speech WPM")).toBeInTheDocument();
-    expect(screen.getByText("145")).toBeInTheDocument();
+    // Both first_speech_wpm and average_wpm are 145 in the mock, so multiple elements exist.
+    expect(screen.getAllByText("145").length).toBeGreaterThanOrEqual(1);
 
     // Transcript details.
     expect(
