@@ -38,12 +38,12 @@ dev:
 	  echo "uvicorn not found at $(UVICORN). Run \`make install\` first."; exit 1; \
 	}
 	@trap 'kill 0' INT TERM; \
-	  ( cd $(API_DIR) && ../../$(UVICORN) main:app --reload --host 127.0.0.1 --port 8000 ) & \
+	  ( cd $(API_DIR) && set -a && [ -f .env ] && source .env && set +a && ../../$(UVICORN) main:app --reload --host 127.0.0.1 --port 8000 ) & \
 	  ( cd $(WEB_DIR) && npm run dev ) & \
 	  wait
 
 dev-api:
-	@cd $(API_DIR) && ../../$(UVICORN) main:app --reload --host 127.0.0.1 --port 8000
+	@cd $(API_DIR) && set -a && [ -f .env ] && source .env && set +a && ../../$(UVICORN) main:app --reload --host 127.0.0.1 --port 8000
 
 dev-web:
 	@cd $(WEB_DIR) && npm run dev
