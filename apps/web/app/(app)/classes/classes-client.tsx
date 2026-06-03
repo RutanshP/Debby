@@ -705,6 +705,7 @@ export function ClassesClient() {
                             <th className="px-3 py-2">Status</th>
                             <th className="px-3 py-2">Completed</th>
                             <th className="px-3 py-2">Result</th>
+                            <th className="px-3 py-2">Review</th>
                             <th className="px-3 py-2">Feedback</th>
                           </tr>
                         </thead>
@@ -732,6 +733,18 @@ export function ClassesClient() {
                                     {resultSummary(summary.results[recipient.id])}
                                   </td>
                                   <td className="px-3 py-2">
+                                    {recipient.status === "completed" && classDetail ? (
+                                      <Link
+                                        href={`/classes/submissions/${recipient.id}?class=${classDetail.class_room.id}`}
+                                        className="text-sm font-medium text-teal transition hover:text-teal-dark"
+                                      >
+                                        View
+                                      </Link>
+                                    ) : (
+                                      <span className="text-sm text-slate-400">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2">
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -753,7 +766,7 @@ export function ClassesClient() {
                                 </tr>,
                                 isOpen && (
                                   <tr key={`${recipient.id}-feedback`}>
-                                    <td colSpan={6} className="px-3 pb-3">
+                                    <td colSpan={7} className="px-3 pb-3">
                                       <FeedbackPanel
                                         recipientId={recipient.id}
                                         isCoach={true}
