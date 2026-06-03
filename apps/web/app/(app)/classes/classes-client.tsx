@@ -6,6 +6,8 @@ import { StreamTab } from "@/components/classroom/StreamTab";
 import { useSearchParams } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import { ClassSettings } from "@/components/classroom/ClassSettings";
+import { getBrowserSupabase } from "@/lib/supabase";
+import { CommentThread } from "@/components/classroom/CommentThread";
 import {
   assignmentHref,
   assignmentTypeLabel,
@@ -147,6 +149,17 @@ export function ClassesClient() {
   const [practiceTopic, setPracticeTopic] = useState("");
   const [practiceTimer, setPracticeTimer] = useState(120);
   const [savingAssignment, setSavingAssignment] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
+
+  // Resolve the authenticated user's ID once on mount for comment authorship.
+  useEffect(() => {
+    getBrowserSupabase()
+      .auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session?.user?.id) setCurrentUserId(session.user.id);
+      })
+      .catch(() => {/* silently ignore; delete buttons won't show */});
+  }, []);
 
   const unfinishedCount = useMemo(
     () => assignments.filter((item) => item.recipient.status !== "completed").length,
@@ -635,6 +648,14 @@ export function ClassesClient() {
                                   <p className="text-sm text-slate-600">
                                     {payloadSummary(item)}
                                   </p>
+                                  <CommentThread
+                                    classId={item.class_room.id}
+                                    targetType="assignment"
+                                    targetId={item.recipient.id}
+                                    allowPrivate
+                                    currentUserId={currentUserId}
+                                    currentUserRole={classDetail?.role === "coach" ? "coach" : "competitor"}
+                                  />
                                 </article>
                               );
                             })}
