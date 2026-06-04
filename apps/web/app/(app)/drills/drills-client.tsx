@@ -13,6 +13,7 @@ import {
 } from "@/lib/classroom";
 
 export type DrillType = "rebuttal" | "speed" | "impact" | "contention" | "filler";
+type SpeedCategory = "standard" | "postmodernism";
 
 interface DrillTypeOption {
   type: DrillType;
@@ -55,6 +56,10 @@ const DRILL_TYPES: DrillTypeOption[] = [
 ];
 
 const TIMER_OPTIONS = [30, 60, 120];
+const SPEED_CATEGORY_OPTIONS: Array<{ value: SpeedCategory; label: string }> = [
+  { value: "standard", label: "Standard" },
+  { value: "postmodernism", label: "Postmodernism" },
+];
 const FILLER_WORDS = new Set([
   "um",
   "uh",
@@ -177,6 +182,7 @@ export function DrillsClient() {
   const searchParams = useSearchParams();
   const assignmentRecipientId = searchParams.get("assignment");
   const [drillType, setDrillType] = useState<DrillType>("rebuttal");
+  const [speedCategory, setSpeedCategory] = useState<SpeedCategory>("standard");
   const [timerSeconds, setTimerSeconds] = useState<number>(60);
   const [assignmentDetail, setAssignmentDetail] =
     useState<AssignmentRecipientDetail | null>(null);
@@ -324,6 +330,9 @@ export function DrillsClient() {
       }
       const body: Record<string, unknown> = { drill_type: drillType };
       body.timer_seconds = assignmentPayload?.timer_seconds ?? (isFiller ? 60 : timerSeconds);
+      if (drillType === "speed") {
+        body.speed_category = speedCategory;
+      }
       const data = await apiFetch<DrillPrompt>("/api/drills", {
         method: "POST",
         body: JSON.stringify(body),
@@ -572,7 +581,7 @@ export function DrillsClient() {
       </section>
 
       {!drill && (
-        <div className="flex w-fit items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <label htmlFor="timer" className="text-sm font-semibold text-teal-dark">
             Timer
           </label>
@@ -589,6 +598,25 @@ export function DrillsClient() {
               </option>
             ))}
           </select>
+          {isSpeed && !assignmentLocked && (
+            <>
+              <label htmlFor="speed-category" className="text-sm font-semibold text-teal-dark">
+                Category
+              </label>
+              <select
+                id="speed-category"
+                value={speedCategory}
+                onChange={(e) => setSpeedCategory(e.target.value as SpeedCategory)}
+                className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
+              >
+                {SPEED_CATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       )}
 

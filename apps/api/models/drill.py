@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from models.round import WpmPoint
 
 DrillType = Literal["rebuttal", "speed", "impact", "contention", "filler"]
+SpeedCategory = Literal["standard", "postmodernism"]
 
 # Legacy code used "contentions" (plural); we expose the singular form publicly
 # but translate when calling into the legacy-style prompt builder.
@@ -44,6 +45,7 @@ class DrillPrompt(BaseModel):
 class DrillCreateRequest(BaseModel):
     drill_type: DrillType
     timer_seconds: int | None = None
+    speed_category: SpeedCategory | None = None
 
 
 class DrillScoreRequest(BaseModel):

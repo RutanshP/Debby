@@ -12,6 +12,8 @@ import json
 import logging
 import random
 import re
+from functools import lru_cache
+from pathlib import Path
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -273,6 +275,18 @@ _SPEED_TOPIC_AREAS = [
     },
 ]
 
+_POSTMODERNISM_SOURCE_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "postmodernism_speed_source.txt"
+)
+
+
+@lru_cache(maxsize=1)
+def _postmodernism_source_text() -> str:
+    try:
+        return _POSTMODERNISM_SOURCE_PATH.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
 
 def _speed_fallback_passage(target_words: int) -> str:
     passage = " ".join(_FALLBACK_SENTENCES)
@@ -397,7 +411,11 @@ def _contention_topic() -> tuple[str, str]:
     return "MSPDP", topics.get_mspdp_topic()
 
 
-async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None) -> DrillPrompt:
+async def generate_drill(
+    drill_type: DrillType,
+    timer_seconds: int | None = None,
+    speed_category: str | None = None,
+) -> DrillPrompt:
     if drill_type not in DRILL_TITLES:
         raise ValueError("Unknown drill type.")
 
@@ -425,6 +443,15 @@ async def generate_drill(drill_type: DrillType, timer_seconds: int | None = None
 
     if drill_type == "speed":
         word_target = speed_passage_word_target(timer)
+        postmodernism_source = _postmodernism_source_text()
+        if speed_category == "postmodernism" and postmodernism_source:
+            return DrillPrompt(
+                title=DRILL_TITLES["speed"],
+                topic="Speed Reading: Postmodernism",
+                prompt=_fit_speed_passage_to_target(postmodernism_source, word_target),
+                task="Read the passage aloud, then submit your recording.",
+                timer_seconds=timer,
+            )
         speed_topic = await _choose_speed_topic()
         speed_category = str(speed_topic["category"])
         speed_label = str(speed_topic["label"])

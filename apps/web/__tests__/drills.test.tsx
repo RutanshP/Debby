@@ -370,6 +370,7 @@ describe("DrillsClient", () => {
     const [, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(JSON.parse(init.body as string)).toEqual({
       drill_type: "speed",
+      speed_category: "standard",
       timer_seconds: 60,
     });
 
@@ -416,6 +417,30 @@ describe("DrillsClient", () => {
     expect(screen.getByTestId("wpm-chart")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Redo Drill/i })).toBeInTheDocument();
     expect(screen.queryByTestId("record-Record Reading")).not.toBeInTheDocument();
+  });
+
+  it("sends the postmodernism speed category when selected", async () => {
+    const user = userEvent.setup();
+    render(<DrillsClient />);
+
+    await user.click(screen.getByRole("button", { name: /Speed Reading/i }));
+    await user.selectOptions(screen.getByLabelText(/Category/i), "postmodernism");
+    mockFetchOnce({
+      id: 7,
+      drill_type: "speed",
+      prompt: "Technical jargon passage.",
+    });
+    await user.click(screen.getByRole("button", { name: /Generate Drill/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body as string)).toEqual({
+      drill_type: "speed",
+      speed_category: "postmodernism",
+      timer_seconds: 60,
+    });
   });
 
   it("redo drill generates a fresh prompt for the same drill type", async () => {

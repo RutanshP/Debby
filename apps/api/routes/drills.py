@@ -348,7 +348,11 @@ async def create_drill(
     user=Depends(get_current_user),
 ) -> Drill:
     try:
-        prompt = await generate_drill(body.drill_type, timer_seconds=body.timer_seconds)
+        prompt = await generate_drill(
+            body.drill_type,
+            timer_seconds=body.timer_seconds,
+            speed_category=body.speed_category,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
