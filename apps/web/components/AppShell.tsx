@@ -76,10 +76,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   async function handleSignOut() {
     setSigningOut(true);
-    const supabase = getBrowserSupabase();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    try {
+      const supabase = getBrowserSupabase();
+      await supabase.auth.signOut();
+      router.push("/login");
+      router.refresh();
+    } catch {
+      // Ensure signingOut resets even if an error occurs
+      setSigningOut(false);
+    }
   }
 
   return (
@@ -120,7 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
         </div>
-        <div className="mt-auto space-y-1">
+        <div className="mt-auto space-y-2 border-t border-slate-200 pt-4">
           <Link
             href="/workspace"
             className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
@@ -135,7 +140,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={handleSignOut}
             disabled={signingOut}
-            className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {signingOut ? "Signing out..." : "Sign out"}
           </button>
@@ -149,7 +154,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={handleSignOut}
             disabled={signingOut}
-            className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {signingOut ? "Signing out..." : "Sign out"}
           </button>
