@@ -30,6 +30,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Use the query hook to get class detail (which includes the role)
   const classDetailQuery = useClassDetail(classId);
   const classRole = classDetailQuery.data?.role ?? null;
+  // Determine if we're in a loading/transition state where role is unknown
+  const roleUnknown = classId && classDetailQuery.isFetching;
 
   const coachNavItems = classId
     ? [
@@ -51,11 +53,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     })),
   ];
   const scopedNavItems = inClassWorkspace
-    ? classRole === "coach"
-      ? coachNavItems
-      : classRole === "competitor" || !classId
-        ? studentNavItems
-        : [{ href: `/classes?class=${classId}`, label: "Assignments" }]
+    ? roleUnknown
+      ? [{ href: `/classes?class=${classId}`, label: "Assignments" }]
+      : classRole === "coach"
+        ? coachNavItems
+        : classRole === "competitor" || !classId
+          ? studentNavItems
+          : [{ href: `/classes?class=${classId}`, label: "Assignments" }]
     : navItems;
 
   async function handleSignOut() {
