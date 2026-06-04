@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api";
+import { shortId } from "@/lib/classroom";
 
 export type PostType = "announcement" | "material";
 
@@ -43,9 +44,9 @@ export async function deletePost(
   });
 }
 
-/** Returns a short (8-char) fallback display name from a UUID. */
+/** Returns a short fallback display name from a UUID. */
 export function authorShortId(userId: string): string {
-  return userId.slice(0, 8);
+  return shortId(userId);
 }
 
 /** Format a date string as a relative or absolute label. */

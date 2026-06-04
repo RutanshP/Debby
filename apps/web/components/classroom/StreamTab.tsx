@@ -27,16 +27,14 @@ interface AuthorNames {
 async function lookupAuthorNames(userIds: string[]): Promise<AuthorNames> {
   if (userIds.length === 0) return {};
   try {
-    const data = await apiFetch<Record<string, { name?: string; email?: string }>>(
-      "/api/profiles/lookup",
-      {
-        method: "POST",
-        body: JSON.stringify({ user_ids: userIds }),
-      },
-    );
+    // /api/profiles/lookup returns a { user_id: display_name } map.
+    const data = await apiFetch<Record<string, string>>("/api/profiles/lookup", {
+      method: "POST",
+      body: JSON.stringify({ user_ids: userIds }),
+    });
     const names: AuthorNames = {};
-    for (const [id, profile] of Object.entries(data)) {
-      names[id] = profile.name ?? profile.email ?? authorShortId(id);
+    for (const [id, displayName] of Object.entries(data)) {
+      names[id] = displayName || authorShortId(id);
     }
     return names;
   } catch {

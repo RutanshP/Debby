@@ -39,11 +39,7 @@ export async function deleteComment(commentId: string): Promise<void> {
   await apiFetch<void>(`/api/comments/${commentId}`, { method: "DELETE" });
 }
 
-/** Shorten a UUID to its first 8 characters for display when no name is available. */
-export function shortId(id: string): string {
-  if (!id) return "";
-  return id.length > 8 ? id.slice(0, 8) : id;
-}
+export { shortId } from "@/lib/classroom";
 
 export function formatCommentDate(value?: string | null): string {
   if (!value) return "";

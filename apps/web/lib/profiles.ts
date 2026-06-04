@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { shortId } from "@/lib/classroom";
 
 export interface Profile {
   user_id: string;
@@ -17,9 +18,7 @@ export interface UpdateProfileRequest {
 /** Module-level cache: user_id -> display_name */
 const _nameCache = new Map<string, string>();
 
-export function shortId(id: string): string {
-  return id.length > 8 ? id.slice(0, 8) : id;
-}
+export { shortId };
 
 export async function getProfile(): Promise<Profile> {
   return apiFetch<Profile>("/api/me/profile");

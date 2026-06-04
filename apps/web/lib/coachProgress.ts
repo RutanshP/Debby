@@ -1,6 +1,7 @@
 // Types and helpers for the instructor progress dashboard.
 
 import type { ProgressRound, ProgressDrill } from "@/lib/progress";
+import { shortId } from "@/lib/classroom";
 
 export interface StudentProgressData {
   user_id: string;
@@ -32,10 +33,7 @@ export function flattenClassProgress(students: StudentProgressData[]): {
   return { rounds, drills };
 }
 
-/** Build a display name using first 8 chars of the user ID as a fallback. */
-export function shortId(userId: string): string {
-  return userId.length > 8 ? userId.slice(0, 8) : userId;
-}
+export { shortId };
 
 /** Look up display names for a list of user IDs via the profiles endpoint.
  *  Degrades gracefully to shortId on any error or missing entry. */
@@ -46,16 +44,13 @@ export async function resolveDisplayNames(
   const map = new Map<string, string>(userIds.map((id) => [id, shortId(id)]));
   if (userIds.length === 0) return map;
   try {
+    // /api/profiles/lookup returns a { user_id: display_name } map.
     const profiles = (await apiFetch("/api/profiles/lookup", {
       method: "POST",
       body: JSON.stringify({ user_ids: userIds }),
-    })) as Array<{ user_id: string; display_name?: string; full_name?: string; email?: string }>;
-    if (Array.isArray(profiles)) {
-      for (const profile of profiles) {
-        const name =
-          profile.display_name ?? profile.full_name ?? profile.email ?? shortId(profile.user_id);
-        map.set(profile.user_id, name);
-      }
+    })) as Record<string, string>;
+    for (const [userId, displayName] of Object.entries(profiles)) {
+      if (displayName) map.set(userId, displayName);
     }
   } catch {
     // Degrade to shortId — already set above.

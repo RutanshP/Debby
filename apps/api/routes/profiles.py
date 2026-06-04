@@ -38,10 +38,11 @@ async def update_my_profile(
 @router.post("/profiles/lookup", response_model=dict[str, str])
 async def lookup_profiles(
     body: ProfileLookupRequest,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     """Return a {user_id: display_name} map for the given user_ids.
 
-    Unknown user_ids are omitted; requires the caller to be authenticated.
+    Only ids that share a class with the caller are resolved; unknown and
+    non-classmate ids are omitted.
     """
-    return await profiles_service.lookup_names(body.user_ids)
+    return await profiles_service.lookup_names(body.user_ids, current_user.id)
