@@ -39,6 +39,7 @@ export function FeedbackPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [editing, setEditing] = useState<boolean>(() => !(initialFeedback && isCoach));
 
   useEffect(() => {
     // If we already have initial data skip the fetch.
@@ -52,6 +53,7 @@ export function FeedbackPanel({
           setGrade(fb.grade != null ? String(fb.grade) : "");
           setText(fb.feedback ?? "");
           setReturned(fb.returned);
+          if (isCoach) setEditing(false);
         }
       })
       .catch((err: unknown) => {
@@ -76,6 +78,7 @@ export function FeedbackPanel({
       });
       setFeedback(updated);
       setSuccess(true);
+      setEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save feedback");
     } finally {
@@ -102,6 +105,46 @@ export function FeedbackPanel({
         {feedback.feedback && (
           <p className="mt-1 text-sm text-slate-700">{feedback.feedback}</p>
         )}
+      </div>
+    );
+  }
+
+  if (isCoach && feedback && !editing) {
+    return (
+      <div className="mt-3 rounded-md border border-teal/30 bg-teal/5 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-teal-dark">
+              Coach Feedback
+            </p>
+            {success && (
+              <p className="mb-2 text-xs text-teal-dark" role="status">
+                Feedback sent
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(true);
+              setSuccess(false);
+            }}
+            className="text-xs font-medium text-teal underline hover:text-teal-dark"
+          >
+            Edit
+          </button>
+        </div>
+        <div className="space-y-1 text-sm text-slate-700">
+          {feedback.grade != null && (
+            <p>
+              <span className="font-medium">Grade:</span> {feedback.grade}
+            </p>
+          )}
+          {feedback.feedback && <p className="whitespace-pre-line">{feedback.feedback}</p>}
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            {feedback.returned ? "Returned to student" : "Saved privately"}
+          </p>
+        </div>
       </div>
     );
   }

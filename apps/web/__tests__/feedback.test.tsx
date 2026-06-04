@@ -85,7 +85,9 @@ describe("FeedbackPanel — coach mode", () => {
     expect(body.feedback).toBe("Great rebuttal!");
     expect(body.returned).toBe(true);
 
-    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(await screen.findByText("Feedback sent")).toBeInTheDocument();
+    expect(screen.getByText("Great rebuttal!")).toBeInTheDocument();
+    expect(screen.getByText(/returned to student/i)).toBeInTheDocument();
   });
 
   it("shows error message when PUT fails", async () => {

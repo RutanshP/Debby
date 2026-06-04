@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api";
-import type { Assignment, ClassRoom } from "@/lib/classroom";
+import type { Assignment, ClassMember, ClassRoom } from "@/lib/classroom";
 
 // ---- Request types ----
 
@@ -47,6 +47,17 @@ export async function removeMember(
 ): Promise<void> {
   await apiFetch<void>(`/api/classes/${classId}/members/${userId}`, {
     method: "DELETE",
+  });
+}
+
+export async function updateMemberRole(
+  classId: string,
+  userId: string,
+  role: "coach" | "competitor",
+): Promise<ClassMember> {
+  return apiFetch<ClassMember>(`/api/classes/${classId}/members/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
   });
 }
 

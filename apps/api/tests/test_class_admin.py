@@ -277,6 +277,25 @@ def test_coach_can_remove_competitor(client: TestClient, fake_supabase: _FakeSup
     assert all(m["user_id"] != STUDENT.id for m in remaining_members)
 
 
+def test_coach_can_promote_competitor_to_coach(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+) -> None:
+    class_id = _create_class_and_join_student(client)
+    resp = client.patch(
+        f"/api/classes/{class_id}/members/{STUDENT.id}",
+        json={"role": "coach"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["role"] == "coach"
+    promoted = [
+        m
+        for m in fake_supabase.table("class_members").rows
+        if m["class_id"] == class_id and m["user_id"] == STUDENT.id
+    ]
+    assert promoted[0]["role"] == "coach"
+
+
 def test_coach_cannot_remove_last_coach(client: TestClient) -> None:
     class_id = _create_class_and_join_student(client)
     # Attempt to remove the only coach (COACH) via remove_member (using remove on self)

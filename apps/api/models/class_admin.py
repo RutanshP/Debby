@@ -12,6 +12,10 @@ class UpdateClassRequest(BaseModel):
     archived: bool | None = None
 
 
+class UpdateMemberRoleRequest(BaseModel):
+    role: str = Field(min_length=1)
+
+
 class UpdateAssignmentRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=180)
     # Callers may send due_at: null to explicitly clear an existing deadline.

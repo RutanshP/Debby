@@ -159,3 +159,23 @@ export function assignmentHref(detail: AssignmentRecipientDetail): string {
     ? `/drills?class=${classId}&assignment=${id}`
     : `/practice?class=${classId}&assignment=${id}`;
 }
+
+export function resultSummary(result?: Record<string, unknown> | null): string {
+  if (!result) return "No result yet";
+  if (typeof result.numeric_score === "number") return `Score ${result.numeric_score}/10`;
+  const score = result.score;
+  if (score && typeof score === "object" && "score" in score) {
+    const numeric = (score as { score?: unknown }).score;
+    if (typeof numeric === "number" || typeof numeric === "string") {
+      return `Score ${numeric}/10`;
+    }
+  }
+  if (typeof result.wpm === "number") return `${Math.round(result.wpm)} WPM`;
+  if (result.winner_side === "aff" || result.winner_side === "neg") {
+    return `Winner: ${result.winner_side}`;
+  }
+  if (typeof result.rfd === "string" && result.rfd.trim()) {
+    return result.rfd.trim().slice(0, 80);
+  }
+  return "Result saved";
+}

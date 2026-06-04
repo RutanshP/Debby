@@ -5,8 +5,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from deps.auth import User, get_current_user
-from models.class_admin import UpdateAssignmentRequest, UpdateClassRequest
-from models.classroom import Assignment, ClassRoom
+from models.class_admin import (
+    UpdateAssignmentRequest,
+    UpdateClassRequest,
+    UpdateMemberRoleRequest,
+)
+from models.classroom import Assignment, ClassMember, ClassRoom
 from services import class_admin as class_admin_service
 
 router = APIRouter(tags=["class_admin"])
@@ -53,6 +57,25 @@ async def remove_member_route(
 ) -> None:
     try:
         await class_admin_service.remove_member(user.id, class_id, user_id)
+    except Exception as exc:
+        raise _translate_error(exc) from exc
+
+
+@router.patch("/classes/{class_id}/members/{user_id}", response_model=ClassMember)
+async def update_member_role_route(
+    class_id: str,
+    user_id: str,
+    body: UpdateMemberRoleRequest,
+    user: User = Depends(get_current_user),
+) -> ClassMember:
+    try:
+        row = await class_admin_service.update_member_role(
+            user.id,
+            class_id,
+            user_id,
+            body.role,
+        )
+        return ClassMember.model_validate(row)
     except Exception as exc:
         raise _translate_error(exc) from exc
 

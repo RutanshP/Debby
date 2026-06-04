@@ -16,6 +16,7 @@ import {
   isCoachAssignmentSummary,
   isDrillPayload,
   isPracticePayload,
+  resultSummary,
   shortId,
   statusLabel,
   type AssignmentRecipientDetail,
@@ -106,26 +107,6 @@ function payloadSummary(detail: AssignmentRecipientDetail | CoachAssignmentSumma
   return assignmentTypeLabel(assignment.type);
 }
 
-function resultSummary(result?: Record<string, unknown> | null): string {
-  if (!result) return "No result yet";
-  if (typeof result.numeric_score === "number") return `Score ${result.numeric_score}/10`;
-  const score = result.score;
-  if (score && typeof score === "object" && "score" in score) {
-    const numeric = (score as { score?: unknown }).score;
-    if (typeof numeric === "number" || typeof numeric === "string") {
-      return `Score ${numeric}/10`;
-    }
-  }
-  if (typeof result.wpm === "number") return `${Math.round(result.wpm)} WPM`;
-  if (result.winner_side === "aff" || result.winner_side === "neg") {
-    return `Winner: ${result.winner_side}`;
-  }
-  if (typeof result.rfd === "string" && result.rfd.trim()) {
-    return result.rfd.trim().slice(0, 80);
-  }
-  return "Result saved";
-}
-
 export function ClassesClient() {
   const searchParams = useSearchParams();
   const requestedClassId = searchParams.get("class");
@@ -173,6 +154,19 @@ export function ClassesClient() {
     () => classDetail?.roster.filter((member) => member.role === "competitor") ?? [],
     [classDetail],
   );
+  const studentAssignments = useMemo(
+    () =>
+      assignments.filter((item) =>
+        selectedClassId ? item.class_room.id === selectedClassId : true,
+      ),
+    [assignments, selectedClassId],
+  );
+  const calendarItems = useMemo(() => {
+    if (!classDetail) return [];
+    return classDetail.role === "coach"
+      ? classDetail.assignments.filter(isCoachAssignmentSummary)
+      : studentAssignments;
+  }, [classDetail, studentAssignments]);
 
   useEffect(() => {
     if (loading) return;
@@ -279,8 +273,12 @@ export function ClassesClient() {
       requestedTab === "progress"
     ) {
       setTab(requestedTab);
+    } else if (classDetail?.role === "competitor") {
+      setTab("stream");
+    } else {
+      setTab("classwork");
     }
-  }, [requestedTab]);
+  }, [classDetail?.role, requestedTab]);
 
   async function handleCreateAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -402,6 +400,32 @@ export function ClassesClient() {
                 </div>
 
                 <div>
+                  {classDetail.role === "competitor" && (
+                    <nav
+                      aria-label="Classroom sections"
+                      className="mb-5 flex flex-wrap gap-2"
+                    >
+                      {[
+                        { key: "stream", label: "Stream" },
+                        { key: "results", label: "Feedback" },
+                        { key: "calendar", label: "Calendar" },
+                      ].map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => setTab(item.key as Tab)}
+                          className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                            tab === item.key
+                              ? "bg-teal text-white"
+                              : "border border-slate-200 bg-white text-slate-700 hover:border-teal hover:text-teal-dark"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </nav>
+                  )}
+
                   {classLoading ? (
                     <p className="text-sm text-slate-600">Loading class...</p>
                   ) : tab === "classwork" ? (
@@ -410,7 +434,7 @@ export function ClassesClient() {
                       {classDetail.role === "competitor" && (
                         <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
                           <UpcomingCard
-                            assignments={assignments}
+                            assignments={studentAssignments}
                           />
 
                           <div className="flex flex-col gap-3">
@@ -420,10 +444,10 @@ export function ClassesClient() {
                                 ({unfinishedCount} unfinished)
                               </span>
                             </h2>
-                            {assignments.length === 0 ? (
+                            {studentAssignments.length === 0 ? (
                               <p className="text-sm text-slate-600">No assignments yet.</p>
                             ) : (
-                              assignments.map((item) => (
+                              studentAssignments.map((item) => (
                                 <ClassworkCard
                                   key={item.recipient.id}
                                   item={item}
@@ -685,7 +709,7 @@ export function ClassesClient() {
                       ))}
                     </div>
                   ) : tab === "stream" ? (
-                    <StreamTab classDetail={classDetail} />
+                    <StreamTab classDetail={classDetail} assignments={studentAssignments} />
                   ) : tab === "settings" ? (
                     <ClassSettings
                       classDetail={classDetail}
@@ -696,7 +720,7 @@ export function ClassesClient() {
                       }}
                     />
                   ) : tab === "calendar" ? (
-                    <ClassCalendar assignments={assignments} />
+                    <ClassCalendar assignments={calendarItems} classId={selectedClassId ?? undefined} />
                   ) : tab === "progress" && classDetail.role === "coach" ? (
                     <ClassProgressDashboard classId={classDetail.class_room.id} />
                   ) : tab === "progress" ? (
@@ -790,7 +814,7 @@ export function ClassesClient() {
                     </div>
                   ) : (
                     <div className="grid gap-3">
-                      {classDetail.assignments.map((item) => {
+                      {studentAssignments.map((item) => {
                         if (isCoachAssignmentSummary(item)) return null;
                         return (
                           <article

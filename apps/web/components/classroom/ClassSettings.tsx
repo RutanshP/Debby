@@ -8,6 +8,7 @@ import {
   regenerateJoinCode,
   removeMember,
   renameClass,
+  updateMemberRole,
 } from "@/lib/classAdmin";
 
 const fieldClass =
@@ -50,6 +51,8 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
   // --- remove member ---
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
 
   // --- leave ---
   const [leaving, setLeaving] = useState(false);
@@ -58,6 +61,7 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
   const competitors: ClassMember[] = roster.filter(
     (m) => m.role === "competitor",
   );
+  const coaches: ClassMember[] = roster.filter((m) => m.role === "coach");
 
   async function handleRename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,6 +117,19 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
       setRemoveError(err instanceof Error ? err.message : "Failed to remove member");
     } finally {
       setRemovingId(null);
+    }
+  }
+
+  async function handlePromoteToCoach(userId: string) {
+    setUpdatingRoleId(userId);
+    setRoleError(null);
+    try {
+      await updateMemberRole(class_room.id, userId, "coach");
+      await onRefresh();
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setUpdatingRoleId(null);
     }
   }
 
@@ -192,6 +209,25 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
           {/* Roster management */}
           <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
             <h4 className="text-sm font-semibold text-slate-700">
+              Coaches ({coaches.length})
+            </h4>
+            <ul className="flex flex-col gap-2">
+              {coaches.map((member) => (
+                <li
+                  key={`coach-${member.user_id}`}
+                  className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2"
+                >
+                  <span className="text-sm font-mono text-slate-700">
+                    {member.user_id.slice(0, 8)}
+                  </span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-teal-dark">
+                    Coach
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <h4 className="text-sm font-semibold text-slate-700">
               Competitors ({competitors.length})
             </h4>
             {competitors.length === 0 ? (
@@ -206,20 +242,33 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
                     <span className="text-sm text-slate-700 font-mono">
                       {member.user_id.slice(0, 8)}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMember(member.user_id)}
-                      disabled={removingId === member.user_id}
-                      className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-60"
-                    >
-                      {removingId === member.user_id ? "Removing..." : "Remove"}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handlePromoteToCoach(member.user_id)}
+                        disabled={updatingRoleId === member.user_id}
+                        className="text-xs font-medium text-teal hover:text-teal-dark disabled:opacity-60"
+                      >
+                        {updatingRoleId === member.user_id ? "Saving..." : "Make coach"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(member.user_id)}
+                        disabled={removingId === member.user_id}
+                        className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-60"
+                      >
+                        {removingId === member.user_id ? "Removing..." : "Remove"}
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
             {removeError && (
               <p className="text-xs text-red-600" role="alert">{removeError}</p>
+            )}
+            {roleError && (
+              <p className="text-xs text-red-600" role="alert">{roleError}</p>
             )}
           </section>
 

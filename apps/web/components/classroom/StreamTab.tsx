@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
 import {
@@ -12,7 +13,14 @@ import {
   type ClassPost,
   type PostType,
 } from "@/lib/stream";
-import type { ClassDetail } from "@/lib/classroom";
+import {
+  assignmentHref,
+  formatDate,
+  resultSummary,
+  statusLabel,
+  type AssignmentRecipientDetail,
+  type ClassDetail,
+} from "@/lib/classroom";
 
 const fieldClass =
   "h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
@@ -23,6 +31,24 @@ const primaryButtonClass =
 interface AuthorNames {
   [userId: string]: string;
 }
+
+type StreamCache = {
+  posts: ClassPost[];
+  authorNames: AuthorNames;
+  savedAt: number;
+};
+
+type FeedItem =
+  | { kind: "post"; createdAt: string | null; post: ClassPost }
+  | {
+      kind: "assignment";
+      createdAt: string | null;
+      assignment: AssignmentRecipientDetail;
+    };
+
+const STREAM_CACHE_PREFIX = "debby-stream-cache-v1:";
+const STREAM_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+const streamMemoryCache = new Map<string, StreamCache>();
 
 async function lookupAuthorNames(userIds: string[]): Promise<AuthorNames> {
   if (userIds.length === 0) return {};
@@ -46,6 +72,42 @@ async function lookupAuthorNames(userIds: string[]): Promise<AuthorNames> {
 
 function AuthorLabel({ userId, names }: { userId: string; names: AuthorNames }) {
   return <span>{names[userId] ?? authorShortId(userId)}</span>;
+}
+
+function getStreamCacheKey(classId: string): string {
+  return `${STREAM_CACHE_PREFIX}${classId}`;
+}
+
+function readStreamCache(classId: string): StreamCache | null {
+  const now = Date.now();
+  const memory = streamMemoryCache.get(classId);
+  if (memory && now - memory.savedAt <= STREAM_CACHE_MAX_AGE_MS) {
+    return memory;
+  }
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(getStreamCacheKey(classId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StreamCache;
+    if (now - parsed.savedAt > STREAM_CACHE_MAX_AGE_MS) {
+      window.sessionStorage.removeItem(getStreamCacheKey(classId));
+      return null;
+    }
+    streamMemoryCache.set(classId, parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStreamCache(classId: string, cache: StreamCache) {
+  streamMemoryCache.set(classId, cache);
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(getStreamCacheKey(classId), JSON.stringify(cache));
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 /** Returns true only for http: or https: URLs to prevent javascript: XSS. */
@@ -173,9 +235,10 @@ function PostCard({
 
 interface StreamTabProps {
   classDetail: ClassDetail;
+  assignments?: AssignmentRecipientDetail[];
 }
 
-export function StreamTab({ classDetail }: StreamTabProps) {
+export function StreamTab({ classDetail, assignments = [] }: StreamTabProps) {
   const classId = classDetail.class_room.id;
   const isCoach = classDetail.role === "coach";
 
@@ -192,19 +255,61 @@ export function StreamTab({ classDetail }: StreamTabProps) {
   const [saving, setSaving] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
 
+  const feedItems: FeedItem[] = [
+    ...posts.map((post) => ({
+      kind: "post" as const,
+      createdAt: post.created_at ?? null,
+      post,
+    })),
+    ...(!isCoach
+      ? assignments.map((assignment) => ({
+          kind: "assignment" as const,
+          createdAt:
+            assignment.assignment.created_at ??
+            assignment.recipient.created_at ??
+            assignment.assignment.due_at ??
+            null,
+          assignment,
+        }))
+      : []),
+  ].sort((left, right) => {
+    const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+    const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+    return rightTime - leftTime;
+  });
+
   const refreshNames = useCallback(async (postList: ClassPost[]) => {
     const ids = [...new Set(postList.map((p) => p.author_id))];
     const names = await lookupAuthorNames(ids);
     setAuthorNames(names);
-  }, []);
+    writeStreamCache(classId, {
+      posts: postList,
+      authorNames: names,
+      savedAt: Date.now(),
+    });
+  }, [classId]);
 
   const loadPosts = useCallback(async () => {
-    setLoadingPosts(true);
+    const cached = readStreamCache(classId);
+    if (cached) {
+      setPosts(cached.posts);
+      setAuthorNames(cached.authorNames);
+      setLoadingPosts(false);
+    } else {
+      setLoadingPosts(true);
+    }
     setPostError(null);
     try {
       const fetched = await fetchPosts(classId);
       setPosts(fetched);
-      await refreshNames(fetched);
+      const ids = [...new Set(fetched.map((p) => p.author_id))];
+      const names = await lookupAuthorNames(ids);
+      setAuthorNames(names);
+      writeStreamCache(classId, {
+        posts: fetched,
+        authorNames: names,
+        savedAt: Date.now(),
+      });
     } catch (err) {
       if (err instanceof ApiError) {
         setPostError(err.message);
@@ -233,7 +338,8 @@ export function StreamTab({ classDetail }: StreamTabProps) {
         link_url: postLink.trim() || null,
       });
       setPosts((prev) => [newPost, ...prev]);
-      await refreshNames([newPost, ...posts]);
+      const nextPosts = [newPost, ...posts];
+      await refreshNames(nextPosts);
       setPostTitle("");
       setPostBody("");
       setPostLink("");
@@ -251,7 +357,15 @@ export function StreamTab({ classDetail }: StreamTabProps) {
   }
 
   function handleDeleted(postId: string) {
-    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    setPosts((prev) => {
+      const nextPosts = prev.filter((p) => p.id !== postId);
+      writeStreamCache(classId, {
+        posts: nextPosts,
+        authorNames,
+        savedAt: Date.now(),
+      });
+      return nextPosts;
+    });
   }
 
   return (
@@ -341,24 +455,62 @@ export function StreamTab({ classDetail }: StreamTabProps) {
 
       {loadingPosts ? (
         <p className="text-sm text-slate-500">Loading posts...</p>
-      ) : posts.length === 0 ? (
+      ) : feedItems.length === 0 ? (
         <p className="text-sm text-slate-500">
           {isCoach
             ? "No posts yet. Use the form above to post an announcement or material."
-            : "No posts yet."}
+            : "Nothing has been posted yet."}
         </p>
       ) : (
         <div className="flex flex-col gap-3" data-testid="posts-list">
-          {posts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              names={authorNames}
-              isCoach={isCoach}
-              classId={classId}
-              onDeleted={handleDeleted}
-            />
-          ))}
+          {feedItems.map((item) =>
+            item.kind === "post" ? (
+              <PostCard
+                key={item.post.id}
+                post={item.post}
+                names={authorNames}
+                isCoach={isCoach}
+                classId={classId}
+                onDeleted={handleDeleted}
+              />
+            ) : (
+              <article
+                key={item.assignment.recipient.id}
+                className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-800">
+                      Assignment
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      Posted {formatDate(item.assignment.assignment.created_at)}
+                    </span>
+                  </div>
+                  <span className="text-xs font-semibold text-teal-dark">
+                    {statusLabel(item.assignment.recipient.status)}
+                  </span>
+                </div>
+                <h3 className="mt-2 font-semibold text-slate-900">
+                  {item.assignment.assignment.title}
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Due {formatDate(item.assignment.assignment.due_at)}
+                </p>
+                {item.assignment.result && (
+                  <p className="mt-1 text-sm text-slate-600">
+                    {resultSummary(item.assignment.result)}
+                  </p>
+                )}
+                <Link
+                  href={assignmentHref(item.assignment)}
+                  className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-teal transition hover:text-teal-dark"
+                >
+                  Open assignment
+                </Link>
+              </article>
+            ),
+          )}
         </div>
       )}
     </div>

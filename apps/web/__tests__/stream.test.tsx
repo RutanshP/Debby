@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StreamTab } from "@/components/classroom/StreamTab";
-import type { ClassDetail } from "@/lib/classroom";
+import type { AssignmentRecipientDetail, ClassDetail } from "@/lib/classroom";
 
 jest.mock("@/lib/supabase", () => ({
   getBrowserSupabase: () => ({
@@ -57,6 +57,37 @@ const SAMPLE_POSTS = [
     created_at: "2026-01-01T09:00:00+00:00",
   },
 ];
+
+const SAMPLE_ASSIGNMENT: AssignmentRecipientDetail = {
+  recipient: {
+    id: "recipient-1",
+    assignment_id: "assignment-1",
+    user_id: "student-1",
+    status: "completed",
+    created_at: "2026-01-03T10:00:00+00:00",
+  },
+  assignment: {
+    id: "assignment-1",
+    class_id: "class-123",
+    assigned_by: "coach-user-id",
+    title: "Rebuttal Drill",
+    type: "drill",
+    payload: {
+      drill_type: "rebuttal",
+      timer_seconds: 60,
+    },
+    due_at: "2026-01-05T23:59:00+00:00",
+    created_at: "2026-01-03T09:00:00+00:00",
+  },
+  class_room: {
+    id: "class-123",
+    name: "Varsity Parli",
+    join_code: "ABC123",
+    created_by: "coach-user-id",
+    created_at: "2026-01-01T00:00:00+00:00",
+  },
+  result: { numeric_score: 8 },
+};
 
 describe("StreamTab", () => {
   beforeEach(() => {
@@ -204,5 +235,40 @@ describe("StreamTab", () => {
     });
     // Author short-id should appear (first 8 chars of "coach-user-id").
     expect(screen.getAllByText(/coach-us/).length).toBeGreaterThan(0);
+  });
+
+  it("shows assignments in the student stream feed", async () => {
+    const studentDetail = makeClassDetail("competitor");
+    studentDetail.class_room.id = "class-assignments";
+    mockFetchOnce([]);
+
+    render(
+      <StreamTab
+        classDetail={studentDetail}
+        assignments={[
+          {
+            ...SAMPLE_ASSIGNMENT,
+            assignment: {
+              ...SAMPLE_ASSIGNMENT.assignment,
+              class_id: "class-assignments",
+            },
+            class_room: {
+              ...SAMPLE_ASSIGNMENT.class_room,
+              id: "class-assignments",
+            },
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Rebuttal Drill")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/^Assignment$/i)).toBeInTheDocument();
+    expect(screen.getByText(/Score 8\/10/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open assignment/i })).toHaveAttribute(
+      "href",
+      "/drills?class=class-assignments&assignment=recipient-1",
+    );
   });
 });

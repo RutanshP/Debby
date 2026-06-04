@@ -159,6 +159,32 @@ describe("ClassSettings — coach view", () => {
       );
     });
   });
+
+  it("allows promoting a competitor to coach", async () => {
+    const user = userEvent.setup();
+    mockFetchOk({
+      class_id: CLASS_ID,
+      user_id: STUDENT_ID,
+      role: "coach",
+      joined_at: null,
+    });
+
+    render(
+      <ClassSettings
+        classDetail={coachDetail}
+        onRefresh={async () => {}}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /make coach/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining(`/api/classes/${CLASS_ID}/members/${STUDENT_ID}`),
+        expect.objectContaining({ method: "PATCH" }),
+      );
+    });
+  });
 });
 
 describe("ClassSettings — student view", () => {

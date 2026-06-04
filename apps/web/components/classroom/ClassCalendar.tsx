@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { AssignmentRecipientDetail } from "@/lib/classroom";
+import {
+  isCoachAssignmentSummary,
+  type AssignmentRecipientDetail,
+  type CoachAssignmentSummary,
+} from "@/lib/classroom";
 
 function assignmentHref(detail: AssignmentRecipientDetail): string {
   const id = detail.recipient.id;
@@ -45,10 +49,16 @@ function parseIsoDate(isoString: string | null | undefined): { year: number; mon
 }
 
 interface DayAssignments {
-  [key: number]: AssignmentRecipientDetail[];
+  [key: number]: Array<AssignmentRecipientDetail | CoachAssignmentSummary>;
 }
 
-export function ClassCalendar({ assignments }: { assignments: AssignmentRecipientDetail[] }) {
+export function ClassCalendar({
+  assignments,
+  classId,
+}: {
+  assignments: Array<AssignmentRecipientDetail | CoachAssignmentSummary>;
+  classId?: string;
+}) {
   const today = new Date();
   const [displayMonth, setDisplayMonth] = useState(today.getMonth());
   const [displayYear, setDisplayYear] = useState(today.getFullYear());
@@ -57,6 +67,7 @@ export function ClassCalendar({ assignments }: { assignments: AssignmentRecipien
     const grouped: DayAssignments = {};
     assignments.forEach((item) => {
       if (!item.assignment.due_at) return;
+      if (classId && item.assignment.class_id !== classId) return;
       const parsed = parseIsoDate(item.assignment.due_at);
       if (!parsed) return;
       if (parsed.year !== displayYear || parsed.month !== displayMonth) return;
@@ -150,16 +161,26 @@ export function ClassCalendar({ assignments }: { assignments: AssignmentRecipien
                     {day}
                   </div>
                   <div className="flex flex-col gap-1">
-                    {(assignmentsByDay[day] || []).map((item) => (
-                      <Link
-                        key={item.recipient.id}
-                        href={assignmentHref(item)}
-                        className="truncate rounded-sm bg-teal/10 px-1.5 py-0.5 text-xs font-medium text-teal-dark transition hover:bg-teal/20"
-                        title={item.assignment.title}
-                      >
-                        {item.assignment.title}
-                      </Link>
-                    ))}
+                    {(assignmentsByDay[day] || []).map((item) =>
+                      isCoachAssignmentSummary(item) ? (
+                        <div
+                          key={item.assignment.id}
+                          className="truncate rounded-sm bg-teal/10 px-1.5 py-0.5 text-xs font-medium text-teal-dark"
+                          title={item.assignment.title}
+                        >
+                          {item.assignment.title}
+                        </div>
+                      ) : (
+                        <Link
+                          key={item.recipient.id}
+                          href={assignmentHref(item)}
+                          className="truncate rounded-sm bg-teal/10 px-1.5 py-0.5 text-xs font-medium text-teal-dark transition hover:bg-teal/20"
+                          title={item.assignment.title}
+                        >
+                          {item.assignment.title}
+                        </Link>
+                      ),
+                    )}
                   </div>
                 </div>
               )}

@@ -1,4 +1,4 @@
-"""Class-admin service: rename, archive, regenerate code, remove/leave, edit/delete assignment."""
+"""Class-admin service: rename, archive, regenerate code, manage roster, edit/delete assignment."""
 
 from __future__ import annotations
 
@@ -102,6 +102,37 @@ async def remove_member(coach_id: str, class_id: str, user_id: str) -> None:
         if len(coaches) <= 1:
             raise PermissionError("Cannot remove the last coach from a class")
     await _delete(_MEMBERS, {"class_id": class_id, "user_id": user_id})
+
+
+async def update_member_role(
+    coach_id: str,
+    class_id: str,
+    user_id: str,
+    role: str,
+) -> dict[str, Any]:
+    """Promote or demote a class member while preserving at least one coach."""
+    normalized_role = role.strip().lower()
+    if normalized_role not in {"coach", "competitor"}:
+        raise ValueError("Unsupported class role")
+
+    await _require_coach(class_id, coach_id)
+    member = await _get_member(class_id, user_id)
+    if member is None:
+        raise LookupError("Member not found in this class")
+    if member.get("role") == normalized_role:
+        return member
+
+    if member.get("role") == "coach" and normalized_role != "coach":
+        all_members = await _select(_MEMBERS, filters={"class_id": class_id})
+        coaches = [m for m in all_members if m.get("role") == "coach"]
+        if len(coaches) <= 1:
+            raise PermissionError("Cannot demote the last coach from a class")
+
+    return await _update(
+        _MEMBERS,
+        {"class_id": class_id, "user_id": user_id},
+        {"role": normalized_role},
+    )
 
 
 async def leave_class(user_id: str, class_id: str) -> None:
