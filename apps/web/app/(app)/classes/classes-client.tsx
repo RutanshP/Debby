@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { StreamTab } from "@/components/classroom/StreamTab";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { ClassSettings } from "@/components/classroom/ClassSettings";
 import { getBrowserSupabase } from "@/lib/supabase";
@@ -86,14 +86,18 @@ function resultSummary(result?: Record<string, unknown> | null): string {
 
 export function ClassesClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const requestedClassId = searchParams.get("class");
   const requestedTab = searchParams.get("tab");
   const queryClient = useQueryClient();
 
   // Query hooks
   const classesQuery = useClasses();
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
-  const classDetailQuery = useClassDetail(selectedClassId || requestedClassId);
+  // The URL `?class=` param is the source of truth for the selected class so
+  // that the page and the sidebar stay in sync. Fall back to the first class
+  // when no class is specified yet.
+  const selectedClassId = requestedClassId ?? classesQuery.data?.[0]?.id ?? null;
+  const classDetailQuery = useClassDetail(selectedClassId);
 
   const [tab, setTab] = useState<Tab>("classwork");
   const [error, setError] = useState<string | null>(null);
@@ -122,15 +126,6 @@ export function ClassesClient() {
       })
       .catch(() => {/* silently ignore; delete buttons won't show */});
   }, []);
-
-  // Initialize selected class on mount or when requested class changes
-  useEffect(() => {
-    if (requestedClassId) {
-      setSelectedClassId(requestedClassId);
-    } else if (classesQuery.data && classesQuery.data.length > 0 && !selectedClassId) {
-      setSelectedClassId(classesQuery.data[0].id);
-    }
-  }, [requestedClassId, classesQuery.data, selectedClassId]);
 
   const classDetail = classDetailQuery.data;
   const classes = classesQuery.data ?? [];
@@ -255,7 +250,11 @@ export function ClassesClient() {
                 <button
                   key={cls.id}
                   type="button"
-                  onClick={() => setSelectedClassId(cls.id)}
+                  onClick={() =>
+                    router.push(
+                      `/classes?class=${cls.id}${requestedTab ? `&tab=${requestedTab}` : ""}`,
+                    )
+                  }
                   className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
                     selectedClassId === cls.id
                       ? "bg-teal text-white shadow-sm"

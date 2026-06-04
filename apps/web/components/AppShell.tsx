@@ -30,8 +30,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Use the query hook to get class detail (which includes the role)
   const classDetailQuery = useClassDetail(classId);
   const classRole = classDetailQuery.data?.role ?? null;
-  // Determine if we're in a loading/transition state where role is unknown
-  const roleUnknown = classId && classDetailQuery.isFetching;
+  // Role is "unknown" only while the detail for this class is loading for the
+  // first time (no cached data yet). Using isLoading rather than isFetching
+  // avoids collapsing the nav on every background refetch, while still
+  // preventing a stale coach/student flash when switching to a new class.
+  const roleUnknown = Boolean(classId) && classDetailQuery.isLoading;
 
   const coachNavItems = classId
     ? [
