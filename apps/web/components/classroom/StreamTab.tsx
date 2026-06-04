@@ -368,19 +368,6 @@ export function StreamTab({ classDetail, assignments = [] }: StreamTabProps) {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Class banner */}
-      <div className="flex items-end rounded-xl bg-gradient-to-br from-teal to-teal-dark p-6 text-white shadow-md">
-        <div>
-          <h2 className="text-2xl font-bold">{classDetail.class_room.name}</h2>
-          <p className="mt-1 text-sm capitalize opacity-80">
-            {classDetail.role} &middot; Code:{" "}
-            <span className="font-mono font-semibold">
-              {classDetail.class_room.join_code}
-            </span>
-          </p>
-        </div>
-      </div>
-
       {/* Coach composer */}
       {isCoach && (
         <form

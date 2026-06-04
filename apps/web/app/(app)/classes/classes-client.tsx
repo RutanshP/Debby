@@ -12,6 +12,7 @@ import { ClassBanner } from "@/components/classroom/ClassBanner";
 import { UpcomingCard } from "@/components/classroom/UpcomingCard";
 import { ClassworkCard } from "@/components/classroom/ClassworkCard";
 import { ClassProgressDashboard } from "@/components/classroom/ClassProgressDashboard";
+import { GradebookDashboard } from "@/components/classroom/GradebookDashboard";
 import { apiFetch } from "@/lib/api";
 import { useProfileNames } from "@/lib/profiles";
 import { getBrowserSupabase } from "@/lib/supabase";
@@ -23,7 +24,6 @@ import {
   isDrillPayload,
   isPracticePayload,
   resultSummary,
-  shortId,
   statusLabel,
   type AssignmentRecipientDetail,
   type AssignmentType,
@@ -631,86 +631,105 @@ export function ClassesClient() {
                     </p>
                   </div>
                 ) : classDetail.role === "coach" ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
-                      <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
-                        <tr>
-                          <th className="px-3 py-2">Assignment</th>
-                          <th className="px-3 py-2">Student</th>
-                          <th className="px-3 py-2">Status</th>
-                          <th className="px-3 py-2">Completed</th>
-                          <th className="px-3 py-2">Result</th>
-                          <th className="px-3 py-2">Review</th>
-                          <th className="px-3 py-2">Feedback</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {coachAssignments.flatMap((summary) =>
-                          summary.recipients.flatMap((recipient) => {
-                            const isOpen = expandedFeedback.has(recipient.id);
-                            return [
-                              <tr key={recipient.id}>
-                                <td className="px-3 py-2 font-medium text-slate-900">
-                                  {summary.assignment.title}
-                                </td>
-                                <td className="px-3 py-2 text-slate-700">
-                                  {nameFor(recipient.user_id)}
-                                </td>
-                                <td className="px-3 py-2 text-slate-700">
-                                  {statusLabel(recipient.status)}
-                                </td>
-                                <td className="px-3 py-2 text-slate-700">
-                                  {recipient.completed_at
-                                    ? formatDate(recipient.completed_at)
-                                    : "-"}
-                                </td>
-                                <td className="px-3 py-2 text-slate-700">
-                                  {resultSummary(summary.results[recipient.id])}
-                                </td>
-                                <td className="px-3 py-2">
-                                  {recipient.status === "completed" ? (
-                                    <Link
-                                      href={`/classes/submissions/${recipient.id}?class=${classDetail.class_room.id}`}
-                                      className="text-sm font-medium text-teal transition hover:text-teal-dark"
-                                    >
-                                      View
-                                    </Link>
-                                  ) : (
-                                    <span className="text-sm text-slate-400">—</span>
-                                  )}
-                                </td>
-                                <td className="px-3 py-2">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setExpandedFeedback((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(recipient.id)) {
-                                          next.delete(recipient.id);
-                                        } else {
-                                          next.add(recipient.id);
+                  <div className="flex flex-col gap-6">
+                    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                      <GradebookDashboard
+                        classId={classDetail.class_room.id}
+                        embedded={true}
+                      />
+                    </section>
+
+                    <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                      <div className="border-b border-slate-200 px-4 py-4">
+                        <h2 className="text-lg font-semibold text-slate-900">
+                          Submission details
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-600">
+                          Review completed work, open full submissions, and send feedback.
+                        </p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200 text-sm">
+                          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+                            <tr>
+                              <th className="px-3 py-2">Assignment</th>
+                              <th className="px-3 py-2">Student</th>
+                              <th className="px-3 py-2">Status</th>
+                              <th className="px-3 py-2">Completed</th>
+                              <th className="px-3 py-2">Result</th>
+                              <th className="px-3 py-2">Review</th>
+                              <th className="px-3 py-2">Feedback</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {coachAssignments.flatMap((summary) =>
+                              summary.recipients.flatMap((recipient) => {
+                                const isOpen = expandedFeedback.has(recipient.id);
+                                return [
+                                  <tr key={recipient.id}>
+                                    <td className="px-3 py-2 font-medium text-slate-900">
+                                      {summary.assignment.title}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-700">
+                                      {nameFor(recipient.user_id)}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-700">
+                                      {statusLabel(recipient.status)}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-700">
+                                      {recipient.completed_at
+                                        ? formatDate(recipient.completed_at)
+                                        : "-"}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-700">
+                                      {resultSummary(summary.results[recipient.id])}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {recipient.status === "completed" ? (
+                                        <Link
+                                          href={`/classes/submissions/${recipient.id}?class=${classDetail.class_room.id}`}
+                                          className="text-sm font-medium text-teal transition hover:text-teal-dark"
+                                        >
+                                          View
+                                        </Link>
+                                      ) : (
+                                        <span className="text-sm text-slate-400">-</span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setExpandedFeedback((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(recipient.id)) {
+                                              next.delete(recipient.id);
+                                            } else {
+                                              next.add(recipient.id);
+                                            }
+                                            return next;
+                                          })
                                         }
-                                        return next;
-                                      })
-                                    }
-                                    className="text-xs text-teal underline hover:text-teal-dark"
-                                  >
-                                    {isOpen ? "Close" : "Feedback"}
-                                  </button>
-                                </td>
-                              </tr>,
-                              isOpen && (
-                                <tr key={`${recipient.id}-feedback`}>
-                                  <td colSpan={7} className="px-3 pb-3">
-                                    <FeedbackPanel recipientId={recipient.id} isCoach={true} />
-                                  </td>
-                                </tr>
-                              ),
-                            ].filter(Boolean);
-                          }),
-                        )}
-                      </tbody>
-                    </table>
+                                        className="text-xs text-teal underline hover:text-teal-dark"
+                                      >
+                                        {isOpen ? "Close" : "Feedback"}
+                                      </button>
+                                    </td>
+                                  </tr>,
+                                  isOpen && (
+                                    <tr key={`${recipient.id}-feedback`}>
+                                      <td colSpan={7} className="px-3 pb-3">
+                                        <FeedbackPanel recipientId={recipient.id} isCoach={true} />
+                                      </td>
+                                    </tr>
+                                  ),
+                                ].filter(Boolean);
+                              }),
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
                   </div>
                 ) : (
                   <div className="grid gap-3">

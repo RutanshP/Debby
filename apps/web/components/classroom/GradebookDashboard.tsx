@@ -13,10 +13,12 @@ import { GradeCell } from "./GradeCell";
 
 interface GradebookDashboardProps {
   classId: string;
+  embedded?: boolean;
 }
 
 export function GradebookDashboard({
   classId,
+  embedded = false,
 }: GradebookDashboardProps) {
   const classDetailQuery = useClassDetail(classId);
   const queryClient = useQueryClient();
@@ -82,36 +84,42 @@ export function GradebookDashboard({
     }
   }
 
+  const wrapperClass = embedded ? "flex flex-col gap-4" : "mx-auto max-w-7xl p-6";
+
   if (!classDetail) {
     return (
-      <main className="mx-auto max-w-7xl p-6">
+      <section className={wrapperClass}>
         <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
           Loading class details...
         </div>
-      </main>
+      </section>
     );
   }
 
   if (!isCoach) {
     return (
-      <main className="mx-auto max-w-7xl p-6">
+      <section className={wrapperClass}>
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
           <p className="text-sm text-slate-600">
             Gradebook is available for coaches only.
           </p>
         </div>
-      </main>
+      </section>
     );
   }
 
   return (
-    <main className="mx-auto max-w-7xl p-6">
-      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className={wrapperClass}>
+      <header className={embedded ? "flex flex-col gap-1" : "mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"}>
         <div>
-          <h1 className="text-3xl font-bold text-teal-dark">Gradebook</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            {classDetail.class_room.name}
-          </p>
+          <h2 className={embedded ? "text-xl font-semibold text-slate-900" : "text-3xl font-bold text-teal-dark"}>
+            Gradebook
+          </h2>
+          {!embedded && (
+            <p className="mt-1 text-sm text-slate-600">
+              {classDetail.class_room.name}
+            </p>
+          )}
         </div>
       </header>
 
@@ -199,6 +207,6 @@ export function GradebookDashboard({
           </table>
         </div>
       )}
-    </main>
+    </section>
   );
 }

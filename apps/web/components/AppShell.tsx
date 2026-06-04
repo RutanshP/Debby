@@ -42,9 +42,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         { href: `/classes?class=${classId}&tab=people`, label: "People" },
         { href: `/classes?class=${classId}&tab=stream`, label: "Stream" },
         { href: `/classes?class=${classId}&tab=calendar`, label: "Calendar" },
-        { href: `/classes?class=${classId}&tab=results`, label: "Results" },
+        { href: `/classes?class=${classId}&tab=results`, label: "Gradebook" },
         { href: `/classes?class=${classId}&tab=progress`, label: "Progress" },
-        { href: `/classes/gradebook?class=${classId}`, label: "Gradebook" },
       ]
     : [{ href: "/classes", label: "Assignments" }];
   const studentNavItems = [

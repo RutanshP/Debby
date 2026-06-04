@@ -98,14 +98,17 @@ describe("StreamTab", () => {
     jest.resetAllMocks();
   });
 
-  it("renders the class banner with class name", async () => {
+  it("renders stream content without duplicating the class banner", async () => {
     mockFetchOnce([]); // posts fetch
     mockFetchOnce({}); // profiles lookup (may not be called)
 
     render(<StreamTab classDetail={makeClassDetail("coach")} />);
 
-    expect(screen.getByText("Varsity Parli")).toBeInTheDocument();
-    expect(screen.getByText(/ABC123/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/No posts yet/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Varsity Parli")).not.toBeInTheDocument();
+    expect(screen.queryByText(/ABC123/)).not.toBeInTheDocument();
   });
 
   it("renders posts after loading", async () => {
