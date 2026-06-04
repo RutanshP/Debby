@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import {
@@ -26,7 +27,6 @@ import { HeadlineStatsRow } from "@/components/progress/HeadlineStats";
 import { WpmTrendChart } from "@/components/progress/WpmTrendChart";
 import { FillerTrendChart } from "@/components/progress/FillerTrendChart";
 import { WinRateBreakdownCard } from "@/components/progress/WinRateBreakdown";
-import { RecentRoundsList } from "@/components/progress/RecentRoundsList";
 import { DrillScoreTrendChart } from "@/components/progress/DrillScoreTrend";
 import { WeaknessSpotlight } from "@/components/progress/WeaknessSpotlight";
 import { ActivityHeatmap } from "@/components/progress/ActivityHeatmap";
@@ -44,12 +44,101 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+const SIDE_LABEL: Record<string, string> = {
+  aff: "Affirmative",
+  neg: "Negative",
+};
+
+function formatRoundDate(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function resolvedWinner(round: ProgressRound): "aff" | "neg" | null {
+  if (round.winner_side === "aff" || round.winner_side === "neg") return round.winner_side;
+  const ballot = round.flow?.ballot;
+  if (ballot && typeof ballot === "object") {
+    const winner = ballot.winner;
+    if (winner === "aff" || winner === "neg") return winner;
+  }
+  return null;
+}
+
+function CoachRecentRoundsList({
+  rounds,
+  classId,
+}: {
+  rounds: ProgressRound[];
+  classId: string;
+}) {
+  if (rounds.length === 0) {
+    return (
+      <p className="text-sm text-slate-500">No rounds yet - the latest will show here.</p>
+    );
+  }
+
+  return (
+    <ul className="space-y-2" data-testid="recent-rounds-list">
+      {rounds.map((round) => {
+        const winner = resolvedWinner(round);
+        const userWon = winner !== null && winner === round.side;
+        const href = round.recipient_id
+          ? `/classes/submissions/${round.recipient_id}?class=${classId}`
+          : null;
+        const content = (
+          <>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium text-slate-900">{round.topic}</div>
+              <div className="mt-0.5 text-xs text-slate-500">
+                {formatRoundDate(round.created_at)} ·{" "}
+                {round.side ? SIDE_LABEL[round.side] : "-"}
+                {typeof round.average_wpm === "number" ? ` · ${round.average_wpm} wpm` : ""}
+              </div>
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                userWon
+                  ? "bg-teal/10 text-teal"
+                  : winner
+                    ? "bg-slate-100 text-slate-600"
+                    : "bg-slate-50 text-slate-400"
+              }`}
+            >
+              {userWon ? "Won" : winner ? "Lost" : "-"}
+            </span>
+          </>
+        );
+
+        return (
+          <li key={round.id}>
+            {href ? (
+              <Link
+                href={href}
+                className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm transition hover:border-teal/50 hover:shadow-sm"
+              >
+                {content}
+              </Link>
+            ) : (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+                {content}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function ProgressCharts({
   rounds,
   drills,
+  classId,
 }: {
   rounds: ProgressRound[];
   drills: ProgressDrill[];
+  classId: string;
 }) {
   if (rounds.length === 0 && drills.length === 0) {
     return (
@@ -105,7 +194,7 @@ function ProgressCharts({
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Section title="Recent rounds">
-          <RecentRoundsList rounds={recent} />
+          <CoachRecentRoundsList rounds={recent} classId={classId} />
         </Section>
         <Section title="Dropped arguments">
           <DroppedArgumentPatterns patterns={dropped} />
@@ -227,7 +316,7 @@ export function ClassProgressDashboard({ classId }: { classId: string }) {
       </div>
 
       {/* Charts */}
-      <ProgressCharts rounds={displayRounds} drills={displayDrills} />
+      <ProgressCharts rounds={displayRounds} drills={displayDrills} classId={classId} />
     </div>
   );
 }

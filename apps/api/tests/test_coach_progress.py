@@ -192,8 +192,10 @@ def test_coach_receives_students_with_rounds_and_drills(
     class_id = _setup_class_with_student(client)
 
     # Seed some rounds and drills for the student
+    round_id = str(uuid.uuid4())
+    recipient_id = str(uuid.uuid4())
     fake_supabase.table("rounds").rows.append({
-        "id": str(uuid.uuid4()),
+        "id": round_id,
         "user_id": STUDENT.id,
         "topic": "Ban phones",
         "format": "parli",
@@ -209,6 +211,13 @@ def test_coach_receives_students_with_rounds_and_drills(
         "filler_per_minute": 1.0,
         "major_pause_count": 0,
         "created_at": "2026-01-15T10:00:00+00:00",
+    })
+    fake_supabase.table("assignment_submissions").rows.append({
+        "id": str(uuid.uuid4()),
+        "recipient_id": recipient_id,
+        "user_id": STUDENT.id,
+        "round_id": round_id,
+        "created_at": "2026-01-15T10:05:00+00:00",
     })
     fake_supabase.table("drills").rows.append({
         "id": str(uuid.uuid4()),
@@ -236,6 +245,7 @@ def test_coach_receives_students_with_rounds_and_drills(
     assert len(student_data["rounds"]) == 1
     assert len(student_data["drills"]) == 1
     assert student_data["rounds"][0]["topic"] == "Ban phones"
+    assert student_data["rounds"][0]["recipient_id"] == recipient_id
     assert student_data["drills"][0]["drill_type"] == "rebuttal"
 
 

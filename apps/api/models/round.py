@@ -55,6 +55,7 @@ class Round(BaseModel):
 
 class RoundSummary(BaseModel):
     id: str
+    recipient_id: str | None = None
     topic: str
     format: Format
     side: Side | None = None

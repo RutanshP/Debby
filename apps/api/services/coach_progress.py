@@ -13,6 +13,7 @@ from services.classroom import _require_coach, _select
 from services.supabase_client import get_supabase
 
 _MEMBERS = "class_members"
+_SUBMISSIONS = "assignment_submissions"
 _ROUND_LIMIT = 100
 _DRILL_LIMIT = 100
 _DRILL_SUMMARY_COLUMNS = (
@@ -87,6 +88,13 @@ async def class_progress(coach_id: str, class_id: str) -> ClassProgressResponse:
         if row.get("role") == "competitor"
     ]
 
+    submission_rows = await _select(_SUBMISSIONS)
+    round_to_recipient = {
+        row["round_id"]: row["recipient_id"]
+        for row in submission_rows
+        if row.get("round_id") and row.get("recipient_id")
+    }
+
     async def _student_progress(user_id: str) -> StudentProgress:
         rounds_task = rounds_service.list_round_summaries(
             user_id=user_id,
@@ -94,6 +102,12 @@ async def class_progress(coach_id: str, class_id: str) -> ClassProgressResponse:
         )
         drill_rows_task = asyncio.to_thread(_fetch_drill_rows, user_id, _DRILL_LIMIT)
         rounds, drill_rows = await asyncio.gather(rounds_task, drill_rows_task)
+        rounds = [
+            round_summary.model_copy(
+                update={"recipient_id": round_to_recipient.get(round_summary.id)}
+            )
+            for round_summary in rounds
+        ]
         drills = [
             s
             for row in drill_rows

@@ -7,6 +7,7 @@ export type DrillType = "rebuttal" | "speed" | "impact" | "contention" | "filler
 
 export interface ProgressRound {
   id: string;
+  recipient_id?: string | null;
   topic: string;
   format: Format | string;
   side: Side | null;

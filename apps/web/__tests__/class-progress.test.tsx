@@ -32,12 +32,6 @@ jest.mock("@/components/progress/ActivityHeatmap", () => ({
   ActivityHeatmap: () => <div data-testid="activity-heatmap" />,
 }));
 
-jest.mock("@/components/progress/RecentRoundsList", () => ({
-  RecentRoundsList: ({ rounds }: { rounds: unknown[] }) => (
-    <div data-testid="recent-rounds-list">{rounds.length} rounds</div>
-  ),
-}));
-
 jest.mock("@/components/progress/DroppedArgumentPatterns", () => ({
   DroppedArgumentPatterns: () => <div data-testid="dropped-patterns" />,
 }));
@@ -58,6 +52,7 @@ const MOCK_PAYLOAD: ClassProgressResponse = {
       rounds: [
         {
           id: "r1",
+          recipient_id: "recipient-1",
           topic: "Ban phones",
           format: "parli",
           side: "aff",
@@ -82,6 +77,7 @@ const MOCK_PAYLOAD: ClassProgressResponse = {
       rounds: [
         {
           id: "r2",
+          recipient_id: "recipient-2",
           topic: "Free trade",
           format: "mspdp",
           side: "neg",
@@ -93,6 +89,7 @@ const MOCK_PAYLOAD: ClassProgressResponse = {
         },
         {
           id: "r3",
+          recipient_id: "recipient-3",
           topic: "Climate change",
           format: "parli",
           side: "aff",
@@ -158,8 +155,11 @@ describe("ClassProgressDashboard", () => {
     expect(screen.getByTestId(`selector-${STUDENT_A_ID}`)).toBeInTheDocument();
     expect(screen.getByTestId(`selector-${STUDENT_B_ID}`)).toBeInTheDocument();
 
-    // Aggregate view has 3 rounds total (1 + 2)
-    expect(screen.getByTestId("recent-rounds-list")).toHaveTextContent("3 rounds");
+    expect(screen.getByTestId("recent-rounds-list").querySelectorAll("li")).toHaveLength(3);
+    expect(screen.getByRole("link", { name: /Ban phones/i })).toHaveAttribute(
+      "href",
+      "/classes/submissions/recipient-1?class=class-1",
+    );
 
     // WPM trend should have 3 points (all rounds have average_wpm)
     expect(screen.getByTestId("wpm-trend-chart")).toHaveTextContent("3 points");
@@ -180,7 +180,7 @@ describe("ClassProgressDashboard", () => {
     await user.click(screen.getByTestId(`selector-${STUDENT_A_ID}`));
 
     await waitFor(() => {
-      expect(screen.getByTestId("recent-rounds-list")).toHaveTextContent("1 rounds");
+      expect(screen.getByTestId("recent-rounds-list").querySelectorAll("li")).toHaveLength(1);
     });
 
     expect(screen.getByTestId("wpm-trend-chart")).toHaveTextContent("1 points");
@@ -200,13 +200,13 @@ describe("ClassProgressDashboard", () => {
     // Select student B (2 rounds)
     await user.click(screen.getByTestId(`selector-${STUDENT_B_ID}`));
     await waitFor(() => {
-      expect(screen.getByTestId("recent-rounds-list")).toHaveTextContent("2 rounds");
+      expect(screen.getByTestId("recent-rounds-list").querySelectorAll("li")).toHaveLength(2);
     });
 
     // Back to All (3 rounds)
     await user.click(screen.getByTestId("selector-all"));
     await waitFor(() => {
-      expect(screen.getByTestId("recent-rounds-list")).toHaveTextContent("3 rounds");
+      expect(screen.getByTestId("recent-rounds-list").querySelectorAll("li")).toHaveLength(3);
     });
   });
 
