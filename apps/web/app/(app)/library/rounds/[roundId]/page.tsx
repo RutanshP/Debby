@@ -4,6 +4,7 @@ import { getServerSupabase } from "@/lib/supabase";
 import { RfdCard } from "@/components/RfdCard";
 import { WpmChart, type WpmPoint } from "@/components/WpmChart";
 import { FlowSheet, type FlowSheetData } from "@/components/FlowSheet";
+import { withClassContext } from "@/lib/classroom";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -66,9 +67,10 @@ interface Round {
 
 interface PageProps {
   params: Promise<{ roundId: string }>;
+  searchParams?: Promise<{ class?: string }>;
 }
 
-function NotFound() {
+function NotFound({ classId }: { classId?: string | null }) {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <h1 className="mb-4 text-2xl font-semibold text-slate-800">Library</h1>
@@ -181,7 +183,8 @@ function HighlightedTranscript({ text }: { text: string }) {
   );
 }
 
-export default async function RoundDetailPage({ params }: PageProps) {
+export default async function RoundDetailPage({ params, searchParams }: PageProps) {
+  const classId = (await searchParams)?.class ?? null;
   const { roundId } = await params;
 
   const cookieStore = await Promise.resolve(cookies());
@@ -189,7 +192,7 @@ export default async function RoundDetailPage({ params }: PageProps) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) return <NotFound />;
+  if (!session) return <NotFound classId={classId} />;
 
   let res: Response;
   try {
@@ -198,10 +201,10 @@ export default async function RoundDetailPage({ params }: PageProps) {
       cache: "no-store",
     });
   } catch {
-    return <NotFound />;
+    return <NotFound classId={classId} />;
   }
   if (res.status === 404 || res.status === 401 || res.status === 403) {
-    return <NotFound />;
+    return <NotFound classId={classId} />;
   }
   if (!res.ok) {
     throw new Error(`Failed to load round: ${res.status}`);
@@ -215,7 +218,7 @@ export default async function RoundDetailPage({ params }: PageProps) {
     <main className="mx-auto max-w-4xl space-y-8 px-4 py-10">
       <header>
         <Link
-          href="/library?tab=rounds"
+          href={withClassContext("/library?tab=rounds", classId)}
           className="mb-4 inline-flex text-sm font-medium text-teal transition hover:text-teal-dark"
         >
           Back to rounds

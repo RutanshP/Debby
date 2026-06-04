@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   activityHeatmap,
   drillScoreTrend,
@@ -25,6 +26,7 @@ import { WeaknessSpotlight } from "@/components/progress/WeaknessSpotlight";
 import { ActivityHeatmap } from "@/components/progress/ActivityHeatmap";
 import { DroppedArgumentPatterns } from "@/components/progress/DroppedArgumentPatterns";
 import { SpeechInsightsCard } from "@/components/progress/SpeechInsightsCard";
+import { withClassContext } from "@/lib/classroom";
 
 const sectionCard = "rounded-lg border border-slate-200 bg-white p-6 shadow-sm";
 const sectionTitle = "text-lg font-semibold text-slate-800";
@@ -47,6 +49,9 @@ export function ProgressDashboard({
   drills: ProgressDrill[];
   initialInsights: SpeechInsightsResponse | null;
 }) {
+  const searchParams = useSearchParams();
+  const classId = searchParams.get("class");
+
   if (rounds.length === 0 && drills.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-white p-12 text-center">
@@ -57,7 +62,7 @@ export function ProgressDashboard({
           Run your first round to start seeing your progress here.
         </p>
         <Link
-          href="/"
+          href={withClassContext("/practice", classId)}
           className="mt-6 inline-flex h-10 items-center justify-center rounded-md bg-teal px-4 text-sm font-medium text-white shadow-sm transition hover:bg-teal-dark"
         >
           Start a round

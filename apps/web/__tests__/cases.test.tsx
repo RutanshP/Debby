@@ -2,6 +2,11 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import CaseBuilder from "@/app/(app)/parli-gpt/case-builder";
 
+const getParamMock = jest.fn<string | null, [string]>();
+jest.mock("next/navigation", () => ({
+  useSearchParams: () => ({ get: (key: string) => getParamMock(key) }),
+}));
+
 jest.mock("@/lib/supabase", () => ({
   getBrowserSupabase: () => ({
     auth: {
@@ -22,6 +27,8 @@ function mockFetchOnce(body: unknown, ok = true, status = 200) {
 
 beforeEach(() => {
   global.fetch = jest.fn();
+  getParamMock.mockReset();
+  getParamMock.mockImplementation(() => null);
 });
 
 afterEach(() => {

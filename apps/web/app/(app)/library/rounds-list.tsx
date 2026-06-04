@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { withClassContext } from "@/lib/classroom";
 
 export interface HistoryRound {
   id: string;
@@ -54,6 +56,8 @@ function winnerLabel(round: HistoryRound): string {
 }
 
 export function HistoryList({ rounds, pageSize = 20 }: HistoryListProps) {
+  const searchParams = useSearchParams();
+  const classId = searchParams.get("class");
   const [items, setItems] = useState(rounds);
   const [offset, setOffset] = useState(rounds.length);
   const [hasMore, setHasMore] = useState(rounds.length >= pageSize);
@@ -139,7 +143,7 @@ export function HistoryList({ rounds, pageSize = 20 }: HistoryListProps) {
           return (
             <li key={r.id}>
               <Link
-                href={`/library/rounds/${r.id}`}
+                href={withClassContext(`/library/rounds/${r.id}`, classId)}
                 className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal/50 hover:shadow"
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

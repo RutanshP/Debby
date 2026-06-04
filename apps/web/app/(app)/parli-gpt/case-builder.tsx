@@ -1,9 +1,11 @@
 "use client";
 
 import type React from "react";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { apiFetch, ApiError } from "@/lib/api";
+import { withClassContext } from "@/lib/classroom";
 
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
@@ -88,6 +90,8 @@ function titleFromGeneratedCase(markdown: string): string | null {
 }
 
 export default function CaseBuilder() {
+  const searchParams = useSearchParams();
+  const classId = searchParams.get("class");
   const [format, setFormat] = useState<Format>("parli");
   const [topic, setTopic] = useState("");
   const [side, setSide] = useState<Side>("aff");
@@ -184,7 +188,11 @@ export default function CaseBuilder() {
       });
       setSavedCaseId(saved.id);
       setSaveMessage(`Saved to Library.`);
-      window.history.replaceState(null, "", `/parli-gpt?saved=${saved.id}`);
+      window.history.replaceState(
+        null,
+        "",
+        withClassContext(`/parli-gpt?saved=${saved.id}`, classId),
+      );
     } catch (err) {
       const msg =
         err instanceof ApiError

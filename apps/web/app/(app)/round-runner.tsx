@@ -17,6 +17,7 @@ import { WpmChart, type WpmPoint } from "../../components/WpmChart";
 import {
   isPracticePayload,
   statusLabel,
+  withClassContext,
   type AssignmentRecipientDetail,
   type StartAssignmentResponse,
 } from "../../lib/classroom";
@@ -289,6 +290,7 @@ function DebbyAudioButton({
 export function RoundRunner() {
   const speech = useDebbySpeech();
   const searchParams = useSearchParams();
+  const classId = searchParams?.get("class") ?? null;
   const assignmentRecipientId = searchParams?.get("assignment") ?? null;
   const [step, setStep] = useState<Step>(1);
 
@@ -1491,11 +1493,11 @@ export function RoundRunner() {
                   winnerSide={judgment.winner_side ?? null}
                   winnerLabel={winnerLabel(judgment.winner_side, userSide)}
                 />
-                {roundId && (
-                  <a
-                    href={`/library/rounds/${roundId}`}
-                    className="text-sm text-teal underline"
-                  >
+                  {roundId && (
+                    <a
+                      href={withClassContext(`/library/rounds/${roundId}`, classId)}
+                      className="text-sm text-teal underline"
+                    >
                     round saved in Library
                   </a>
                 )}

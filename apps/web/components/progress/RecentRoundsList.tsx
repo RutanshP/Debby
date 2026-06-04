@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { ProgressRound } from "@/lib/progress";
+import { withClassContext } from "@/lib/classroom";
 
 const SIDE_LABEL: Record<string, string> = {
   aff: "Affirmative",
@@ -23,6 +27,9 @@ function resolvedWinner(r: ProgressRound): "aff" | "neg" | null {
 }
 
 export function RecentRoundsList({ rounds }: { rounds: ProgressRound[] }) {
+  const searchParams = useSearchParams();
+  const classId = searchParams.get("class");
+
   if (rounds.length === 0) {
     return (
       <p className="text-sm text-slate-500">No rounds yet — your latest will show here.</p>
@@ -36,7 +43,7 @@ export function RecentRoundsList({ rounds }: { rounds: ProgressRound[] }) {
         return (
           <li key={r.id}>
             <Link
-              href={`/library/rounds/${r.id}`}
+              href={withClassContext(`/library/rounds/${r.id}`, classId)}
               className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm transition hover:border-teal/50 hover:shadow-sm"
             >
               <div className="min-w-0 flex-1">

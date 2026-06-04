@@ -1,7 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { Weakness } from "@/lib/progress";
+import { withClassContext } from "@/lib/classroom";
 
 export function WeaknessSpotlight({ weakness }: { weakness: Weakness | null }) {
+  const searchParams = useSearchParams();
+  const classId = searchParams.get("class");
+
   if (!weakness) {
     return (
       <p className="text-sm text-slate-500">
@@ -21,7 +28,7 @@ export function WeaknessSpotlight({ weakness }: { weakness: Weakness | null }) {
         </p>
       </div>
       <Link
-        href={weakness.href}
+        href={withClassContext(weakness.href, classId)}
         className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-teal px-4 text-sm font-medium text-teal transition hover:bg-teal/5"
       >
         Start drill

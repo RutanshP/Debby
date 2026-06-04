@@ -6,6 +6,10 @@ import { HistoryList, type HistoryRound } from "@/app/(app)/library/rounds-list"
 
 jest.mock("next/headers", () => ({ cookies: jest.fn() }));
 jest.mock("@/lib/supabase", () => ({ getServerSupabase: jest.fn() }));
+const getParamMock = jest.fn<string | null, [string]>();
+jest.mock("next/navigation", () => ({
+  useSearchParams: () => ({ get: (key: string) => getParamMock(key) }),
+}));
 
 const ROUNDS: HistoryRound[] = [
   {
@@ -36,6 +40,11 @@ const ROUNDS: HistoryRound[] = [
 ];
 
 describe("HistoryList", () => {
+  beforeEach(() => {
+    getParamMock.mockReset();
+    getParamMock.mockImplementation(() => null);
+  });
+
   it("renders one row per round", () => {
     render(<HistoryList rounds={ROUNDS} />);
     expect(screen.getByText("UBI")).toBeInTheDocument();
@@ -62,6 +71,15 @@ describe("HistoryList", () => {
   it("shows the empty state when the list is empty", () => {
     render(<HistoryList rounds={[]} />);
     expect(screen.getByText(/no rounds yet/i)).toBeInTheDocument();
+  });
+
+  it("preserves class context in round links", () => {
+    getParamMock.mockImplementation((key: string) => (key === "class" ? "class-1" : null));
+    render(<HistoryList rounds={ROUNDS} />);
+    expect(screen.getByRole("link", { name: /UBI/i })).toHaveAttribute(
+      "href",
+      "/library/rounds/r1?class=class-1",
+    );
   });
 });
 
@@ -186,9 +204,18 @@ describe("HistoryDetailPage (server component)", () => {
     ) as unknown as typeof fetch;
 
     const { default: Page } = await loadPage();
-    render(await Page({ params: Promise.resolve({ roundId: "r1" }) }));
+    render(
+      await Page({
+        params: Promise.resolve({ roundId: "r1" }),
+        searchParams: Promise.resolve({ class: "class-1" }),
+      }),
+    );
 
     expect(screen.getByRole("heading", { name: "UBI" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back to rounds/i })).toHaveAttribute(
+      "href",
+      "/library?tab=rounds&class=class-1",
+    );
     expect(screen.getByText("Winner: You (Affirmative)")).toBeInTheDocument();
     expect(screen.getByText("Aff wins.")).toBeInTheDocument();
     expect(screen.getByText(/speech statistics/i)).toBeInTheDocument();

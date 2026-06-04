@@ -3,6 +3,7 @@ import Link from "next/link";
 import type React from "react";
 import ReactMarkdown from "react-markdown";
 import { getServerSupabase } from "@/lib/supabase";
+import { withClassContext } from "@/lib/classroom";
 import { SavedCaseActions } from "./case-actions";
 
 const API_BASE_URL =
@@ -20,6 +21,7 @@ interface SavedCase {
 
 interface PageProps {
   params: Promise<{ caseId: string }>;
+  searchParams?: Promise<{ class?: string }>;
 }
 
 const markdownComponents = {
@@ -55,11 +57,11 @@ const markdownComponents = {
   ),
 };
 
-function NotFound() {
+function NotFound({ classId }: { classId?: string | null }) {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <Link
-        href="/library?tab=cases"
+        href={withClassContext("/library?tab=cases", classId)}
         className="mb-4 inline-flex text-sm font-medium text-teal transition hover:text-teal-dark"
       >
         Back to cases
@@ -71,14 +73,15 @@ function NotFound() {
   );
 }
 
-export default async function SavedCasePage({ params }: PageProps) {
+export default async function SavedCasePage({ params, searchParams }: PageProps) {
+  const classId = (await searchParams)?.class ?? null;
   const { caseId } = await params;
   const cookieStore = await Promise.resolve(cookies());
   const supabase = getServerSupabase(cookieStore);
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) return <NotFound />;
+  if (!session) return <NotFound classId={classId} />;
 
   let res: Response;
   try {
@@ -87,10 +90,10 @@ export default async function SavedCasePage({ params }: PageProps) {
       cache: "no-store",
     });
   } catch {
-    return <NotFound />;
+    return <NotFound classId={classId} />;
   }
   if (res.status === 404 || res.status === 401 || res.status === 403) {
-    return <NotFound />;
+    return <NotFound classId={classId} />;
   }
   if (!res.ok) {
     throw new Error(`Failed to load saved case: ${res.status}`);
@@ -102,7 +105,7 @@ export default async function SavedCasePage({ params }: PageProps) {
     <main className="case-builder-page mx-auto max-w-5xl space-y-6 px-4 py-10">
       <header className="case-builder-controls">
         <Link
-          href="/library?tab=cases"
+          href={withClassContext("/library?tab=cases", classId)}
           className="mb-4 inline-flex text-sm font-medium text-teal transition hover:text-teal-dark"
         >
           Back to cases

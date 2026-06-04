@@ -1,8 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { withClassContext } from "@/lib/classroom";
 
 function filenamePart(value: string): string {
   return (
@@ -25,6 +26,8 @@ export function SavedCaseActions({
   side: "aff" | "neg";
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const classId = searchParams.get("class");
   const [deleting, setDeleting] = useState(false);
 
   function printPdf() {
@@ -43,7 +46,7 @@ export function SavedCaseActions({
     setDeleting(true);
     try {
       await apiFetch<void>(`/api/saved-cases/${id}`, { method: "DELETE" });
-      router.push("/library?tab=cases");
+      router.push(withClassContext("/library?tab=cases", classId));
       router.refresh();
     } finally {
       setDeleting(false);

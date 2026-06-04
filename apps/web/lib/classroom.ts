@@ -160,6 +160,16 @@ export function assignmentHref(detail: AssignmentRecipientDetail): string {
     : `/practice?class=${classId}&assignment=${id}`;
 }
 
+export function withClassContext(href: string, classId?: string | null): string {
+  if (!classId) return href;
+  const [path, hash = ""] = href.split("#", 2);
+  const separator = path.includes("?") ? "&" : "?";
+  const next = path.includes("class=")
+    ? path
+    : `${path}${separator}class=${encodeURIComponent(classId)}`;
+  return hash ? `${next}#${hash}` : next;
+}
+
 export function resultSummary(result?: Record<string, unknown> | null): string {
   if (!result) return "No result yet";
   if (typeof result.numeric_score === "number") return `Score ${result.numeric_score}/10`;

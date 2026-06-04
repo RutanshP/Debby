@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { withClassContext } from "@/lib/classroom";
 
 export interface SavedCaseSummary {
   id: string;
@@ -30,6 +32,8 @@ function sideLabel(side: "aff" | "neg"): string {
 }
 
 export function SavedCasesList({ cases, pageSize = 20 }: SavedCasesListProps) {
+  const searchParams = useSearchParams();
+  const classId = searchParams.get("class");
   const [items, setItems] = useState(cases);
   const [offset, setOffset] = useState(cases.length);
   const [hasMore, setHasMore] = useState(cases.length >= pageSize);
@@ -61,7 +65,7 @@ export function SavedCasesList({ cases, pageSize = 20 }: SavedCasesListProps) {
           Save a generated case from Case Builder and it will appear here.
         </p>
         <Link
-          href="/parli-gpt"
+          href={withClassContext("/parli-gpt", classId)}
           className="mt-5 inline-flex rounded-md bg-teal px-4 py-2 text-sm font-medium text-white hover:bg-teal-dark"
         >
           Open Case Builder
@@ -76,7 +80,7 @@ export function SavedCasesList({ cases, pageSize = 20 }: SavedCasesListProps) {
         {items.map((item) => (
           <li key={item.id}>
             <Link
-              href={`/library/cases/${item.id}`}
+              href={withClassContext(`/library/cases/${item.id}`, classId)}
               className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal/50 hover:shadow"
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
