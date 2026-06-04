@@ -174,6 +174,13 @@ def test_upsert_twice_updates_name(client: TestClient) -> None:
     assert get.json()["display_name"] == "Updated Name"
 
 
+def _share_class(fake_supabase: _FakeSupabase, *user_ids: str, class_id: str = "class-1") -> None:
+    """Seed class_members rows so the given users share a class."""
+    members = fake_supabase.table("class_members")
+    for uid in user_ids:
+        members.rows.append({"class_id": class_id, "user_id": uid, "role": "competitor"})
+
+
 def test_lookup_returns_map(client: TestClient, fake_supabase: _FakeSupabase) -> None:
     global CURRENT_USER
     # Seed profiles for two users directly.
@@ -183,6 +190,8 @@ def test_lookup_returns_map(client: TestClient, fake_supabase: _FakeSupabase) ->
     fake_supabase.table("profiles").rows.append(
         {"user_id": USER_B.id, "display_name": "Bob"}
     )
+    # A and B share a class, so A may resolve B's name.
+    _share_class(fake_supabase, USER_A.id, USER_B.id)
 
     resp = client.post(
         "/api/profiles/lookup",
@@ -192,6 +201,26 @@ def test_lookup_returns_map(client: TestClient, fake_supabase: _FakeSupabase) ->
     body = resp.json()
     assert body[USER_A.id] == "Alice"
     assert body[USER_B.id] == "Bob"
+
+
+def test_lookup_omits_non_classmates(client: TestClient, fake_supabase: _FakeSupabase) -> None:
+    # B has a profile but shares no class with A → must not be resolvable.
+    fake_supabase.table("profiles").rows.append(
+        {"user_id": USER_A.id, "display_name": "Alice"}
+    )
+    fake_supabase.table("profiles").rows.append(
+        {"user_id": USER_B.id, "display_name": "Bob"}
+    )
+    _share_class(fake_supabase, USER_A.id)  # A is in a class, B is not
+
+    resp = client.post(
+        "/api/profiles/lookup",
+        json={"user_ids": [USER_A.id, USER_B.id]},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body.get(USER_A.id) == "Alice"
+    assert USER_B.id not in body
 
 
 def test_lookup_omits_unknown_ids(client: TestClient, fake_supabase: _FakeSupabase) -> None:

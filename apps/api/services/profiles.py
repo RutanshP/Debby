@@ -8,6 +8,7 @@ from typing import Any
 from services.supabase_client import get_supabase
 
 _PROFILES = "profiles"
+_MEMBERS = "class_members"
 
 
 def _client():
@@ -69,11 +70,35 @@ async def upsert_profile(user_id: str, display_name: str) -> dict[str, Any]:
     return row
 
 
-async def lookup_names(user_ids: list[str]) -> dict[str, str]:
+async def _classmate_ids(user_id: str) -> set[str]:
+    """Return the set of user_ids that share at least one class with `user_id`.
+
+    Always includes `user_id` itself so callers can resolve their own name.
+    """
+    memberships = await _select(_MEMBERS, filters={"user_id": user_id})
+    class_ids = {m["class_id"] for m in memberships if m.get("class_id")}
+    allowed: set[str] = {user_id}
+    for class_id in class_ids:
+        for member in await _select(_MEMBERS, filters={"class_id": class_id}):
+            member_id = member.get("user_id")
+            if member_id:
+                allowed.add(member_id)
+    return allowed
+
+
+async def lookup_names(user_ids: list[str], requester_id: str) -> dict[str, str]:
     """Return a mapping of user_id -> display_name for known profiles.
 
-    Unknown user_ids are omitted from the result.
+    Only user_ids that share a class with `requester_id` (or the requester
+    themselves) are resolved; other ids and unknown ids are omitted. This
+    mirrors the "profiles: classmates read" RLS policy at the application
+    layer, since the service-role client bypasses RLS.
     """
+    if not user_ids:
+        return {}
+
+    allowed = await _classmate_ids(requester_id)
+    user_ids = [uid for uid in user_ids if uid in allowed]
     if not user_ids:
         return {}
 

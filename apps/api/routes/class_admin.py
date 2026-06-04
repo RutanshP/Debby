@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+
+from routes._errors import translate_error as _translate_error
 
 from deps.auth import User, get_current_user
 from models.class_admin import (
@@ -15,15 +17,6 @@ from services import class_admin as class_admin_service
 
 router = APIRouter(tags=["class_admin"])
 
-
-def _translate_error(exc: Exception) -> HTTPException:
-    if isinstance(exc, PermissionError):
-        return HTTPException(status_code=403, detail=str(exc))
-    if isinstance(exc, LookupError):
-        return HTTPException(status_code=404, detail=str(exc))
-    if isinstance(exc, ValueError):
-        return HTTPException(status_code=400, detail=str(exc))
-    return HTTPException(status_code=500, detail=str(exc))
 
 
 @router.patch("/classes/{class_id}", response_model=ClassRoom)
