@@ -1,0 +1,193 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { useClassDetail, useQueryClient, classroomKeys } from "@/lib/queries/classroom";
+import { upsertFeedback } from "@/lib/feedback";
+import { isCoachAssignmentSummary, shortId } from "@/lib/classroom";
+import { GradeCell } from "./GradeCell";
+
+interface GradebookDashboardProps {
+  classId: string;
+}
+
+export function GradebookDashboard({ classId }: GradebookDashboardProps) {
+  const classDetailQuery = useClassDetail(classId);
+  const queryClient = useQueryClient();
+  const [editingCell, setEditingCell] = useState<string | null>(null);
+  const [savingCell, setSavingCell] = useState<string | null>(null);
+
+  const classDetail = classDetailQuery.data;
+  const isCoach = classDetail?.role === "coach";
+
+  // Extract coach assignments (recipients + assignments)
+  const coachAssignments = useMemo(() => {
+    if (!classDetail || !isCoach) return [];
+    return classDetail.assignments.filter(isCoachAssignmentSummary);
+  }, [classDetail, isCoach]);
+
+  // Extract all competitors (roster members with role 'competitor')
+  const competitors = useMemo(() => {
+    if (!classDetail) return [];
+    return classDetail.roster.filter((member) => member.role === "competitor");
+  }, [classDetail]);
+
+  // Build matrix: competitors (rows) x assignments (columns)
+  // Matrix[competitorIndex][assignmentIndex] = recipientId
+  const recipientMatrix = useMemo(() => {
+    const matrix: (string | null)[][] = competitors.map(() =>
+      coachAssignments.map(() => null),
+    );
+
+    coachAssignments.forEach((summary, assignmentIdx) => {
+      summary.recipients.forEach((recipient) => {
+        const competitorIdx = competitors.findIndex(
+          (c) => c.user_id === recipient.user_id,
+        );
+        if (competitorIdx >= 0) {
+          matrix[competitorIdx][assignmentIdx] = recipient.id;
+        }
+      });
+    });
+
+    return matrix;
+  }, [competitors, coachAssignments]);
+
+  async function handleGradeSave(recipientId: string, grade: number | null, feedback: string | null) {
+    setSavingCell(recipientId);
+    try {
+      await upsertFeedback(recipientId, {
+        grade,
+        feedback: feedback?.trim() || null,
+      });
+      // Invalidate relevant cache keys
+      await queryClient.invalidateQueries({
+        queryKey: classroomKeys.detail(classId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: classroomKeys.feedback(recipientId),
+      });
+      setEditingCell(null);
+    } finally {
+      setSavingCell(recipientId);
+    }
+  }
+
+  if (!classDetail) {
+    return (
+      <main className="mx-auto max-w-7xl p-6">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
+          Loading class details...
+        </div>
+      </main>
+    );
+  }
+
+  if (!isCoach) {
+    return (
+      <main className="mx-auto max-w-7xl p-6">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+          <p className="text-sm text-slate-600">Gradebook is available for coaches only.</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto max-w-7xl p-6">
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-teal-dark">Gradebook</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            {classDetail.class_room.name}
+          </p>
+        </div>
+      </header>
+
+      {competitors.length === 0 ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+          <p className="text-sm text-slate-600">
+            No competitors in this class yet.
+          </p>
+        </div>
+      ) : coachAssignments.length === 0 ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+          <p className="text-sm text-slate-600">
+            No assignments created yet. Create an assignment to start grading.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          <table className="w-full divide-y divide-slate-200 text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-900">
+                  Student
+                </th>
+                {coachAssignments.map((summary, idx) => (
+                  <th
+                    key={`header-${idx}`}
+                    className="border-l border-slate-200 px-3 py-3 text-center font-semibold text-slate-900"
+                  >
+                    <div className="max-w-[120px] truncate text-xs font-medium">
+                      {summary.assignment.title}
+                    </div>
+                  </th>
+                ))}
+                <th className="border-l border-slate-200 bg-teal/5 px-3 py-3 text-center font-semibold text-slate-900">
+                  Avg
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {competitors.map((competitor, competitorIdx) => (
+                  <tr key={`row-${competitor.user_id}`}>
+                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-4 py-3 font-medium text-slate-900">
+                      {shortId(competitor.user_id)}
+                    </td>
+                    {recipientMatrix[competitorIdx].map((recipientId, assignmentIdx) => (
+                      <td
+                        key={`cell-${competitorIdx}-${assignmentIdx}`}
+                        className="border-l border-slate-200 px-3 py-2 text-center"
+                      >
+                        <GradeCell
+                          recipientId={recipientId}
+                          isEditing={editingCell === recipientId}
+                          isSaving={savingCell === recipientId}
+                          onEdit={() => setEditingCell(recipientId)}
+                          onCancel={() => setEditingCell(null)}
+                          onSave={handleGradeSave}
+                        />
+                      </td>
+                    ))}
+                    <td className="border-l border-slate-200 bg-teal/5 px-3 py-2 text-center">
+                      <span className="text-slate-400">—</span>
+                    </td>
+                  </tr>
+              )}
+              {/* Footer row with assignment averages */}
+              <tr className="bg-slate-50 font-semibold">
+                <td className="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-slate-900">
+                  Avg
+                </td>
+                {coachAssignments.map((_, idx) => (
+                  <td
+                    key={`footer-${idx}`}
+                    className="border-l border-slate-200 px-3 py-3 text-center"
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <div className="text-teal-dark">—</div>
+                      <div className="text-xs text-slate-600">—%</div>
+                    </div>
+                  </td>
+                ))}
+                <td className="border-l border-slate-200 bg-teal/5 px-3 py-3 text-center text-teal-dark">
+                  —
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </main>
+  );
+}
