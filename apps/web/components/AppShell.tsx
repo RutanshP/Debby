@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
-import type { ClassDetail, ClassRole } from "@/lib/classroom";
+import { useState } from "react";
+import type { ClassRole } from "@/lib/classroom";
 import { getBrowserSupabase } from "@/lib/supabase";
+import { useClassDetail } from "@/lib/queries/classroom";
 
 const navItems = [
   { href: "/practice", label: "Practice" },
@@ -24,9 +24,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
-  const [classRole, setClassRole] = useState<ClassRole | null>(null);
   const classId = searchParams.get("class");
   const inClassWorkspace = pathname.startsWith("/classes") || Boolean(classId);
+
+  // Use the query hook to get class detail (which includes the role)
+  const classDetailQuery = useClassDetail(classId);
+  const classRole = classDetailQuery.data?.role ?? null;
+
   const coachNavItems = classId
     ? [
         { href: `/classes?class=${classId}&tab=classwork`, label: "Assignments" },
@@ -53,26 +57,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ? studentNavItems
         : [{ href: `/classes?class=${classId}`, label: "Assignments" }]
     : navItems;
-
-  useEffect(() => {
-    let ignore = false;
-    async function loadClassRole() {
-      if (!classId) {
-        setClassRole(null);
-        return;
-      }
-      try {
-        const detail = await apiFetch<ClassDetail>(`/api/classes/${classId}`);
-        if (!ignore) setClassRole(detail.role);
-      } catch {
-        if (!ignore) setClassRole(null);
-      }
-    }
-    void loadClassRole();
-    return () => {
-      ignore = true;
-    };
-  }, [classId]);
 
   async function handleSignOut() {
     setSigningOut(true);

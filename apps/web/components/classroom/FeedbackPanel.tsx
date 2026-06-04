@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
-  getFeedback,
   upsertFeedback,
   type SubmissionFeedback,
 } from "@/lib/feedback";
+import { useFeedback, useQueryClient, classroomKeys } from "@/lib/queries/classroom";
 
 const fieldClass =
   "rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
@@ -26,9 +26,11 @@ export function FeedbackPanel({
   isCoach,
   initialFeedback,
 }: FeedbackPanelProps) {
-  const [feedback, setFeedback] = useState<SubmissionFeedback | null>(
-    initialFeedback ?? null,
-  );
+  const queryClient = useQueryClient();
+  // Only enable the query if we don't have initial feedback
+  const feedbackQuery = useFeedback(recipientId, initialFeedback === undefined);
+  const feedback = initialFeedback ?? feedbackQuery.data ?? null;
+
   const [grade, setGrade] = useState<string>(
     initialFeedback?.grade != null ? String(initialFeedback.grade) : "",
   );
@@ -40,28 +42,17 @@ export function FeedbackPanel({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Update local state when feedback data changes
   useEffect(() => {
-    // If we already have initial data skip the fetch.
-    if (initialFeedback !== undefined) return;
-    let cancelled = false;
-    getFeedback(recipientId)
-      .then((fb) => {
-        if (cancelled) return;
-        if (fb) {
-          setFeedback(fb);
-          setGrade(fb.grade != null ? String(fb.grade) : "");
-          setText(fb.feedback ?? "");
-          setReturned(fb.returned);
-        }
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load feedback");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [recipientId, initialFeedback]);
+    if (feedback) {
+      setGrade(feedback.grade != null ? String(feedback.grade) : "");
+      setText(feedback.feedback ?? "");
+      setReturned(feedback.returned);
+    }
+  }, [feedback]);
+
+  // Show error from query if it exists and no initial feedback was provided
+  const displayError = error || (feedbackQuery.isError ? "Failed to load feedback" : null);
 
   async function handleSave() {
     setSaving(true);
@@ -69,13 +60,16 @@ export function FeedbackPanel({
     setSuccess(false);
     try {
       const parsedGrade = grade.trim() !== "" ? Number(grade) : null;
-      const updated = await upsertFeedback(recipientId, {
+      await upsertFeedback(recipientId, {
         grade: parsedGrade,
         feedback: text.trim() !== "" ? text : null,
         returned,
       });
-      setFeedback(updated);
       setSuccess(true);
+      // Invalidate the feedback query to refresh data
+      await queryClient.invalidateQueries({
+        queryKey: classroomKeys.feedback(recipientId),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save feedback");
     } finally {
@@ -113,9 +107,9 @@ export function FeedbackPanel({
         Coach Feedback
       </p>
 
-      {error && (
+      {displayError && (
         <p className="mb-2 text-xs text-red-600" role="alert">
-          {error}
+          {displayError}
         </p>
       )}
       {success && (
