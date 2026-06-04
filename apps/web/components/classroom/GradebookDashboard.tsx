@@ -163,7 +163,7 @@ export function GradebookDashboard({ classId }: GradebookDashboardProps) {
                       <span className="text-slate-400">—</span>
                     </td>
                   </tr>
-              )}
+              ))}
               {/* Footer row with assignment averages */}
               <tr className="bg-slate-50 font-semibold">
                 <td className="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-slate-900">
