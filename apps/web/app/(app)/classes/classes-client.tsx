@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { ClassSettings } from "@/components/classroom/ClassSettings";
 import { getBrowserSupabase } from "@/lib/supabase";
+import { useProfileNames } from "@/lib/profiles";
 import { CommentThread } from "@/components/classroom/CommentThread";
 import { FeedbackPanel } from "@/components/classroom/FeedbackPanel";
 import {
@@ -149,6 +150,13 @@ export function ClassesClient() {
     () => classDetail?.roster.filter((member) => member.role === "competitor") ?? [],
     [classDetail],
   );
+
+  // Resolve roster user ids to display names for the People tab.
+  const rosterIds = useMemo(
+    () => classDetail?.roster.map((member) => member.user_id) ?? [],
+    [classDetail],
+  );
+  const { nameFor } = useProfileNames(rosterIds);
 
   useEffect(() => {
     if (
@@ -563,8 +571,7 @@ export function ClassesClient() {
                         className="rounded-lg border border-slate-200 bg-slate-50 p-4"
                       >
                         <div className="font-medium text-slate-900">
-                          {member.role === "coach" ? "Coach" : "Competitor"}{" "}
-                          {shortId(member.user_id)}
+                          {nameFor(member.user_id)}
                         </div>
                         <div className="mt-1 text-sm capitalize text-slate-600">
                           {member.role}
