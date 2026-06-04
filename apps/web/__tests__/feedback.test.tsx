@@ -1,5 +1,7 @@
+import type { ReactElement } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FeedbackPanel } from "@/components/classroom/FeedbackPanel";
 
 jest.mock("@/lib/supabase", () => ({
@@ -9,6 +11,20 @@ jest.mock("@/lib/supabase", () => ({
 }));
 
 const RECIPIENT_ID = "recipient-123";
+
+function renderWithQueryClient(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+  );
+}
 
 function mockFetchOnce(payload: unknown, status = 200) {
   (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -30,7 +46,7 @@ describe("FeedbackPanel — coach mode", () => {
   });
 
   it("renders grade input, feedback textarea, and return toggle", () => {
-    render(
+    renderWithQueryClient(
       <FeedbackPanel
         recipientId={RECIPIENT_ID}
         isCoach={true}
@@ -56,7 +72,7 @@ describe("FeedbackPanel — coach mode", () => {
     };
     mockFetchOnce(savedFeedback);
 
-    render(
+    renderWithQueryClient(
       <FeedbackPanel
         recipientId={RECIPIENT_ID}
         isCoach={true}
@@ -100,7 +116,7 @@ describe("FeedbackPanel — coach mode", () => {
       json: async () => ({ detail: "Coach role required" }),
     });
 
-    render(
+    renderWithQueryClient(
       <FeedbackPanel
         recipientId={RECIPIENT_ID}
         isCoach={true}
@@ -124,7 +140,7 @@ describe("FeedbackPanel — student read-only mode", () => {
   });
 
   it("renders nothing when feedback is not returned", () => {
-    const { container } = render(
+    const { container } = renderWithQueryClient(
       <FeedbackPanel
         recipientId={RECIPIENT_ID}
         isCoach={false}
@@ -142,7 +158,7 @@ describe("FeedbackPanel — student read-only mode", () => {
   });
 
   it("shows grade and feedback when returned is true", () => {
-    render(
+    renderWithQueryClient(
       <FeedbackPanel
         recipientId={RECIPIENT_ID}
         isCoach={false}
@@ -162,7 +178,7 @@ describe("FeedbackPanel — student read-only mode", () => {
   });
 
   it("does not show save button in student mode", () => {
-    render(
+    renderWithQueryClient(
       <FeedbackPanel
         recipientId={RECIPIENT_ID}
         isCoach={false}

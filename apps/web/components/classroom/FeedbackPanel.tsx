@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
-  getFeedback,
   upsertFeedback,
   type SubmissionFeedback,
 } from "@/lib/feedback";
+import { classroomKeys, useFeedback, useQueryClient } from "@/lib/queries/classroom";
 
 const fieldClass =
   "rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
@@ -15,9 +15,7 @@ const primaryButtonClass =
 
 interface FeedbackPanelProps {
   recipientId: string;
-  /** When true, the panel renders a coach editor. When false, read-only student view. */
   isCoach: boolean;
-  /** Optional initial feedback (avoids an extra fetch when parent already has the data). */
   initialFeedback?: SubmissionFeedback | null;
 }
 
@@ -26,9 +24,13 @@ export function FeedbackPanel({
   isCoach,
   initialFeedback,
 }: FeedbackPanelProps) {
-  const [feedback, setFeedback] = useState<SubmissionFeedback | null>(
+  const queryClient = useQueryClient();
+  const feedbackQuery = useFeedback(recipientId, initialFeedback === undefined);
+  const [savedFeedback, setSavedFeedback] = useState<SubmissionFeedback | null>(
     initialFeedback ?? null,
   );
+  const feedback = savedFeedback ?? feedbackQuery.data ?? null;
+
   const [grade, setGrade] = useState<string>(
     initialFeedback?.grade != null ? String(initialFeedback.grade) : "",
   );
@@ -42,28 +44,16 @@ export function FeedbackPanel({
   const [editing, setEditing] = useState<boolean>(() => !(initialFeedback && isCoach));
 
   useEffect(() => {
-    // If we already have initial data skip the fetch.
-    if (initialFeedback !== undefined) return;
-    let cancelled = false;
-    getFeedback(recipientId)
-      .then((fb) => {
-        if (cancelled) return;
-        if (fb) {
-          setFeedback(fb);
-          setGrade(fb.grade != null ? String(fb.grade) : "");
-          setText(fb.feedback ?? "");
-          setReturned(fb.returned);
-          if (isCoach) setEditing(false);
-        }
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load feedback");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [recipientId, initialFeedback]);
+    if (!feedback) return;
+    setGrade(feedback.grade != null ? String(feedback.grade) : "");
+    setText(feedback.feedback ?? "");
+    setReturned(feedback.returned);
+    if (isCoach && initialFeedback === undefined) {
+      setEditing(false);
+    }
+  }, [feedback, initialFeedback, isCoach]);
+
+  const displayError = error || (feedbackQuery.isError ? "Failed to load feedback" : null);
 
   async function handleSave() {
     setSaving(true);
@@ -71,12 +61,15 @@ export function FeedbackPanel({
     setSuccess(false);
     try {
       const parsedGrade = grade.trim() !== "" ? Number(grade) : null;
-      const updated = await upsertFeedback(recipientId, {
+      const nextFeedback = await upsertFeedback(recipientId, {
         grade: parsedGrade,
         feedback: text.trim() !== "" ? text : null,
         returned,
       });
-      setFeedback(updated);
+      setSavedFeedback(nextFeedback);
+      await queryClient.invalidateQueries({
+        queryKey: classroomKeys.feedback(recipientId),
+      });
       setSuccess(true);
       setEditing(false);
     } catch (err) {
@@ -87,7 +80,6 @@ export function FeedbackPanel({
   }
 
   if (!isCoach) {
-    // Student read-only view — only shown if returned.
     if (!feedback?.returned) return null;
     return (
       <div
@@ -109,7 +101,7 @@ export function FeedbackPanel({
     );
   }
 
-  if (isCoach && feedback && !editing) {
+  if (feedback && !editing) {
     return (
       <div className="mt-3 rounded-md border border-teal/30 bg-teal/5 p-3">
         <div className="flex items-start justify-between gap-3">
@@ -149,16 +141,15 @@ export function FeedbackPanel({
     );
   }
 
-  // Coach editor view.
   return (
     <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
         Coach Feedback
       </p>
 
-      {error && (
+      {displayError && (
         <p className="mb-2 text-xs text-red-600" role="alert">
-          {error}
+          {displayError}
         </p>
       )}
       {success && (

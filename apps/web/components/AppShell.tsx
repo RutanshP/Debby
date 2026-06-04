@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
-import type { ClassDetail, ClassRole } from "@/lib/classroom";
+import { useState } from "react";
+import type { ClassRole } from "@/lib/classroom";
 import { getBrowserSupabase } from "@/lib/supabase";
+import { useClassDetail } from "@/lib/queries/classroom";
 
 const navItems = [
   { href: "/practice", label: "Practice" },
@@ -24,9 +24,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
-  const [classRole, setClassRole] = useState<ClassRole | null>(null);
   const classId = searchParams.get("class");
   const inClassWorkspace = pathname.startsWith("/classes") || Boolean(classId);
+
+  // Use the query hook to get class detail (which includes the role)
+  const classDetailQuery = useClassDetail(classId);
+  const classRole = classDetailQuery.data?.role ?? null;
+  // Role is "unknown" only while the detail for this class is loading for the
+  // first time (no cached data yet). Using isLoading rather than isFetching
+  // avoids collapsing the nav on every background refetch, while still
+  // preventing a stale coach/student flash when switching to a new class.
+  const roleUnknown = Boolean(classId) && classDetailQuery.isLoading;
+
   const coachNavItems = classId
     ? [
         { href: `/classes?class=${classId}&tab=classwork`, label: "Assignments" },
@@ -35,6 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         { href: `/classes?class=${classId}&tab=calendar`, label: "Calendar" },
         { href: `/classes?class=${classId}&tab=results`, label: "Results" },
         { href: `/classes?class=${classId}&tab=progress`, label: "Progress" },
+        { href: `/classes/gradebook?class=${classId}`, label: "Gradebook" },
       ]
     : [{ href: "/classes", label: "Assignments" }];
   const studentNavItems = [
@@ -50,39 +60,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     })),
   ];
   const scopedNavItems = inClassWorkspace
-    ? classRole === "coach"
-      ? coachNavItems
-      : classRole === "competitor" || !classId
-        ? studentNavItems
-        : [{ href: `/classes?class=${classId}`, label: "Assignments" }]
+    ? roleUnknown
+      ? [{ href: `/classes?class=${classId}`, label: "Assignments" }]
+      : classRole === "coach"
+        ? coachNavItems
+        : classRole === "competitor" || !classId
+          ? studentNavItems
+          : [{ href: `/classes?class=${classId}`, label: "Assignments" }]
     : navItems;
-
-  useEffect(() => {
-    let ignore = false;
-    async function loadClassRole() {
-      if (!classId) {
-        setClassRole(null);
-        return;
-      }
-      try {
-        const detail = await apiFetch<ClassDetail>(`/api/classes/${classId}`);
-        if (!ignore) setClassRole(detail.role);
-      } catch {
-        if (!ignore) setClassRole(null);
-      }
-    }
-    void loadClassRole();
-    return () => {
-      ignore = true;
-    };
-  }, [classId]);
 
   async function handleSignOut() {
     setSigningOut(true);
-    const supabase = getBrowserSupabase();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    try {
+      const supabase = getBrowserSupabase();
+      await supabase.auth.signOut();
+      router.push("/login");
+      router.refresh();
+    } catch {
+      // Ensure signingOut resets even if an error occurs
+      setSigningOut(false);
+    }
   }
 
   return (
@@ -123,7 +120,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
         </div>
-        <div className="mt-auto space-y-1">
+        <div className="mt-auto space-y-2 border-t border-slate-200 pt-4">
+          <Link
+            href="/profile"
+            className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
+              isActive(pathname, "/profile")
+                ? "bg-teal text-white"
+                : "text-slate-700 hover:bg-teal/10 hover:text-teal-dark"
+            }`}
+          >
+            Profile
+          </Link>
           <Link
             href="/workspace"
             className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
@@ -138,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={handleSignOut}
             disabled={signingOut}
-            className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {signingOut ? "Signing out..." : "Sign out"}
           </button>
@@ -152,7 +159,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={handleSignOut}
             disabled={signingOut}
-            className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {signingOut ? "Signing out..." : "Sign out"}
           </button>
