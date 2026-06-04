@@ -122,6 +122,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="mt-auto space-y-1">
           <Link
+            href="/profile"
+            className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
+              isActive(pathname, "/profile")
+                ? "bg-teal text-white"
+                : "text-slate-700 hover:bg-teal/10 hover:text-teal-dark"
+            }`}
+          >
+            Profile
+          </Link>
+          <Link
             href="/workspace"
             className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
               isActive(pathname, "/workspace")
