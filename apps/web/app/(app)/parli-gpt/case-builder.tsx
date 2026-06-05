@@ -2,10 +2,14 @@
 
 import type React from "react";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { apiFetch, ApiError } from "@/lib/api";
-import { withClassContext } from "@/lib/classroom";
+import {
+  isCasePayload,
+  statusLabel,
+  type AssignmentRecipientDetail,
+} from "@/lib/classroom";
 
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
@@ -27,6 +31,13 @@ interface RandomCaseResponse {
 
 interface SavedCaseResponse {
   id: string;
+}
+
+interface AnalyzeCaseResponse {
+  score: number;
+  category: string;
+  summary: string;
+  feedback: string;
 }
 
 const markdownComponents = {
@@ -94,22 +105,29 @@ function titleFromGeneratedCase(markdown: string): string | null {
 export default function CaseBuilder() {
   const searchParams = useSearchParams();
   const classId = searchParams.get("class");
+  const assignmentRecipientId = searchParams.get("assignment");
   const [mode, setMode] = useState<StudioMode>("create");
   const [format, setFormat] = useState<Format>("parli");
   const [topic, setTopic] = useState("");
   const [side, setSide] = useState<Side>("aff");
   const [inputCaseText, setInputCaseText] = useState("");
   const [caseText, setCaseText] = useState("");
+  const [analysis, setAnalysis] = useState<AnalyzeCaseResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
+  const [assignmentDetail, setAssignmentDetail] =
+    useState<AssignmentRecipientDetail | null>(null);
+  const [assignmentCompleted, setAssignmentCompleted] = useState(false);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
   const topicWordCount = countWords(topic);
   const topicTooLong = topicWordCount > TOPIC_WORD_LIMIT;
   const analysisWordCount = countWords(inputCaseText);
   const analysisTooLong = analysisWordCount > ANALYSIS_WORD_LIMIT;
+  const assignmentLocked = Boolean(assignmentDetail && isCasePayload(assignmentDetail.assignment));
 
   function resetOutput() {
     setError(null);
@@ -117,12 +135,70 @@ export default function CaseBuilder() {
     setSaveError(null);
     setSavedCaseId(null);
     setCaseText("");
+    setAnalysis(null);
   }
 
   function handleModeChange(nextMode: StudioMode) {
+    if (assignmentLocked) return;
     setMode(nextMode);
     resetOutput();
   }
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadAssignment() {
+      if (!assignmentRecipientId) {
+        setAssignmentDetail(null);
+        setAssignmentCompleted(false);
+        return;
+      }
+      setAssignmentLoading(true);
+      setError(null);
+      try {
+        const detail = await apiFetch<AssignmentRecipientDetail>(
+          `/api/assignments/${assignmentRecipientId}`,
+        );
+        if (ignore) return;
+        if (!isCasePayload(detail.assignment)) {
+          throw new Error("This assignment is not a case analysis.");
+        }
+        setAssignmentDetail(detail);
+        setAssignmentCompleted(detail.recipient.status === "completed");
+        setMode("analyze");
+        setFormat(detail.assignment.payload.format);
+        setTopic(detail.assignment.payload.topic);
+        setSide(detail.assignment.payload.side);
+        setInputCaseText(detail.assignment.payload.content);
+        resetOutput();
+        if (
+          detail.result &&
+          typeof detail.result.score === "number" &&
+          typeof detail.result.category === "string" &&
+          typeof detail.result.summary === "string" &&
+          typeof detail.result.feedback === "string"
+        ) {
+          const previous = {
+            score: detail.result.score,
+            category: detail.result.category,
+            summary: detail.result.summary,
+            feedback: detail.result.feedback,
+          } as AnalyzeCaseResponse;
+          setAnalysis(previous);
+          setCaseText(previous.feedback);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : "Failed to load assignment");
+        }
+      } finally {
+        if (!ignore) setAssignmentLoading(false);
+      }
+    }
+    void loadAssignment();
+    return () => {
+      ignore = true;
+    };
+  }, [assignmentRecipientId]);
 
   async function handleGenerate() {
     const trimmedTopic = topic.trim();
@@ -190,7 +266,12 @@ export default function CaseBuilder() {
     setLoading(true);
     resetOutput();
     try {
-      const data = await apiFetch<CaseResponse>("/api/cases/analyze", {
+      if (assignmentRecipientId) {
+        await apiFetch(`/api/assignments/${assignmentRecipientId}/start`, {
+          method: "POST",
+        });
+      }
+      const data = await apiFetch<AnalyzeCaseResponse>("/api/cases/analyze", {
         method: "POST",
         body: JSON.stringify({
           format,
@@ -199,7 +280,32 @@ export default function CaseBuilder() {
           content: trimmedInput,
         }),
       });
-      setCaseText(data.case);
+      setAnalysis(data);
+      setCaseText(data.feedback);
+      if (assignmentRecipientId) {
+        const review = await apiFetch<{ id: string }>("/api/case-reviews", {
+          method: "POST",
+          body: JSON.stringify({
+            format,
+            topic: topic.trim(),
+            side,
+            source_text: trimmedInput,
+            score: data.score,
+            category: data.category,
+            summary: data.summary,
+            feedback: data.feedback,
+          }),
+        });
+        const detail = await apiFetch<AssignmentRecipientDetail>(
+          `/api/assignments/${assignmentRecipientId}/complete`,
+          {
+            method: "POST",
+            body: JSON.stringify({ case_review_id: review.id }),
+          },
+        );
+        setAssignmentDetail(detail);
+        setAssignmentCompleted(detail.recipient.status === "completed");
+      }
     } catch (err) {
       const msg =
         err instanceof ApiError
@@ -214,6 +320,7 @@ export default function CaseBuilder() {
   }
 
   async function handleSaveCase() {
+    if (mode === "analyze") return;
     if (!caseText.trim() || savedCaseId) return;
     setSaving(true);
     setSaveMessage(null);
@@ -222,9 +329,7 @@ export default function CaseBuilder() {
       const title =
         titleFromGeneratedCase(caseText) ??
         truncateTitle(
-          mode === "analyze"
-            ? `Case Analysis: ${topic.trim() || "Untitled topic"}`
-            : `${side === "aff" ? "Affirmative" : "Negative"} Case: ${topic.trim() || "Untitled topic"}`,
+          `${side === "aff" ? "Affirmative" : "Negative"} Case: ${topic.trim() || "Untitled topic"}`,
         );
       const saved = await apiFetch<SavedCaseResponse>("/api/saved-cases", {
         method: "POST",
@@ -238,11 +343,6 @@ export default function CaseBuilder() {
       });
       setSavedCaseId(saved.id);
       setSaveMessage(`Saved to Library.`);
-      window.history.replaceState(
-        null,
-        "",
-        withClassContext(`/parli-gpt?saved=${saved.id}`, classId),
-      );
     } catch (err) {
       const msg =
         err instanceof ApiError
@@ -274,12 +374,33 @@ export default function CaseBuilder() {
         Case Studio
       </h1>
       <div className="space-y-6">
+        {assignmentDetail && (
+          <section className="rounded-lg border border-teal/30 bg-teal/5 p-4 text-sm shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="font-semibold text-teal-dark">
+                  {assignmentDetail.assignment.title}
+                </div>
+                <div className="text-slate-600">
+                  {assignmentDetail.class_room.name} / case analysis /{" "}
+                  {assignmentDetail.assignment.payload.format}
+                </div>
+              </div>
+              <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-teal-dark">
+                {assignmentCompleted
+                  ? "Completed"
+                  : statusLabel(assignmentDetail.recipient.status)}
+              </span>
+            </div>
+          </section>
+        )}
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => handleModeChange("create")}
               aria-pressed={mode === "create"}
+              disabled={assignmentLocked}
               className={`rounded-md px-4 py-2 text-sm font-medium transition ${
                 mode === "create"
                   ? "bg-teal text-white"
@@ -292,6 +413,7 @@ export default function CaseBuilder() {
               type="button"
               onClick={() => handleModeChange("analyze")}
               aria-pressed={mode === "analyze"}
+              disabled={assignmentLocked}
               className={`rounded-md px-4 py-2 text-sm font-medium transition ${
                 mode === "analyze"
                   ? "bg-teal text-white"
@@ -321,6 +443,7 @@ export default function CaseBuilder() {
                 id="format"
                 value={format}
                 onChange={(e) => setFormat(e.target.value as Format)}
+                disabled={assignmentLocked}
                 className="h-10 w-full rounded border border-slate-300 px-2"
               >
                 <option value="parli">Parli</option>
@@ -341,6 +464,7 @@ export default function CaseBuilder() {
                 type="text"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
+                disabled={assignmentLocked}
                 placeholder={
                   mode === "create"
                     ? "Enter a topic..."
@@ -375,6 +499,7 @@ export default function CaseBuilder() {
                 id="side"
                 value={side}
                 onChange={(e) => setSide(e.target.value as Side)}
+                disabled={assignmentLocked}
                 className="h-10 w-full rounded border border-slate-300 px-2"
               >
                 <option value="aff">Affirmative</option>
@@ -388,6 +513,8 @@ export default function CaseBuilder() {
               onClick={mode === "create" ? handleGenerate : handleAnalyze}
               disabled={
                 loading ||
+                assignmentLoading ||
+                assignmentCompleted ||
                 topicTooLong ||
                 (mode === "create" ? !topic.trim() : !inputCaseText.trim() || analysisTooLong)
               }
@@ -398,7 +525,7 @@ export default function CaseBuilder() {
             <button
               type="button"
               onClick={handleRandom}
-              disabled={loading || mode !== "create"}
+              disabled={loading || mode !== "create" || assignmentLocked}
               className="h-10 rounded border border-teal-600 px-5 font-medium text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50 lg:mt-6"
             >
               Random topic
@@ -416,6 +543,7 @@ export default function CaseBuilder() {
                 id="case-text"
                 value={inputCaseText}
                 onChange={(e) => setInputCaseText(e.target.value)}
+                disabled={assignmentLocked}
                 placeholder="Paste the case you want Debby to analyze..."
                 rows={12}
                 className="w-full rounded border border-slate-300 px-3 py-2"
@@ -460,14 +588,16 @@ export default function CaseBuilder() {
           {!loading && !error && caseText && (
             <div>
               <div className="case-builder-actions mb-5 flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={handleSaveCase}
-                  disabled={saving || Boolean(savedCaseId)}
-                  className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:border-teal-600 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {savedCaseId ? "Saved to Library" : saving ? "Saving..." : "Save to Library"}
-                </button>
+                {mode === "create" ? (
+                  <button
+                    type="button"
+                    onClick={handleSaveCase}
+                    disabled={saving || Boolean(savedCaseId)}
+                    className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:border-teal-600 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savedCaseId ? "Saved to Library" : saving ? "Saving..." : "Save to Library"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handlePrintPdf}
@@ -485,6 +615,21 @@ export default function CaseBuilder() {
                 <p className="case-builder-actions mb-4 text-right text-sm font-medium text-red-600">
                   {saveError}
                 </p>
+              ) : null}
+              {mode === "analyze" && analysis ? (
+                <div className="mb-6 rounded-lg border border-teal/20 bg-teal/5 p-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-teal-dark">
+                      {analysis.category}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-700">
+                      {analysis.score}/10
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-7 text-slate-700">
+                    {analysis.summary}
+                  </p>
+                </div>
               ) : null}
               <article className="case-print-document">
                 <ReactMarkdown components={markdownComponents}>

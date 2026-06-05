@@ -107,7 +107,12 @@ describe("CaseBuilder", () => {
 
   it("analyzes pasted case text with the correct body", async () => {
     const user = userEvent.setup();
-    mockFetchOnce({ case: "# Case Analysis\nNeeds tighter links." });
+    mockFetchOnce({
+      score: 6,
+      category: "Usable",
+      summary: "Solid start, but it needs cleaner internals.",
+      feedback: "## What Works\n- Clear hook",
+    });
     render(<CaseBuilder />);
 
     await user.click(screen.getByRole("button", { name: /analyze a case/i }));
@@ -126,27 +131,26 @@ describe("CaseBuilder", () => {
       side: "neg",
       content: "Contention one: growth good.",
     });
+    expect(await screen.findByText("Usable")).toBeInTheDocument();
+    expect(screen.getByText("6/10")).toBeInTheDocument();
   });
 
-  it("preserves class context when saving from Case Studio", async () => {
+  it("does not offer library saving for case feedback", async () => {
     const user = userEvent.setup();
-    const replaceState = jest.spyOn(window.history, "replaceState");
-    getParamMock.mockImplementation((key) => (key === "class" ? "class-123" : null));
-    mockFetchOnce({ case: "# My Case\nContent." });
-    mockFetchOnce({ id: "case-1" });
+    mockFetchOnce({
+      score: 8,
+      category: "Strong",
+      summary: "Strong case overall.",
+      feedback: "## What Works\n- Good structure",
+    });
     render(<CaseBuilder />);
 
-    await user.type(screen.getByLabelText(/topic/i), "Topic");
-    await user.click(screen.getByRole("button", { name: /generate/i }));
-    await screen.findByRole("heading", { level: 1, name: /my case/i });
-    await user.click(screen.getByRole("button", { name: /save to library/i }));
+    await user.click(screen.getByRole("button", { name: /analyze a case/i }));
+    await user.type(screen.getByLabelText(/paste case text/i), "Some case text.");
+    await user.click(screen.getByRole("button", { name: /^analyze$/i }));
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    expect(replaceState).toHaveBeenCalledWith(
-      null,
-      "",
-      "/parli-gpt?saved=case-1&class=class-123",
-    );
+    await screen.findByText("Strong");
+    expect(screen.queryByRole("button", { name: /save to library/i })).not.toBeInTheDocument();
   });
 
   it("Random button calls /api/cases/random and populates topic", async () => {

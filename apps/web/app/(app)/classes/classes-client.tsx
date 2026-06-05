@@ -22,6 +22,7 @@ import {
   formatDate,
   isCoachAssignmentSummary,
   isDrillPayload,
+  isCasePayload,
   isPracticePayload,
   resultSummary,
   statusLabel,
@@ -68,6 +69,9 @@ function payloadSummary(detail: AssignmentRecipientDetail | CoachAssignmentSumma
   if (isPracticePayload(assignment)) {
     return `${assignment.payload.format} / ${assignment.payload.side} / ${assignment.payload.speech_duration_seconds}s`;
   }
+  if (isCasePayload(assignment)) {
+    return `${assignment.payload.format} / ${assignment.payload.side} / case analysis`;
+  }
   return assignmentTypeLabel(assignment.type);
 }
 
@@ -100,6 +104,10 @@ export function ClassesClient() {
   const [practiceSide, setPracticeSide] = useState<PracticeSide>("aff");
   const [practiceTopic, setPracticeTopic] = useState("");
   const [practiceTimer, setPracticeTimer] = useState(120);
+  const [caseFormat, setCaseFormat] = useState<PracticeFormat>("parli");
+  const [caseSide, setCaseSide] = useState<PracticeSide>("aff");
+  const [caseTopic, setCaseTopic] = useState("");
+  const [caseContent, setCaseContent] = useState("");
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
   const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
@@ -198,6 +206,13 @@ export function ClassesClient() {
       const payload =
         type === "drill"
           ? { drill_type: drillType, timer_seconds: drillType === "filler" ? 60 : drillTimer }
+          : type === "case"
+            ? {
+                format: caseFormat,
+                topic: caseTopic.trim(),
+                side: caseSide,
+                content: caseContent.trim(),
+              }
           : {
               format: practiceFormat,
               topic: practiceTopic.trim(),
@@ -217,6 +232,8 @@ export function ClassesClient() {
       });
       setTitle("");
       setPracticeTopic("");
+      setCaseTopic("");
+      setCaseContent("");
       setSelectedRecipients([]);
       await invalidateCurrentClass();
     } catch (err) {
@@ -385,6 +402,7 @@ export function ClassesClient() {
                             >
                               <option value="drill">Drill</option>
                               <option value="practice_round">Practice round</option>
+                              <option value="case">Case analysis</option>
                             </select>
                           </label>
 
@@ -424,7 +442,7 @@ export function ClassesClient() {
                                 </select>
                               </label>
                             </>
-                          ) : (
+                          ) : type === "practice_round" ? (
                             <>
                               <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 lg:col-span-2">
                                 Topic
@@ -477,6 +495,55 @@ export function ClassesClient() {
                                     </option>
                                   ))}
                                 </select>
+                              </label>
+                            </>
+                          ) : (
+                            <>
+                              <label className={labelClass}>
+                                Format
+                                <select
+                                  value={caseFormat}
+                                  onChange={(event) =>
+                                    setCaseFormat(event.target.value as PracticeFormat)
+                                  }
+                                  className={fieldClass}
+                                >
+                                  <option value="parli">Parli</option>
+                                  <option value="mspdp">MSPDP</option>
+                                </select>
+                              </label>
+                              <label className={labelClass}>
+                                Side
+                                <select
+                                  value={caseSide}
+                                  onChange={(event) =>
+                                    setCaseSide(event.target.value as PracticeSide)
+                                  }
+                                  className={fieldClass}
+                                >
+                                  <option value="aff">Affirmative</option>
+                                  <option value="neg">Negative</option>
+                                </select>
+                              </label>
+                              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 lg:col-span-2">
+                                Topic / Resolution
+                                <input
+                                  value={caseTopic}
+                                  onChange={(event) => setCaseTopic(event.target.value)}
+                                  className={fieldClass}
+                                  placeholder="Optional but helpful"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 lg:col-span-2">
+                                Case text
+                                <textarea
+                                  value={caseContent}
+                                  onChange={(event) => setCaseContent(event.target.value)}
+                                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
+                                  rows={10}
+                                  placeholder="Paste the case competitors should analyze..."
+                                  required={type === "case"}
+                                />
                               </label>
                             </>
                           )}

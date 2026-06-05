@@ -3,18 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
+  assignmentHref,
   isCoachAssignmentSummary,
   type AssignmentRecipientDetail,
   type CoachAssignmentSummary,
 } from "@/lib/classroom";
-
-function assignmentHref(detail: AssignmentRecipientDetail): string {
-  const id = detail.recipient.id;
-  const classId = detail.class_room.id;
-  return detail.assignment.type === "drill"
-    ? `/drills?class=${classId}&assignment=${id}`
-    : `/practice?class=${classId}&assignment=${id}`;
-}
 
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();

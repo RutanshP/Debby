@@ -134,8 +134,8 @@ async def test_make_mspdp_case_returns_markdown(side: str):
     assert "MSPDP case" in out
 
 
-async def test_analyze_case_returns_markdown_feedback():
-    mock = AsyncMock(return_value=_mock_completion("# Case Analysis\nfeedback"))
+async def test_analyze_case_returns_structured_feedback():
+    mock = AsyncMock(return_value=_mock_completion('{"score": 7, "summary": "Solid but incomplete.", "feedback": "## What Works\\n- Clear tagline"}'))
     with patch.object(cases_service.client.chat.completions, "create", mock):
         out = await cases_service.analyze_case(
             "parli",
@@ -143,10 +143,11 @@ async def test_analyze_case_returns_markdown_feedback():
             "Contention one says growth is good.",
             topic="Resolved: Test topic",
         )
-    assert "Case Analysis" in out
+    assert out["score"] == 7
+    assert out["category"] == "Strong"
     kwargs = mock.await_args.kwargs
     assert "analyze student debate cases" in kwargs["messages"][0]["content"].lower()
-    assert "Quick Verdict" in kwargs["messages"][1]["content"]
+    assert "Revision Priorities" in kwargs["messages"][1]["content"]
     assert "Resolved: Test topic" in kwargs["messages"][1]["content"]
     assert "Contention one says growth is good." in kwargs["messages"][1]["content"]
 
@@ -245,7 +246,7 @@ def test_random_case_returns_topic_and_side(authed):
 
 
 def test_analyze_case_happy_path(authed):
-    mock = AsyncMock(return_value=_mock_completion("# Analysis"))
+    mock = AsyncMock(return_value=_mock_completion('{"score": 5, "summary": "Usable with work.", "feedback": "## What Works\\n- Point"}'))
     with patch.object(cases_service.client.chat.completions, "create", mock):
         r = client.post(
             "/api/cases/analyze",
@@ -257,7 +258,12 @@ def test_analyze_case_happy_path(authed):
             },
         )
     assert r.status_code == 200
-    assert r.json() == {"case": "# Analysis"}
+    assert r.json() == {
+        "score": 5,
+        "category": "Usable",
+        "summary": "Usable with work.",
+        "feedback": "## What Works\n- Point",
+    }
 
 
 def test_analyze_case_rejects_blank_content(authed):

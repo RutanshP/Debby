@@ -14,6 +14,7 @@ from models.classroom import (
     AssignmentRecipientDetail,
     AssignmentSubmission,
     AssignmentType,
+    CaseAssignmentPayload,
     ClassDetail,
     ClassListItem,
     ClassMember,
@@ -111,6 +112,8 @@ def _is_jwt_future_error(exc: Exception) -> bool:
 def _validate_payload(kind: AssignmentType, payload: dict[str, Any]) -> dict[str, Any]:
     if kind == "drill":
         return DrillAssignmentPayload.model_validate(payload).model_dump()
+    if kind == "case":
+        return CaseAssignmentPayload.model_validate(payload).model_dump()
     return PracticeRoundAssignmentPayload.model_validate(payload).model_dump()
 
 
@@ -290,6 +293,13 @@ async def _result_for_submission(submission: dict[str, Any] | None) -> dict[str,
             limit=1,
         )
         return rows[0] if rows else None
+    if submission.get("case_review_id"):
+        rows = await _select(
+            "case_reviews",
+            filters={"id": submission["case_review_id"], "user_id": submission["user_id"]},
+            limit=1,
+        )
+        return rows[0] if rows else None
     if submission.get("round_id"):
         rows = await _select(
             "rounds",
@@ -458,18 +468,30 @@ async def complete_assignment(
     recipient_id: str,
     drill_id: str | None = None,
     round_id: str | None = None,
+    case_review_id: str | None = None,
 ) -> AssignmentRecipientDetail:
     detail = await get_assignment_detail(user_id=user_id, recipient_id=recipient_id)
     assignment = detail.assignment
     if assignment.type == "drill":
-        if not drill_id or round_id:
+        if not drill_id or round_id or case_review_id:
             raise ValueError("Drill assignment requires drill_id")
         rows = await _select("drills", filters={"id": drill_id, "user_id": user_id}, limit=1)
         if not rows:
             raise PermissionError("Drill not found for current user")
         submission_payload = {"drill_id": drill_id}
+    elif assignment.type == "case":
+        if not case_review_id or drill_id or round_id:
+            raise ValueError("Case assignment requires case_review_id")
+        rows = await _select(
+            "case_reviews",
+            filters={"id": case_review_id, "user_id": user_id},
+            limit=1,
+        )
+        if not rows:
+            raise PermissionError("Case review not found for current user")
+        submission_payload = {"case_review_id": case_review_id}
     else:
-        if not round_id or drill_id:
+        if not round_id or drill_id or case_review_id:
             raise ValueError("Practice assignment requires round_id")
         rows = await _select("rounds", filters={"id": round_id, "user_id": user_id}, limit=1)
         if not rows:

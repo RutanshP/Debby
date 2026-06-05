@@ -51,6 +51,13 @@ class CaseResponse(BaseModel):
     case: str
 
 
+class AnalyzeCaseResponse(BaseModel):
+    score: int
+    category: str
+    summary: str
+    feedback: str
+
+
 class AnalyzeCaseRequest(BaseModel):
     format: Format
     side: Side
@@ -140,11 +147,11 @@ async def create_random_case(
     return RandomCaseResponse(case=case_text, topic=topic, side=side, format=req.format)
 
 
-@router.post("/analyze", response_model=CaseResponse)
+@router.post("/analyze", response_model=AnalyzeCaseResponse)
 async def analyze_case_route(
     req: AnalyzeCaseRequest,
     _user: User = Depends(get_current_user),
-) -> CaseResponse:
+) -> AnalyzeCaseResponse:
     try:
         analysis = await analyze_case(
             req.format,
@@ -154,4 +161,4 @@ async def analyze_case_route(
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Case analysis failed: {exc}")
-    return CaseResponse(case=analysis)
+    return AnalyzeCaseResponse(**analysis)

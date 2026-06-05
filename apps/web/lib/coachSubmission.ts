@@ -75,7 +75,7 @@ export interface CoachAssignment {
   id: string;
   class_id: string;
   title: string;
-  type: "drill" | "practice_round";
+  type: "drill" | "practice_round" | "case";
   payload: Record<string, unknown>;
   due_at?: string | null;
   created_at?: string | null;
@@ -87,13 +87,29 @@ export interface CoachSubmission {
   user_id: string;
   drill_id?: string | null;
   round_id?: string | null;
+  case_review_id?: string | null;
   created_at?: string | null;
 }
 
+export interface CoachCaseReview {
+  id: string;
+  user_id: string;
+  format: string;
+  topic: string;
+  side: Side;
+  source_text: string;
+  score: number;
+  category: string;
+  summary: string;
+  feedback: string;
+  created_at: string | null;
+}
+
 export interface CoachSubmissionResponse {
-  type: "round" | "drill";
+  type: "round" | "drill" | "case";
   round: CoachRound | null;
   drill: CoachDrill | null;
+  case_review: CoachCaseReview | null;
   recipient: CoachRecipient;
   assignment: CoachAssignment;
   submission: CoachSubmission | null;

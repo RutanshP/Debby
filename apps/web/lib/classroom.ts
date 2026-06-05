@@ -1,5 +1,5 @@
 export type ClassRole = "coach" | "competitor";
-export type AssignmentType = "drill" | "practice_round";
+export type AssignmentType = "drill" | "practice_round" | "case";
 export type AssignmentStatus = "assigned" | "in_progress" | "completed";
 export type DrillAssignmentType =
   | "rebuttal"
@@ -38,9 +38,17 @@ export interface PracticeRoundAssignmentPayload {
   speech_duration_seconds: number;
 }
 
+export interface CaseAssignmentPayload {
+  format: PracticeFormat;
+  topic: string;
+  side: PracticeSide;
+  content: string;
+}
+
 export type AssignmentPayload =
   | DrillAssignmentPayload
-  | PracticeRoundAssignmentPayload;
+  | PracticeRoundAssignmentPayload
+  | CaseAssignmentPayload;
 
 export interface Assignment {
   id: string;
@@ -69,6 +77,7 @@ export interface AssignmentSubmission {
   user_id: string;
   drill_id?: string | null;
   round_id?: string | null;
+  case_review_id?: string | null;
   created_at?: string | null;
 }
 
@@ -121,6 +130,12 @@ export function isPracticePayload(
   return assignment.type === "practice_round";
 }
 
+export function isCasePayload(
+  assignment: Assignment,
+): assignment is Assignment & { payload: CaseAssignmentPayload } {
+  return assignment.type === "case";
+}
+
 export function isCoachAssignmentSummary(
   value: CoachAssignmentSummary | AssignmentRecipientDetail,
 ): value is CoachAssignmentSummary {
@@ -128,7 +143,9 @@ export function isCoachAssignmentSummary(
 }
 
 export function assignmentTypeLabel(type: AssignmentType): string {
-  return type === "practice_round" ? "Practice round" : "Drill";
+  if (type === "practice_round") return "Practice round";
+  if (type === "case") return "Case analysis";
+  return "Drill";
 }
 
 export function statusLabel(status: AssignmentStatus): string {
@@ -155,9 +172,13 @@ export function formatDate(value?: string | null): string {
 export function assignmentHref(detail: AssignmentRecipientDetail): string {
   const id = detail.recipient.id;
   const classId = detail.class_room.id;
-  return detail.assignment.type === "drill"
-    ? `/drills?class=${classId}&assignment=${id}`
-    : `/practice?class=${classId}&assignment=${id}`;
+  if (detail.assignment.type === "drill") {
+    return `/drills?class=${classId}&assignment=${id}`;
+  }
+  if (detail.assignment.type === "case") {
+    return `/parli-gpt?class=${classId}&assignment=${id}`;
+  }
+  return `/practice?class=${classId}&assignment=${id}`;
 }
 
 export function withClassContext(href: string, classId?: string | null): string {
@@ -173,6 +194,8 @@ export function withClassContext(href: string, classId?: string | null): string 
 export function resultSummary(result?: Record<string, unknown> | null): string {
   if (!result) return "No result yet";
   if (typeof result.numeric_score === "number") return `Score ${result.numeric_score}/10`;
+  if (typeof result.score === "number") return `Score ${result.score}/10`;
+  if (typeof result.category === "string") return String(result.category);
   const score = result.score;
   if (score && typeof score === "object" && "score" in score) {
     const numeric = (score as { score?: unknown }).score;

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import { getServerSupabase } from "@/lib/supabase";
 import { RfdCard } from "@/components/RfdCard";
 import { WpmChart, type WpmPoint } from "@/components/WpmChart";
@@ -201,6 +202,7 @@ export default async function CoachSubmissionPage({
   const data = (await res.json()) as CoachSubmissionResponse;
   const round = data.round;
   const drill = data.drill;
+  const caseReview = data.case_review;
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 px-4 py-10">
@@ -217,7 +219,9 @@ export default async function CoachSubmissionPage({
         <p className="mt-1 text-sm text-slate-500">
           {data.assignment.type === "practice_round"
             ? "Practice round"
-            : "Drill"}{" "}
+            : data.assignment.type === "case"
+              ? "Case analysis"
+              : "Drill"}{" "}
           &middot; Student {recipientId.slice(0, 8)}
         </p>
       </header>
@@ -473,8 +477,59 @@ export default async function CoachSubmissionPage({
         </>
       )}
 
+      {/* ---- Case view ---- */}
+      {data.type === "case" && caseReview && (
+        <>
+          <div className="rounded-md border border-slate-200 bg-white p-4">
+            <h2 className="mb-1 text-base font-semibold text-slate-800">
+              Rating
+            </h2>
+            <p className="text-sm text-slate-700">
+              {caseReview.category} ({caseReview.score}/10)
+            </p>
+            <p className="mt-2 text-sm text-slate-600">{caseReview.summary}</p>
+            {caseReview.created_at && (
+              <p className="mt-1 text-xs text-slate-500">
+                Submitted {new Date(caseReview.created_at).toLocaleString()}
+              </p>
+            )}
+          </div>
+
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-slate-800">
+              Feedback
+            </h2>
+              <div className="rounded-lg border border-slate-200 bg-white p-5">
+              <div className="text-sm text-slate-700">
+                <ReactMarkdown>{caseReview.feedback}</ReactMarkdown>
+              </div>
+              </div>
+            </section>
+
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-slate-800">
+              Submitted case
+            </h2>
+            <div className="rounded-md border border-slate-200 bg-white p-4">
+              <p className="mb-2 text-xs text-slate-500">
+                {(caseReview.format ?? "").toUpperCase()} &middot;{" "}
+                {caseReview.side ? SIDE_LABEL[caseReview.side] : "Unknown side"}
+              </p>
+              {caseReview.topic ? (
+                <p className="mb-3 text-sm font-medium text-slate-800">
+                  {caseReview.topic}
+                </p>
+              ) : null}
+              <p className="whitespace-pre-wrap text-sm text-slate-700">
+                {caseReview.source_text}
+              </p>
+            </div>
+          </section>
+        </>
+      )}
+
       {/* ---- No submission yet ---- */}
-      {!round && !drill && (
+      {!round && !drill && !caseReview && (
         <div className="rounded-md border border-slate-200 bg-white p-6 text-sm text-slate-500">
           This student has not submitted their work yet.
         </div>

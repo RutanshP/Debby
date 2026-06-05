@@ -141,6 +141,7 @@ async def complete_assignment_route(
             recipient_id=recipient_id,
             drill_id=body.drill_id,
             round_id=body.round_id,
+            case_review_id=body.case_review_id,
         )
     except Exception as exc:
         raise _translate_error(exc) from exc

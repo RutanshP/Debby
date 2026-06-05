@@ -59,6 +59,24 @@ async def get_drill_any(drill_id: str) -> dict[str, Any] | None:
     return await asyncio.to_thread(_do)
 
 
+async def get_case_review_any(case_review_id: str) -> dict[str, Any] | None:
+    """Fetch a case review by id without user_id scoping (coach view)."""
+
+    def _do() -> dict[str, Any] | None:
+        client = get_supabase()
+        resp = (
+            client.table("case_reviews")
+            .select("*")
+            .eq("id", case_review_id)
+            .limit(1)
+            .execute()
+        )
+        data = getattr(resp, "data", None) or []
+        return data[0] if data else None
+
+    return await asyncio.to_thread(_do)
+
+
 async def get_submission_for_coach(
     coach_id: str,
     class_id: str,
@@ -101,6 +119,7 @@ async def get_submission_for_coach(
     # 5. Resolve round or drill.
     round_data: dict[str, Any] | None = None
     drill_data: dict[str, Any] | None = None
+    case_review_data: dict[str, Any] | None = None
     submission_type: str | None = None
 
     if submission_row:
@@ -110,17 +129,25 @@ async def get_submission_for_coach(
         elif submission_row.get("drill_id"):
             submission_type = "drill"
             drill_data = await get_drill_any(submission_row["drill_id"])
+        elif submission_row.get("case_review_id"):
+            submission_type = "case"
+            case_review_data = await get_case_review_any(submission_row["case_review_id"])
 
     # Determine type from assignment if no submission yet.
     if submission_type is None:
-        submission_type = (
-            "drill" if assignment_row.get("type") == "drill" else "round"
-        )
+        assignment_type = assignment_row.get("type")
+        if assignment_type == "drill":
+            submission_type = "drill"
+        elif assignment_type == "case":
+            submission_type = "case"
+        else:
+            submission_type = "round"
 
     return {
         "type": submission_type,
         "round": round_data,
         "drill": drill_data,
+        "case_review": case_review_data,
         "recipient": recipient_row,
         "assignment": assignment_row,
         "submission": submission_row,

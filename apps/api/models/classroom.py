@@ -10,11 +10,12 @@ from models.round import Format, Side
 from models.topic_limits import validate_topic_word_limit
 
 ClassRole = Literal["coach", "competitor"]
-AssignmentType = Literal["drill", "practice_round"]
+AssignmentType = Literal["drill", "practice_round", "case"]
 AssignmentStatus = Literal["assigned", "in_progress", "completed"]
 
 DRILL_TIMERS = {30, 60, 120}
 PRACTICE_TIMERS = {30, 45, 60, 90, 120, 180, 240, 300}
+MAX_CASE_TEXT_WORDS = 6000
 
 
 class ClassRoom(BaseModel):
@@ -64,7 +65,31 @@ class PracticeRoundAssignmentPayload(BaseModel):
         return value
 
 
-AssignmentPayload = DrillAssignmentPayload | PracticeRoundAssignmentPayload
+class CaseAssignmentPayload(BaseModel):
+    format: Format
+    topic: str = ""
+    side: Side
+    content: str = Field(min_length=1)
+
+    @field_validator("topic")
+    @classmethod
+    def topic_must_be_valid(cls, value: str) -> str:
+        if not value.strip():
+            return ""
+        return validate_topic_word_limit(value)
+
+    @field_validator("content")
+    @classmethod
+    def content_must_be_within_limit(cls, value: str) -> str:
+        words = value.strip().split()
+        if not value.strip():
+            raise ValueError("Case text is required")
+        if len(words) > MAX_CASE_TEXT_WORDS:
+            raise ValueError(f"Case text must be {MAX_CASE_TEXT_WORDS} words or fewer")
+        return value
+
+
+AssignmentPayload = DrillAssignmentPayload | PracticeRoundAssignmentPayload | CaseAssignmentPayload
 
 
 class Assignment(BaseModel):
@@ -94,6 +119,7 @@ class AssignmentSubmission(BaseModel):
     user_id: str
     drill_id: str | None = None
     round_id: str | None = None
+    case_review_id: str | None = None
     created_at: datetime | str | None = None
 
 
@@ -117,6 +143,7 @@ class CreateAssignmentRequest(BaseModel):
 class CompleteAssignmentRequest(BaseModel):
     drill_id: str | None = None
     round_id: str | None = None
+    case_review_id: str | None = None
 
 
 class MatchDrillAssignmentRequest(BaseModel):

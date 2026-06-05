@@ -9,6 +9,8 @@ Ports `backend/parligpt.py`'s `make_case` (Parliamentary) and
 
 from __future__ import annotations
 
+import json
+
 from services import evidence as evidence_service
 from services.openai_client import client
 
@@ -212,15 +214,19 @@ _MSPDP_OUTPUT_RULES = (
 _ANALYSIS_SYSTEM_PROMPT = (
     _BASE_SYSTEM_PROMPT
     + " You analyze student debate cases and give practical coaching feedback. "
-    "Return a structured markdown review that is specific, actionable, and rooted in the pasted case text. "
+    "Return JSON with keys: score, summary, feedback. "
+    "The score must be an integer from 1 to 10. "
+    "The summary must be 2-4 sentences. "
+    "The feedback must be markdown with section headings. "
+    "Be specific, actionable, and rooted in the pasted case text. "
     "Do not claim to have read files or PDFs; analyze only the provided text."
 )
 
 _ANALYSIS_OUTPUT_RULES = (
-    "\n\nOutput requirements:\n"
+    "\n\nOutput requirements for the `feedback` field:\n"
     "- Return polished markdown only.\n"
-    "- Start with a heading naming this as a case analysis.\n"
-    "- Include these sections in order: Quick Verdict, What Works, Gaps and Risks, Strategic Suggestions, and Revision Priorities.\n"
+    "- Do not repeat the score as a heading.\n"
+    "- Include these sections in order: What Works, Gaps and Risks, Strategic Suggestions, and Revision Priorities.\n"
     "- Be concrete about structure, weighing, clash, internal links, solvency, impact framing, and round strategy.\n"
     "- Quote short phrases from the pasted case when useful, but keep the focus on coaching.\n"
     "- If the case text is thin or incomplete, say so clearly and explain what is missing.\n"
@@ -268,6 +274,32 @@ async def _chat(system: str, user: str) -> str:
         ],
     )
     return response.choices[0].message.content or ""
+
+
+async def _json_chat(system: str, user: str) -> dict:
+    response = await client.chat.completions.create(
+        model=_MODEL,
+        max_tokens=_MAX_TOKENS,
+        temperature=_TEMPERATURE,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return json.loads(response.choices[0].message.content or "{}")
+
+
+def case_category_for_score(score: int) -> str:
+    if score <= 2:
+        return "Unusable"
+    if score <= 4:
+        return "Fragile"
+    if score <= 6:
+        return "Usable"
+    if score <= 8:
+        return "Strong"
+    return "Excellent"
 
 
 async def make_case(topic: str, side: str) -> str:
@@ -323,8 +355,8 @@ async def make_mspdp_case(topic: str, side: str) -> str:
     return await _chat(_MSPDP_SYSTEM_PROMPT, user)
 
 
-async def analyze_case(format: str, side: str, case_text: str, topic: str | None = None) -> str:
-    """Analyze an existing debate case and return markdown feedback."""
+async def analyze_case(format: str, side: str, case_text: str, topic: str | None = None) -> dict:
+    """Analyze an existing debate case and return structured feedback."""
     format_label = "Parli" if format == "parli" else "MSPDP"
     side_label = "Affirmative" if side == "aff" else "Negative"
     topic_line = topic.strip() if topic else "Unknown / not provided"
@@ -345,4 +377,12 @@ async def analyze_case(format: str, side: str, case_text: str, topic: str | None
         + "\n\nCase text:\n"
         + case_text.strip()
     )
-    return await _chat(_ANALYSIS_SYSTEM_PROMPT, user)
+    data = await _json_chat(_ANALYSIS_SYSTEM_PROMPT, user)
+    score = int(data.get("score") or 0)
+    score = max(1, min(score, 10))
+    return {
+        "score": score,
+        "category": case_category_for_score(score),
+        "summary": str(data.get("summary") or "").strip(),
+        "feedback": str(data.get("feedback") or "").strip(),
+    }
