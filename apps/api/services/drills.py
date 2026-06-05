@@ -288,6 +288,37 @@ def _postmodernism_source_text() -> str:
         return ""
 
 
+@lru_cache(maxsize=1)
+def _postmodernism_paragraphs() -> tuple[str, ...]:
+    source = _postmodernism_source_text()
+    if not source:
+        return ()
+    return tuple(
+        paragraph.strip()
+        for paragraph in re.split(r"\n\s*\n", source)
+        if paragraph.strip()
+    )
+
+
+def _postmodernism_passage(target_words: int) -> str:
+    paragraphs = _postmodernism_paragraphs()
+    if not paragraphs:
+        return ""
+
+    start_index = random.randrange(len(paragraphs))
+    selected: list[str] = []
+    total_words = 0
+
+    for offset in range(len(paragraphs)):
+        paragraph = paragraphs[(start_index + offset) % len(paragraphs)]
+        selected.append(paragraph)
+        total_words += _word_count(paragraph)
+        if total_words >= target_words:
+            break
+
+    return _fit_speed_passage_to_target("\n\n".join(selected), target_words)
+
+
 def _speed_fallback_passage(target_words: int) -> str:
     passage = " ".join(_FALLBACK_SENTENCES)
     while _word_count(passage) < target_words:
@@ -448,7 +479,7 @@ async def generate_drill(
             return DrillPrompt(
                 title=DRILL_TITLES["speed"],
                 topic="Speed Reading: Postmodernism",
-                prompt=_fit_speed_passage_to_target(postmodernism_source, word_target),
+                prompt=_postmodernism_passage(word_target),
                 task="Read the passage aloud, then submit your recording.",
                 timer_seconds=timer,
             )

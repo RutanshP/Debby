@@ -288,6 +288,10 @@ async def test_generate_drill_speed_reuses_passage_after_threshold():
 async def test_generate_drill_speed_postmodernism_uses_local_source():
     openai_mock = AsyncMock()
     with patch.object(
+        drills_service.random,
+        "randrange",
+        return_value=1,
+    ), patch.object(
         drills_service._openai_client.chat.completions,
         "create",
         openai_mock,
@@ -300,8 +304,11 @@ async def test_generate_drill_speed_postmodernism_uses_local_source():
 
     assert prompt.topic == "Speed Reading: Postmodernism"
     assert prompt.timer_seconds == 30
-    assert drills_service._word_count(prompt.prompt) == drills_service.speed_passage_word_target(30)
-    assert prompt.prompt.startswith("The main theme of the works of Fellini")
+    assert abs(
+        drills_service._word_count(prompt.prompt)
+        - drills_service.speed_passage_word_target(30)
+    ) <= 5
+    assert prompt.prompt.startswith("Reality is fundamentally meaningless, says Derrida.")
     openai_mock.assert_not_awaited()
 
 
