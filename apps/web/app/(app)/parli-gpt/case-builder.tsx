@@ -102,6 +102,56 @@ function titleFromGeneratedCase(markdown: string): string | null {
   return heading ? truncateTitle(heading) : null;
 }
 
+function indentationWidth(line: string): number {
+  let width = 0;
+  for (const char of line) {
+    if (char === " ") width += 1;
+    else if (char === "\t") width += 4;
+    else break;
+  }
+  return width;
+}
+
+function looksStructured(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+  return /^(#{1,6}\s|[-*+]\s|\d+[.)]\s|[A-Za-z]\d+[:.) -]|(Contention|Uniqueness|Link|Links|Impact|Impacts|Claim|Warrant|Reasoning|Evidence|Solvency|Overview|Framework|Observation)(\s*[:.-]|\s*$))/i.test(
+    trimmed,
+  );
+}
+
+function normalizeCaseStructure(value: string): string {
+  const lines = value.replace(/\r\n/g, "\n").split("\n");
+  const indents = Array.from(
+    new Set(
+      lines
+        .filter((line) => line.trim())
+        .map(indentationWidth)
+        .filter((width) => width > 0),
+    ),
+  ).sort((a, b) => a - b);
+
+  const levelForIndent = (width: number) => {
+    if (width <= 0) return 0;
+    const found = indents.findIndex((candidate) => width <= candidate);
+    return (found === -1 ? indents.length : found + 1);
+  };
+
+  return lines
+    .map((line) => {
+      const trimmed = line.trimEnd();
+      if (!trimmed.trim()) return "";
+
+      const content = trimmed.trimStart();
+      const level = levelForIndent(indentationWidth(trimmed));
+      if (level === 0 || looksStructured(content)) {
+        return content;
+      }
+      return `${"  ".repeat(Math.max(level - 1, 0))}- ${content}`;
+    })
+    .join("\n");
+}
+
 export default function CaseBuilder() {
   const searchParams = useSearchParams();
   const classId = searchParams.get("class");
@@ -274,13 +324,14 @@ export default function CaseBuilder() {
     setLoading(true);
     resetOutput();
     try {
+      const normalizedInput = normalizeCaseStructure(trimmedInput);
       const data = await apiFetch<AnalyzeCaseResponse>("/api/cases/analyze", {
         method: "POST",
         body: JSON.stringify({
           format,
           topic: topic.trim(),
           side,
-          content: trimmedInput,
+          content: normalizedInput,
         }),
       });
       setAnalysis(data);
@@ -312,6 +363,7 @@ export default function CaseBuilder() {
     setLoading(true);
     resetOutput();
     try {
+      const normalizedCase = normalizeCaseStructure(trimmedCase);
       await apiFetch(`/api/assignments/${assignmentRecipientId}/start`, {
         method: "POST",
       });
@@ -321,7 +373,7 @@ export default function CaseBuilder() {
           format,
           topic: topic.trim(),
           side,
-          content: trimmedCase,
+          content: normalizedCase,
         }),
       });
       setAnalysis(data);
@@ -610,7 +662,7 @@ export default function CaseBuilder() {
                   </span>
                 ) : (
                   <span className="text-slate-500">
-                    Paste plain text only for now.
+                    Indents and subpoints are normalized before AI analysis.
                   </span>
                 )}
                 <span className={analysisTooLong ? "text-red-600" : "text-slate-400"}>
@@ -643,7 +695,7 @@ export default function CaseBuilder() {
                   </span>
                 ) : (
                   <span className="text-slate-500">
-                    Submit when you want preliminary AI feedback.
+                    Indents and subpoints are normalized before AI feedback.
                   </span>
                 )}
                 <span className={assignmentTooLong ? "text-red-600" : "text-slate-400"}>

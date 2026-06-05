@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import CaseBuilder from "@/app/(app)/parli-gpt/case-builder";
 
@@ -133,6 +133,35 @@ describe("CaseBuilder", () => {
     });
     expect(await screen.findByText("Usable")).toBeInTheDocument();
     expect(screen.getByText("6/10")).toBeInTheDocument();
+  });
+
+  it("normalizes indented subpoints before sending case analysis", async () => {
+    const user = userEvent.setup();
+    mockFetchOnce({
+      score: 7,
+      category: "Strong",
+      summary: "Structured well.",
+      feedback: "## What Works\n- Nice hierarchy",
+    });
+    render(<CaseBuilder />);
+
+    await user.click(screen.getByRole("button", { name: /analyze a case/i }));
+    fireEvent.change(screen.getByLabelText(/paste case text/i), {
+      target: {
+        value: "Contention 1\n    study one proves the point\n        impact grows",
+      },
+    });
+    await user.click(screen.getByRole("button", { name: /^analyze$/i }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({
+      format: "parli",
+      topic: "",
+      side: "aff",
+      content:
+        "Contention 1\n- study one proves the point\n  - impact grows",
+    });
   });
 
   it("does not offer library saving for case feedback", async () => {
