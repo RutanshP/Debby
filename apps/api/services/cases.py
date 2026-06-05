@@ -226,10 +226,13 @@ _ANALYSIS_OUTPUT_RULES = (
     "\n\nOutput requirements for the `feedback` field:\n"
     "- Return polished markdown only.\n"
     "- Do not repeat the score as a heading.\n"
-    "- Include these sections in order: What Works, Gaps and Risks, Strategic Suggestions, and Revision Priorities.\n"
+    "- Include these sections in order: What Works, Gaps and Fixes, and Revision Priorities.\n"
     "- Be concrete about structure, weighing, clash, internal links, solvency, impact framing, and round strategy.\n"
     "- Quote short phrases from the pasted case when useful, but keep the focus on coaching.\n"
     "- If the case text is thin or incomplete, say so clearly and explain what is missing.\n"
+    "- In `Gaps and Fixes`, each bullet must pair one problem with one specific fix immediately after it. Do not create a separate section that restates the same fixes.\n"
+    "- `Revision Priorities` should be short and ranked. Do not repeat the same explanation from `Gaps and Fixes`; just name the highest-leverage edits.\n"
+    "- Avoid repetitive coaching language. If a weakness has already been explained once, do not restate it in different words in a later section.\n"
 )
 
 _MSPDP_NEG_USER = (
