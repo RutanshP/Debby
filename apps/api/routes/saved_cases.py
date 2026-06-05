@@ -1,4 +1,4 @@
-"""Routes for saved Case Builder outputs."""
+"""Routes for saved Case Studio outputs."""
 
 from __future__ import annotations
 

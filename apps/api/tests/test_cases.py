@@ -134,6 +134,23 @@ async def test_make_mspdp_case_returns_markdown(side: str):
     assert "MSPDP case" in out
 
 
+async def test_analyze_case_returns_markdown_feedback():
+    mock = AsyncMock(return_value=_mock_completion("# Case Analysis\nfeedback"))
+    with patch.object(cases_service.client.chat.completions, "create", mock):
+        out = await cases_service.analyze_case(
+            "parli",
+            "aff",
+            "Contention one says growth is good.",
+            topic="Resolved: Test topic",
+        )
+    assert "Case Analysis" in out
+    kwargs = mock.await_args.kwargs
+    assert "analyze student debate cases" in kwargs["messages"][0]["content"].lower()
+    assert "Quick Verdict" in kwargs["messages"][1]["content"]
+    assert "Resolved: Test topic" in kwargs["messages"][1]["content"]
+    assert "Contention one says growth is good." in kwargs["messages"][1]["content"]
+
+
 async def test_mspdp_uses_mspdp_prompt_not_parli_tuli_rules():
     mock = AsyncMock(return_value=_mock_completion("# MSPDP case\nbody"))
     with (
@@ -225,6 +242,45 @@ def test_random_case_returns_topic_and_side(authed):
     assert body["topic"]
     assert body["side"] in ("aff", "neg")
     assert body["format"] == "mspdp"
+
+
+def test_analyze_case_happy_path(authed):
+    mock = AsyncMock(return_value=_mock_completion("# Analysis"))
+    with patch.object(cases_service.client.chat.completions, "create", mock):
+        r = client.post(
+            "/api/cases/analyze",
+            json={
+                "format": "parli",
+                "topic": "Resolved: UBI",
+                "side": "aff",
+                "content": "Contention one: poverty reduction.",
+            },
+        )
+    assert r.status_code == 200
+    assert r.json() == {"case": "# Analysis"}
+
+
+def test_analyze_case_rejects_blank_content(authed):
+    r = client.post(
+        "/api/cases/analyze",
+        json={"format": "parli", "topic": "", "side": "aff", "content": "   "},
+    )
+    assert r.status_code == 422
+
+
+def test_analyze_case_openai_error_returns_502(authed):
+    mock = AsyncMock(side_effect=RuntimeError("boom"))
+    with patch.object(cases_service.client.chat.completions, "create", mock):
+        r = client.post(
+            "/api/cases/analyze",
+            json={
+                "format": "mspdp",
+                "topic": "phones",
+                "side": "neg",
+                "content": "Assertion: schools need focus.",
+            },
+        )
+    assert r.status_code == 502
 
 
 def test_create_case_openai_error_returns_502(authed):

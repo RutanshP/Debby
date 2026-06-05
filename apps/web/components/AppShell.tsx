@@ -10,7 +10,7 @@ import { useClassDetail } from "@/lib/queries/classroom";
 const navItems = [
   { href: "/practice", label: "Practice" },
   { href: "/drills", label: "Drills" },
-  { href: "/parli-gpt", label: "Case Builder" },
+  { href: "/parli-gpt", label: "Case Studio" },
   { href: "/progress", label: "Progress" },
   { href: "/library", label: "Library" },
 ];

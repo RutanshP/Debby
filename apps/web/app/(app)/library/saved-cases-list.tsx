@@ -62,13 +62,13 @@ export function SavedCasesList({ cases, pageSize = 20 }: SavedCasesListProps) {
       <div className="rounded-lg border border-dashed border-slate-300 bg-white p-12 text-center">
         <h2 className="text-lg font-semibold text-slate-700">No saved cases yet</h2>
         <p className="mt-2 text-sm text-slate-500">
-          Save a generated case from Case Builder and it will appear here.
+          Save a generated case or case analysis from Case Studio and it will appear here.
         </p>
         <Link
           href={withClassContext("/parli-gpt", classId)}
           className="mt-5 inline-flex rounded-md bg-teal px-4 py-2 text-sm font-medium text-white hover:bg-teal-dark"
         >
-          Open Case Builder
+          Open Case Studio
         </Link>
       </div>
     );

@@ -110,7 +110,7 @@ export function WorkspaceClient() {
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Personal Debby</h2>
               <p className="text-sm text-slate-600">
-                Practice rounds, drills, case builder, progress, and your library.
+                Practice rounds, drills, case studio, progress, and your library.
               </p>
             </div>
             <Link href="/practice" className={primaryButtonClass}>

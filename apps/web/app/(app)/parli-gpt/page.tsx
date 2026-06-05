@@ -1,7 +1,7 @@
 import CaseBuilder from "./case-builder";
 
 export const metadata = {
-  title: "Case Builder | Debby",
+  title: "Case Studio | Debby",
 };
 
 export default function ParliGptPage() {

@@ -9,9 +9,11 @@ import { withClassContext } from "@/lib/classroom";
 
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
+type StudioMode = "create" | "analyze";
 
 const TOPIC_WORD_LIMIT = 100;
 const SAVED_CASE_TITLE_LIMIT = 240;
+const ANALYSIS_WORD_LIMIT = 6000;
 
 interface CaseResponse {
   case: string;
@@ -92,9 +94,11 @@ function titleFromGeneratedCase(markdown: string): string | null {
 export default function CaseBuilder() {
   const searchParams = useSearchParams();
   const classId = searchParams.get("class");
+  const [mode, setMode] = useState<StudioMode>("create");
   const [format, setFormat] = useState<Format>("parli");
   const [topic, setTopic] = useState("");
   const [side, setSide] = useState<Side>("aff");
+  const [inputCaseText, setInputCaseText] = useState("");
   const [caseText, setCaseText] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -104,6 +108,21 @@ export default function CaseBuilder() {
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
   const topicWordCount = countWords(topic);
   const topicTooLong = topicWordCount > TOPIC_WORD_LIMIT;
+  const analysisWordCount = countWords(inputCaseText);
+  const analysisTooLong = analysisWordCount > ANALYSIS_WORD_LIMIT;
+
+  function resetOutput() {
+    setError(null);
+    setSaveMessage(null);
+    setSaveError(null);
+    setSavedCaseId(null);
+    setCaseText("");
+  }
+
+  function handleModeChange(nextMode: StudioMode) {
+    setMode(nextMode);
+    resetOutput();
+  }
 
   async function handleGenerate() {
     const trimmedTopic = topic.trim();
@@ -113,11 +132,7 @@ export default function CaseBuilder() {
       return;
     }
     setLoading(true);
-    setError(null);
-    setSaveMessage(null);
-    setSaveError(null);
-    setSavedCaseId(null);
-    setCaseText("");
+    resetOutput();
     try {
       const data = await apiFetch<CaseResponse>("/api/cases", {
         method: "POST",
@@ -139,11 +154,7 @@ export default function CaseBuilder() {
 
   async function handleRandom() {
     setLoading(true);
-    setError(null);
-    setSaveMessage(null);
-    setSaveError(null);
-    setSavedCaseId(null);
-    setCaseText("");
+    resetOutput();
     try {
       const data = await apiFetch<RandomCaseResponse>("/api/cases/random", {
         method: "POST",
@@ -165,6 +176,43 @@ export default function CaseBuilder() {
     }
   }
 
+  async function handleAnalyze() {
+    const trimmedInput = inputCaseText.trim();
+    if (!trimmedInput) return;
+    if (topicTooLong) {
+      setError(`Topics must be ${TOPIC_WORD_LIMIT} words or fewer.`);
+      return;
+    }
+    if (analysisTooLong) {
+      setError(`Pasted case text must be ${ANALYSIS_WORD_LIMIT} words or fewer.`);
+      return;
+    }
+    setLoading(true);
+    resetOutput();
+    try {
+      const data = await apiFetch<CaseResponse>("/api/cases/analyze", {
+        method: "POST",
+        body: JSON.stringify({
+          format,
+          topic: topic.trim(),
+          side,
+          content: trimmedInput,
+        }),
+      });
+      setCaseText(data.case);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Failed to analyze case";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSaveCase() {
     if (!caseText.trim() || savedCaseId) return;
     setSaving(true);
@@ -174,7 +222,9 @@ export default function CaseBuilder() {
       const title =
         titleFromGeneratedCase(caseText) ??
         truncateTitle(
-          `${side === "aff" ? "Affirmative" : "Negative"} Case: ${topic.trim() || "Untitled topic"}`,
+          mode === "analyze"
+            ? `Case Analysis: ${topic.trim() || "Untitled topic"}`
+            : `${side === "aff" ? "Affirmative" : "Negative"} Case: ${topic.trim() || "Untitled topic"}`,
         );
       const saved = await apiFetch<SavedCaseResponse>("/api/saved-cases", {
         method: "POST",
@@ -221,9 +271,43 @@ export default function CaseBuilder() {
   return (
     <div className="case-builder-page mx-auto max-w-7xl px-4 py-8">
       <h1 className="case-builder-heading mb-6 text-3xl font-bold text-teal-700">
-        Case Builder
+        Case Studio
       </h1>
       <div className="space-y-6">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => handleModeChange("create")}
+              aria-pressed={mode === "create"}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition ${
+                mode === "create"
+                  ? "bg-teal text-white"
+                  : "border border-slate-300 text-slate-700 hover:border-teal-600 hover:text-teal-700"
+              }`}
+            >
+              Create a Case
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange("analyze")}
+              aria-pressed={mode === "analyze"}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition ${
+                mode === "analyze"
+                  ? "bg-teal text-white"
+                  : "border border-slate-300 text-slate-700 hover:border-teal-600 hover:text-teal-700"
+              }`}
+            >
+              Analyze a Case
+            </button>
+          </div>
+          <p className="mt-3 text-sm text-slate-600">
+            {mode === "create"
+              ? "Build a fresh case from a topic and side."
+              : "Paste an existing case and get strategic feedback. PDF import can come later."}
+          </p>
+        </section>
+
         <section className="case-builder-controls rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-4 lg:grid-cols-[160px_1fr_180px_auto_auto] lg:items-start">
             <div>
@@ -250,14 +334,18 @@ export default function CaseBuilder() {
                 htmlFor="topic"
                 className="mb-1 block text-sm font-medium text-slate-700"
               >
-                Topic
+                {mode === "create" ? "Topic" : "Topic / Resolution"}
               </label>
               <input
                 id="topic"
                 type="text"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                placeholder="Enter a topic..."
+                placeholder={
+                  mode === "create"
+                    ? "Enter a topic..."
+                    : "Optional but helpful for analysis..."
+                }
                 className="h-10 w-full rounded border border-slate-300 px-2"
               />
               <div className="mt-1 flex justify-between text-xs">
@@ -297,21 +385,57 @@ export default function CaseBuilder() {
 
             <button
               type="button"
-              onClick={handleGenerate}
-              disabled={loading || !topic.trim() || topicTooLong}
+              onClick={mode === "create" ? handleGenerate : handleAnalyze}
+              disabled={
+                loading ||
+                topicTooLong ||
+                (mode === "create" ? !topic.trim() : !inputCaseText.trim() || analysisTooLong)
+              }
               className="h-10 rounded bg-teal-600 px-5 font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 lg:mt-6"
             >
-              Generate
+              {mode === "create" ? "Generate" : "Analyze"}
             </button>
             <button
               type="button"
               onClick={handleRandom}
-              disabled={loading}
+              disabled={loading || mode !== "create"}
               className="h-10 rounded border border-teal-600 px-5 font-medium text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50 lg:mt-6"
             >
               Random topic
             </button>
           </div>
+          {mode === "analyze" ? (
+            <div className="mt-4">
+              <label
+                htmlFor="case-text"
+                className="mb-1 block text-sm font-medium text-slate-700"
+              >
+                Paste case text
+              </label>
+              <textarea
+                id="case-text"
+                value={inputCaseText}
+                onChange={(e) => setInputCaseText(e.target.value)}
+                placeholder="Paste the case you want Debby to analyze..."
+                rows={12}
+                className="w-full rounded border border-slate-300 px-3 py-2"
+              />
+              <div className="mt-1 flex justify-between text-xs">
+                {analysisTooLong ? (
+                  <span className="text-red-600">
+                    Pasted case text must be {ANALYSIS_WORD_LIMIT} words or fewer.
+                  </span>
+                ) : (
+                  <span className="text-slate-500">
+                    Paste plain text only for now.
+                  </span>
+                )}
+                <span className={analysisTooLong ? "text-red-600" : "text-slate-400"}>
+                  {analysisWordCount}/{ANALYSIS_WORD_LIMIT}
+                </span>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="case-builder-output min-h-[300px] rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -325,7 +449,7 @@ export default function CaseBuilder() {
                 className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-teal-600 border-t-transparent"
                 aria-hidden="true"
               />
-              <span>Generating case...</span>
+              <span>{mode === "create" ? "Generating case..." : "Analyzing case..."}</span>
             </div>
           )}
           {error && !loading && (
@@ -370,7 +494,9 @@ export default function CaseBuilder() {
             </div>
           )}
           {!loading && !error && !caseText && (
-            <p className="text-slate-500">Debate Case</p>
+            <p className="text-slate-500">
+              {mode === "create" ? "Debate Case" : "Case Analysis"}
+            </p>
           )}
         </section>
       </div>

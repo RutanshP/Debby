@@ -1,4 +1,4 @@
-"""Saved Case Builder outputs stored in Supabase."""
+"""Saved Case Studio outputs stored in Supabase."""
 
 from __future__ import annotations
 

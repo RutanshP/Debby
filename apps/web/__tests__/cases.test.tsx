@@ -105,6 +105,50 @@ describe("CaseBuilder", () => {
     expect(savedButton).toBeDisabled();
   });
 
+  it("analyzes pasted case text with the correct body", async () => {
+    const user = userEvent.setup();
+    mockFetchOnce({ case: "# Case Analysis\nNeeds tighter links." });
+    render(<CaseBuilder />);
+
+    await user.click(screen.getByRole("button", { name: /analyze a case/i }));
+    await user.type(screen.getByLabelText(/topic \/ resolution/i), "Resolved: Test topic");
+    await user.type(screen.getByLabelText(/paste case text/i), "Contention one: growth good.");
+    await user.selectOptions(screen.getByLabelText(/side/i), "neg");
+    await user.click(screen.getByRole("button", { name: /^analyze$/i }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toContain("/api/cases/analyze");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      format: "parli",
+      topic: "Resolved: Test topic",
+      side: "neg",
+      content: "Contention one: growth good.",
+    });
+  });
+
+  it("preserves class context when saving from Case Studio", async () => {
+    const user = userEvent.setup();
+    const replaceState = jest.spyOn(window.history, "replaceState");
+    getParamMock.mockImplementation((key) => (key === "class" ? "class-123" : null));
+    mockFetchOnce({ case: "# My Case\nContent." });
+    mockFetchOnce({ id: "case-1" });
+    render(<CaseBuilder />);
+
+    await user.type(screen.getByLabelText(/topic/i), "Topic");
+    await user.click(screen.getByRole("button", { name: /generate/i }));
+    await screen.findByRole("heading", { level: 1, name: /my case/i });
+    await user.click(screen.getByRole("button", { name: /save to library/i }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect(replaceState).toHaveBeenCalledWith(
+      null,
+      "",
+      "/parli-gpt?saved=case-1&class=class-123",
+    );
+  });
+
   it("Random button calls /api/cases/random and populates topic", async () => {
     const user = userEvent.setup();
     mockFetchOnce({

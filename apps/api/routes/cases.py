@@ -1,4 +1,4 @@
-"""Routes for the Case Builder (A6)."""
+"""Routes for the Case Studio workspace."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from models.topic_limits import (
     count_topic_words,
     validate_topic_word_limit,
 )
-from services.cases import make_case, make_mspdp_case
+from services.cases import analyze_case, make_case, make_mspdp_case
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -49,6 +49,27 @@ class CaseRequest(BaseModel):
 
 class CaseResponse(BaseModel):
     case: str
+
+
+class AnalyzeCaseRequest(BaseModel):
+    format: Format
+    side: Side
+    content: str = Field(min_length=1)
+    topic: str = ""
+
+    @field_validator("topic")
+    @classmethod
+    def topic_must_not_exceed_word_limit(cls, value: str) -> str:
+        if not value.strip():
+            return ""
+        return validate_topic_word_limit(value)
+
+    @field_validator("content")
+    @classmethod
+    def content_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Case text is required.")
+        return value
 
 
 class RandomCaseRequest(BaseModel):
@@ -117,3 +138,20 @@ async def create_random_case(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Case generation failed: {exc}")
     return RandomCaseResponse(case=case_text, topic=topic, side=side, format=req.format)
+
+
+@router.post("/analyze", response_model=CaseResponse)
+async def analyze_case_route(
+    req: AnalyzeCaseRequest,
+    _user: User = Depends(get_current_user),
+) -> CaseResponse:
+    try:
+        analysis = await analyze_case(
+            req.format,
+            req.side,
+            req.content,
+            topic=req.topic,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Case analysis failed: {exc}")
+    return CaseResponse(case=analysis)

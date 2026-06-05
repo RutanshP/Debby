@@ -209,6 +209,23 @@ _MSPDP_OUTPUT_RULES = (
     "- For MSPDP fact rounds, use Claim/Warrant/Impact because the burden is proving or disproving a factual statement.\n"
 )
 
+_ANALYSIS_SYSTEM_PROMPT = (
+    _BASE_SYSTEM_PROMPT
+    + " You analyze student debate cases and give practical coaching feedback. "
+    "Return a structured markdown review that is specific, actionable, and rooted in the pasted case text. "
+    "Do not claim to have read files or PDFs; analyze only the provided text."
+)
+
+_ANALYSIS_OUTPUT_RULES = (
+    "\n\nOutput requirements:\n"
+    "- Return polished markdown only.\n"
+    "- Start with a heading naming this as a case analysis.\n"
+    "- Include these sections in order: Quick Verdict, What Works, Gaps and Risks, Strategic Suggestions, and Revision Priorities.\n"
+    "- Be concrete about structure, weighing, clash, internal links, solvency, impact framing, and round strategy.\n"
+    "- Quote short phrases from the pasted case when useful, but keep the focus on coaching.\n"
+    "- If the case text is thin or incomplete, say so clearly and explain what is missing.\n"
+)
+
 _MSPDP_NEG_USER = (
     "Below is an MSPDP case template. You are the negation side on the following topic: {topic}. \n"
     " If this round is a policy round (for information on what a policy round is, please refer to the case template.), you must argue that the action proposed by the resolution must not be taken. If this round is a value round (for information on what a value round is, please refer to the case template.), you must argue the inverse of the statement. for instance, if the topic is structured in the format \"x does more harm than good,\" you must argue \"x does more good than harm.\" Or, if the topic argues \"x is better than y,\" you must argue \"y is better than x.\" If this round is a fact round (for information on what a fact round is, please refer to the case template.), you must argue that the resolution being stated is untrue. This case template uses \"[ ]\" to signify a definition or explanation of a debate term in the template. Use the negation top of case and ignore the affirmative top of case. Here is the case template:\n"
@@ -304,3 +321,28 @@ async def make_mspdp_case(topic: str, side: str) -> str:
         + _MSPDP_OUTPUT_RULES
     )
     return await _chat(_MSPDP_SYSTEM_PROMPT, user)
+
+
+async def analyze_case(format: str, side: str, case_text: str, topic: str | None = None) -> str:
+    """Analyze an existing debate case and return markdown feedback."""
+    format_label = "Parli" if format == "parli" else "MSPDP"
+    side_label = "Affirmative" if side == "aff" else "Negative"
+    topic_line = topic.strip() if topic else "Unknown / not provided"
+    structure_guide = (
+        "For Parli, assess whether policy/value rounds use TULI well and whether fact rounds use Claim/Warrant/Impact well."
+        if format == "parli"
+        else "For MSPDP, assess whether policy/value rounds use ARESI well and whether fact rounds use Claim/Warrant/Impact well."
+    )
+    user = (
+        f"Analyze this {format_label} {side_label.lower()} debate case.\n"
+        f"Topic: {topic_line}\n"
+        f"Side: {side_label}\n"
+        f"Format: {format_label}\n\n"
+        "Focus on whether the case is strategically usable in a real round, not just whether it sounds polished. "
+        "Identify the strongest strategic choices, the weakest structural or analytical gaps, and the highest-leverage revisions.\n"
+        f"{structure_guide}\n"
+        + _ANALYSIS_OUTPUT_RULES
+        + "\n\nCase text:\n"
+        + case_text.strip()
+    )
+    return await _chat(_ANALYSIS_SYSTEM_PROMPT, user)
