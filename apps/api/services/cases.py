@@ -235,6 +235,9 @@ _ANALYSIS_OUTPUT_RULES = (
     "- Avoid repetitive coaching language. If a weakness has already been explained once, do not restate it in different words in a later section.\n"
     "- Do not grade the case on whether it anticipates opponent counterarguments or includes preemptive rebuttals unless the pasted case explicitly claims to include those sections.\n"
     "- Focus on the quality of the constructive case itself: structure, warranting, links, impacts, weighing, solvency, and strategic coherence.\n"
+    "- Do not require explicit format labels like `U1`, `L1`, `Uniqueness`, `ARESI`, `TULI`, `Assertion`, or `Claim/Warrant/Impact` headings in order to evaluate the case positively.\n"
+    "- Judge the function of the argument, not the label. If the case clearly contains a point being proven, reasoning or warranting, a causal chain or link story, and impacts, treat that as structurally valid even if the formatting is nonstandard.\n"
+    "- Do not penalize the case merely because it does not use numbered tags or template headings.\n"
 )
 
 _MSPDP_NEG_USER = (
@@ -366,9 +369,9 @@ async def analyze_case(format: str, side: str, case_text: str, topic: str | None
     side_label = "Affirmative" if side == "aff" else "Negative"
     topic_line = topic.strip() if topic else "Unknown / not provided"
     structure_guide = (
-        "For Parli, assess whether policy/value rounds use TULI well and whether fact rounds use Claim/Warrant/Impact well."
+        "For Parli, assess whether the case functionally establishes a point, supporting reasoning, causal links, and impacts. Named TULI headings are optional."
         if format == "parli"
-        else "For MSPDP, assess whether policy/value rounds use ARESI well and whether fact rounds use Claim/Warrant/Impact well."
+        else "For MSPDP, assess whether the case functionally establishes a point, supporting reasoning, causal links, and impacts. Named ARESI headings are optional."
     )
     user = (
         f"Analyze this {format_label} {side_label.lower()} debate case.\n"
