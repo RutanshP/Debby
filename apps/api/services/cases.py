@@ -233,6 +233,8 @@ _ANALYSIS_OUTPUT_RULES = (
     "- In `Gaps and Fixes`, each bullet must pair one problem with one specific fix immediately after it. Do not create a separate section that restates the same fixes.\n"
     "- `Revision Priorities` should be short and ranked. Do not repeat the same explanation from `Gaps and Fixes`; just name the highest-leverage edits.\n"
     "- Avoid repetitive coaching language. If a weakness has already been explained once, do not restate it in different words in a later section.\n"
+    "- Do not grade the case on whether it anticipates opponent counterarguments or includes preemptive rebuttals unless the pasted case explicitly claims to include those sections.\n"
+    "- Focus on the quality of the constructive case itself: structure, warranting, links, impacts, weighing, solvency, and strategic coherence.\n"
 )
 
 _MSPDP_NEG_USER = (
