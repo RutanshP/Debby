@@ -67,26 +67,13 @@ class PracticeRoundAssignmentPayload(BaseModel):
 
 class CaseAssignmentPayload(BaseModel):
     format: Format
-    topic: str = ""
+    topic: str = Field(min_length=1)
     side: Side
-    content: str = Field(min_length=1)
 
     @field_validator("topic")
     @classmethod
     def topic_must_be_valid(cls, value: str) -> str:
-        if not value.strip():
-            return ""
         return validate_topic_word_limit(value)
-
-    @field_validator("content")
-    @classmethod
-    def content_must_be_within_limit(cls, value: str) -> str:
-        words = value.strip().split()
-        if not value.strip():
-            raise ValueError("Case text is required")
-        if len(words) > MAX_CASE_TEXT_WORDS:
-            raise ValueError(f"Case text must be {MAX_CASE_TEXT_WORDS} words or fewer")
-        return value
 
 
 AssignmentPayload = DrillAssignmentPayload | PracticeRoundAssignmentPayload | CaseAssignmentPayload

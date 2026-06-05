@@ -107,7 +107,6 @@ export function ClassesClient() {
   const [caseFormat, setCaseFormat] = useState<PracticeFormat>("parli");
   const [caseSide, setCaseSide] = useState<PracticeSide>("aff");
   const [caseTopic, setCaseTopic] = useState("");
-  const [caseContent, setCaseContent] = useState("");
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
   const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
@@ -211,7 +210,6 @@ export function ClassesClient() {
                 format: caseFormat,
                 topic: caseTopic.trim(),
                 side: caseSide,
-                content: caseContent.trim(),
               }
           : {
               format: practiceFormat,
@@ -233,7 +231,6 @@ export function ClassesClient() {
       setTitle("");
       setPracticeTopic("");
       setCaseTopic("");
-      setCaseContent("");
       setSelectedRecipients([]);
       await invalidateCurrentClass();
     } catch (err) {
@@ -531,17 +528,7 @@ export function ClassesClient() {
                                   value={caseTopic}
                                   onChange={(event) => setCaseTopic(event.target.value)}
                                   className={fieldClass}
-                                  placeholder="Optional but helpful"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 lg:col-span-2">
-                                Case text
-                                <textarea
-                                  value={caseContent}
-                                  onChange={(event) => setCaseContent(event.target.value)}
-                                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
-                                  rows={10}
-                                  placeholder="Paste the case competitors should analyze..."
+                                  placeholder="Students will write a case on this topic"
                                   required={type === "case"}
                                 />
                               </label>

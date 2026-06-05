@@ -42,7 +42,6 @@ export interface CaseAssignmentPayload {
   format: PracticeFormat;
   topic: string;
   side: PracticeSide;
-  content: string;
 }
 
 export type AssignmentPayload =
