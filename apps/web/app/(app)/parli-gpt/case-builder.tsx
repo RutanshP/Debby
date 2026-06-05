@@ -383,7 +383,9 @@ export default function CaseBuilder() {
                 </div>
                 <div className="text-slate-600">
                   {assignmentDetail.class_room.name} / case analysis /{" "}
-                  {assignmentDetail.assignment.payload.format}
+                  {isCasePayload(assignmentDetail.assignment)
+                    ? assignmentDetail.assignment.payload.format
+                    : ""}
                 </div>
               </div>
               <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-teal-dark">
