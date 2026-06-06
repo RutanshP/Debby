@@ -2,9 +2,16 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DrillsClient } from "@/app/(app)/drills/drills-client";
 
+const searchParamsState = new URLSearchParams();
+const useClassDetailMock = jest.fn(() => ({ data: null }));
+
 jest.mock("next/navigation", () => ({
-  useSearchParams: () => ({ get: (_k: string) => null }),
+  useSearchParams: () => ({ get: (key: string) => searchParamsState.get(key) }),
   useRouter: () => ({ push: jest.fn() }),
+}));
+
+jest.mock("@/lib/queries/classroom", () => ({
+  useClassDetail: (...args: unknown[]) => useClassDetailMock(...args),
 }));
 
 jest.mock("@/lib/supabase", () => ({
@@ -57,6 +64,9 @@ function mockPendingFetchOnce() {
 describe("DrillsClient", () => {
   beforeEach(() => {
     global.fetch = jest.fn() as unknown as typeof fetch;
+    searchParamsState.forEach((_value, key) => searchParamsState.delete(key));
+    useClassDetailMock.mockReset();
+    useClassDetailMock.mockReturnValue({ data: null });
   });
 
   afterEach(() => {
@@ -511,5 +521,48 @@ describe("DrillsClient", () => {
 
     await user.click(screen.getByRole("button", { name: /Impact Extension/i }));
     expect(screen.queryByText("Old drill.")).not.toBeInTheDocument();
+  });
+
+  it("highlights the matching class drill when browsing drills separately", async () => {
+    searchParamsState.set("class", "class-1");
+    useClassDetailMock.mockReturnValue({
+      data: {
+        role: "competitor",
+        assignments: [
+          {
+            recipient: {
+              id: "rec-1",
+              assignment_id: "asg-1",
+              user_id: "user-1",
+              status: "assigned",
+            },
+            assignment: {
+              id: "asg-1",
+              class_id: "class-1",
+              assigned_by: "coach-1",
+              title: "Impact Drill",
+              type: "drill",
+              payload: { drill_type: "impact", timer_seconds: 120 },
+            },
+            class_room: {
+              id: "class-1",
+              name: "Debate 101",
+              join_code: "JOIN",
+              created_by: "coach-1",
+            },
+          },
+        ],
+      },
+    });
+
+    render(<DrillsClient />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Impact Extension/i })).toHaveTextContent(
+        "1 class assignment due",
+      );
+    });
+    expect(screen.getByLabelText(/Timer/i)).toHaveValue("120");
+    expect(screen.getByText(/Matches 1 due assignment/i)).toBeInTheDocument();
   });
 });

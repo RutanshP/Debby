@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type { ClassRole } from "@/lib/classroom";
 import { getBrowserSupabase } from "@/lib/supabase";
-import { useClassDetail } from "@/lib/queries/classroom";
+import { useClassDetail, useClasses } from "@/lib/queries/classroom";
 
 const navItems = [
   { href: "/practice", label: "Practice" },
@@ -19,6 +19,24 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function assignmentBadgeCount({
+  classId,
+  classRole,
+  detailAssignments,
+  classList,
+}: {
+  classId: string | null;
+  classRole: ClassRole | null;
+  detailAssignments?: Array<{ recipient?: { status: string } }> | null;
+  classList?: Array<{ id: string; open_assignments: number }> | null;
+}): number {
+  if (classRole === "coach") return 0;
+  if (classId && detailAssignments) {
+    return detailAssignments.filter((item) => item.recipient?.status !== "completed").length;
+  }
+  return (classList ?? []).reduce((sum, item) => sum + (item.open_assignments ?? 0), 0);
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -26,10 +44,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [signingOut, setSigningOut] = useState(false);
   const classId = searchParams.get("class");
   const inClassWorkspace = pathname.startsWith("/classes") || Boolean(classId);
+  const classesQuery = useClasses();
 
   // Use the query hook to get class detail (which includes the role)
   const classDetailQuery = useClassDetail(classId);
   const classRole = classDetailQuery.data?.role ?? null;
+  const dueAssignments = assignmentBadgeCount({
+    classId,
+    classRole,
+    detailAssignments:
+      classDetailQuery.data?.role === "competitor"
+        ? classDetailQuery.data.assignments
+        : null,
+    classList: classesQuery.data ?? null,
+  });
   // Role is "unknown" only while the detail for this class is loading for the
   // first time (no cached data yet). Using isLoading rather than isFetching
   // avoids collapsing the nav on every background refetch, while still
@@ -107,13 +135,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={`${item.label}-${item.href}`}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
+                  className={`flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-medium transition ${
                     active
                       ? "bg-teal text-white"
                       : "text-slate-700 hover:bg-teal/10 hover:text-teal-dark"
                   }`}
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+                  {item.label === "Assignments" && dueAssignments > 0 && (
+                    <span
+                      aria-label={`${dueAssignments} assignments due`}
+                      className={`inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        active ? "bg-white/20 text-white" : "bg-teal text-white"
+                      }`}
+                    >
+                      {dueAssignments}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -188,11 +226,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={`${item.label}-${item.href}`}
                 href={item.href}
-                className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium ${
+                className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium ${
                   active ? "bg-teal text-white" : "bg-slate-100 text-slate-700"
                 }`}
               >
-                {item.label}
+                <span>{item.label}</span>
+                {item.label === "Assignments" && dueAssignments > 0 && (
+                  <span
+                    aria-label={`${dueAssignments} assignments due`}
+                    className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+                      active ? "bg-white/20 text-white" : "bg-teal text-white"
+                    }`}
+                  >
+                    {dueAssignments}
+                  </span>
+                )}
               </Link>
             );
           })}

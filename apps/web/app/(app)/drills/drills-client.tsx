@@ -11,6 +11,7 @@ import {
   statusLabel,
   type AssignmentRecipientDetail,
 } from "@/lib/classroom";
+import { useClassDetail } from "@/lib/queries/classroom";
 
 export type DrillType = "rebuttal" | "speed" | "impact" | "contention" | "filler";
 type SpeedCategory = "standard" | "postmodernism";
@@ -178,9 +179,15 @@ function FeedbackLoading() {
   );
 }
 
+function formatAssignmentTimerSummary(timers: number[]): string {
+  const uniqueTimers = [...new Set(timers)].sort((a, b) => a - b);
+  return uniqueTimers.map((seconds) => `${seconds}s`).join(", ");
+}
+
 export function DrillsClient() {
   const searchParams = useSearchParams();
   const assignmentRecipientId = searchParams.get("assignment");
+  const classId = searchParams.get("class");
   const [drillType, setDrillType] = useState<DrillType>("rebuttal");
   const [speedCategory, setSpeedCategory] = useState<SpeedCategory>("standard");
   const [timerSeconds, setTimerSeconds] = useState<number>(60);
@@ -203,6 +210,7 @@ export function DrillsClient() {
   const responseRef = useRef("");
   const submittingRef = useRef(false);
   const typingDeadlineRef = useRef<number | null>(null);
+  const classDetailQuery = useClassDetail(classId);
 
   const isSpeed = drillType === "speed";
   const isContention = drillType === "contention";
@@ -216,6 +224,29 @@ export function DrillsClient() {
   const assignmentLocked = Boolean(assignmentPayload);
   const typingTimerExpired =
     isContention && typingStarted && remainingSeconds !== null && remainingSeconds <= 0;
+  const classDrillAssignments =
+    classDetailQuery.data?.role === "competitor"
+      ? classDetailQuery.data.assignments.filter(
+          (item): item is AssignmentRecipientDetail =>
+            !("recipients" in item) &&
+            item.recipient.status !== "completed" &&
+            isDrillPayload(item.assignment),
+        )
+      : [];
+  const highlightedAssignmentsByType = new Map<DrillType, AssignmentRecipientDetail[]>();
+  for (const item of classDrillAssignments) {
+    const type = item.assignment.payload.drill_type;
+    const current = highlightedAssignmentsByType.get(type) ?? [];
+    current.push(item);
+    highlightedAssignmentsByType.set(type, current);
+  }
+  const matchingTypeAssignments = highlightedAssignmentsByType.get(drillType) ?? [];
+  const exactMatchingAssignments = matchingTypeAssignments.filter(
+    (item) => item.assignment.payload.timer_seconds === timerSeconds,
+  );
+  const assignedTimersForSelectedType = matchingTypeAssignments.map(
+    (item) => item.assignment.payload.timer_seconds,
+  );
 
   useEffect(() => {
     responseRef.current = response;
@@ -275,6 +306,15 @@ export function DrillsClient() {
       ignore = true;
     };
   }, [assignmentRecipientId]);
+
+  useEffect(() => {
+    if (assignmentRecipientId || !classDrillAssignments.length) return;
+    const firstAssignment = classDrillAssignments[0];
+    const nextType = firstAssignment.assignment.payload.drill_type;
+    const nextTimer = firstAssignment.assignment.payload.timer_seconds;
+    setDrillType((current) => (current === nextType ? current : nextType));
+    setTimerSeconds((current) => (current === nextTimer ? current : nextTimer));
+  }, [assignmentRecipientId, classDrillAssignments]);
 
   function handleDrillTypeChange(nextType: DrillType) {
     if (assignmentLocked) return;
@@ -557,6 +597,11 @@ export function DrillsClient() {
       <section aria-label="Drill types" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {DRILL_TYPES.map((option) => {
           const active = option.type === drillType;
+          const matchingAssignments = highlightedAssignmentsByType.get(option.type) ?? [];
+          const assignedTimers = matchingAssignments.map(
+            (item) => item.assignment.payload.timer_seconds,
+          );
+          const highlighted = !assignmentRecipientId && matchingAssignments.length > 0;
           return (
             <button
               key={option.type}
@@ -567,7 +612,9 @@ export function DrillsClient() {
               className={`flex flex-col gap-1 rounded-lg border p-4 text-left transition-colors ${
                 active
                   ? "border-teal bg-teal/5 ring-2 ring-teal"
-                  : "border-slate-200 bg-white hover:border-teal/60"
+                  : highlighted
+                    ? "border-amber-300 bg-amber-50 hover:border-amber-400"
+                    : "border-slate-200 bg-white hover:border-teal/60"
               } disabled:cursor-not-allowed disabled:opacity-80`}
             >
               <span className="inline-block w-fit rounded-full bg-teal/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-teal-dark">
@@ -575,6 +622,15 @@ export function DrillsClient() {
               </span>
               <span className="text-lg font-semibold text-slate-900">{option.label}</span>
               <span className="text-sm text-slate-600">{option.description}</span>
+              {highlighted && (
+                <span className="mt-1 text-xs font-semibold text-amber-800">
+                  {matchingAssignments.length} class assignment
+                  {matchingAssignments.length === 1 ? "" : "s"} due
+                  {assignedTimers.length > 0
+                    ? ` · ${formatAssignmentTimerSummary(assignedTimers)}`
+                    : ""}
+                </span>
+              )}
             </button>
           );
         })}
@@ -598,6 +654,13 @@ export function DrillsClient() {
               </option>
             ))}
           </select>
+          {!assignmentLocked && matchingTypeAssignments.length > 0 && (
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+              {exactMatchingAssignments.length > 0
+                ? `Matches ${exactMatchingAssignments.length} due assignment${exactMatchingAssignments.length === 1 ? "" : "s"}`
+                : `Assigned timer${assignedTimersForSelectedType.length > 1 ? "s" : ""}: ${formatAssignmentTimerSummary(assignedTimersForSelectedType)}`}
+            </span>
+          )}
           {isSpeed && !assignmentLocked && (
             <>
               <label htmlFor="speed-category" className="text-sm font-semibold text-teal-dark">
