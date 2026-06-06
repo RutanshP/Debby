@@ -147,7 +147,7 @@ async def _search_tavily(query: str) -> list[dict[str, Any]]:
             json={
                 "api_key": api_key,
                 "query": query,
-                "search_depth": "advanced",
+                "search_depth": "basic",
                 "max_results": _TAVILY_MAX_RESULTS,
                 "include_answer": False,
                 "include_raw_content": True,
