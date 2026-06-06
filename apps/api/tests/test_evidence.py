@@ -78,6 +78,15 @@ async def test_get_topic_evidence_fetches_then_caches(monkeypatch: pytest.Monkey
     fake_supabase = _FakeSupabase()
     monkeypatch.setattr(evidence_service, "get_supabase", lambda: fake_supabase)
 
+    async def fake_search_tavily(_query: str):
+        return [
+            {
+                "title": "Brookings",
+                "url": "https://example.com/brookings",
+                "raw_content": "NATO members spent 2% of GDP on defense in 2024, raising deterrence costs.",
+            }
+        ]
+
     async def fake_create(**_kwargs):
         return SimpleNamespace(
             output_text=(
@@ -85,6 +94,7 @@ async def test_get_topic_evidence_fetches_then_caches(monkeypatch: pytest.Monkey
             )
         )
 
+    monkeypatch.setattr(evidence_service, "_search_tavily", fake_search_tavily)
     fake_client = SimpleNamespace(
         responses=SimpleNamespace(create=fake_create)
     )
@@ -105,6 +115,20 @@ async def test_get_topic_evidence_filters_non_quantitative_cards(monkeypatch: py
     fake_supabase = _FakeSupabase()
     monkeypatch.setattr(evidence_service, "get_supabase", lambda: fake_supabase)
 
+    async def fake_search_tavily(_query: str):
+        return [
+            {
+                "title": "Think Tank",
+                "url": "https://example.com/vague",
+                "raw_content": "Infrastructure can improve trade and investment.",
+            },
+            {
+                "title": "World Bank",
+                "url": "https://example.com/worldbank",
+                "raw_content": "Trade volume rose 18% between 2021 and 2024 after border reforms.",
+            },
+        ]
+
     async def fake_create(**_kwargs):
         return SimpleNamespace(
             output_text=(
@@ -115,6 +139,7 @@ async def test_get_topic_evidence_filters_non_quantitative_cards(monkeypatch: py
             )
         )
 
+    monkeypatch.setattr(evidence_service, "_search_tavily", fake_search_tavily)
     fake_client = SimpleNamespace(
         responses=SimpleNamespace(create=fake_create)
     )
@@ -137,3 +162,12 @@ async def test_get_prompt_block_falls_back_without_evidence(monkeypatch: pytest.
     block = await evidence_service.get_prompt_block("Test topic", "aff")
 
     assert "Do not invent studies" in block
+
+
+@pytest.mark.asyncio
+async def test_build_tavily_query_mentions_side():
+    aff_query = evidence_service._build_tavily_query("Homework does more harm than good", "aff")
+    neg_query = evidence_service._build_tavily_query("Homework does more harm than good", "neg")
+
+    assert "affirmative" in aff_query
+    assert "negative" in neg_query
