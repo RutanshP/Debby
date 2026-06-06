@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import type { ClassRole } from "@/lib/classroom";
+import { isCoachAssignmentSummary, type ClassRole } from "@/lib/classroom";
 import { getBrowserSupabase } from "@/lib/supabase";
 import { useClassDetail, useClasses } from "@/lib/queries/classroom";
 
@@ -22,17 +22,17 @@ function isActive(pathname: string, href: string): boolean {
 function assignmentBadgeCount({
   classId,
   classRole,
-  detailAssignments,
+  detailAssignmentCount,
   classList,
 }: {
   classId: string | null;
   classRole: ClassRole | null;
-  detailAssignments?: Array<{ recipient?: { status: string } }> | null;
+  detailAssignmentCount?: number | null;
   classList?: Array<{ id: string; open_assignments: number }> | null;
 }): number {
   if (classRole === "coach") return 0;
-  if (classId && detailAssignments) {
-    return detailAssignments.filter((item) => item.recipient?.status !== "completed").length;
+  if (classId && typeof detailAssignmentCount === "number") {
+    return detailAssignmentCount;
   }
   return (classList ?? []).reduce((sum, item) => sum + (item.open_assignments ?? 0), 0);
 }
@@ -49,13 +49,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Use the query hook to get class detail (which includes the role)
   const classDetailQuery = useClassDetail(classId);
   const classRole = classDetailQuery.data?.role ?? null;
+  const competitorDueAssignmentCount =
+    classDetailQuery.data?.role === "competitor"
+      ? classDetailQuery.data.assignments.filter(
+          (item) =>
+            !isCoachAssignmentSummary(item) && item.recipient.status !== "completed",
+        ).length
+      : null;
   const dueAssignments = assignmentBadgeCount({
     classId,
     classRole,
-    detailAssignments:
-      classDetailQuery.data?.role === "competitor"
-        ? classDetailQuery.data.assignments
-        : null,
+    detailAssignmentCount: competitorDueAssignmentCount,
     classList: classesQuery.data ?? null,
   });
   // Role is "unknown" only while the detail for this class is loading for the
