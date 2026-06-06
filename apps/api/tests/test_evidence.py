@@ -90,7 +90,7 @@ async def test_get_topic_evidence_fetches_then_caches(monkeypatch: pytest.Monkey
     async def fake_create(**_kwargs):
         return SimpleNamespace(
             output_text=(
-                '{"cards":[{"tag":"Deterrence works","evidence":"NATO members spent 2% of GDP on defense in 2024, raising deterrence costs.","source_title":"Brookings","source_url":"https://example.com/brookings","source_type":"ngo"}]}'
+                '{"cards":[{"tag":"Deterrence works","evidence":"NATO members spent 2% of GDP on defense in 2024, raising deterrence costs.","source_excerpt":"NATO members spent 2% of GDP on defense in 2024, raising deterrence costs.","source_title":"Brookings","source_url":"https://example.com/brookings","source_type":"ngo"}]}'
             )
         )
 
@@ -133,8 +133,8 @@ async def test_get_topic_evidence_filters_non_quantitative_cards(monkeypatch: py
         return SimpleNamespace(
             output_text=(
                 '{"cards":['
-                '{"tag":"Too vague","evidence":"Infrastructure can improve trade and investment.","source_title":"Think Tank","source_url":"https://example.com/vague","source_type":"ngo"},'
-                '{"tag":"Quantified","evidence":"Trade volume rose 18% between 2021 and 2024 after border reforms.","source_title":"World Bank","source_url":"https://example.com/worldbank","source_type":"academic"}'
+                '{"tag":"Too vague","evidence":"Infrastructure can improve trade and investment.","source_excerpt":"Infrastructure can improve trade and investment.","source_title":"Think Tank","source_url":"https://example.com/vague","source_type":"ngo"},'
+                '{"tag":"Quantified","evidence":"Trade volume rose 18% between 2021 and 2024 after border reforms.","source_excerpt":"Trade volume rose 18% between 2021 and 2024 after border reforms.","source_title":"World Bank","source_url":"https://example.com/worldbank","source_type":"academic"}'
                 ']}'
             )
         )
@@ -171,3 +171,40 @@ async def test_build_tavily_query_mentions_side():
 
     assert "affirmative" in aff_query
     assert "negative" in neg_query
+    assert "statistics" in aff_query
+
+
+@pytest.mark.asyncio
+async def test_get_topic_evidence_rejects_hallucinated_stat(monkeypatch: pytest.MonkeyPatch):
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setattr(evidence_service, "get_supabase", lambda: fake_supabase)
+
+    async def fake_search_tavily(_query: str):
+        return [
+            {
+                "title": "NASA missions",
+                "url": "https://example.com/nasa",
+                "raw_content": (
+                    "In May 2020, SpaceX successfully transported astronauts to the "
+                    "International Space Station from American soil for the first time "
+                    "in nearly a decade."
+                ),
+            }
+        ]
+
+    async def fake_create(**_kwargs):
+        return SimpleNamespace(
+            output_text=(
+                '{"cards":[{"tag":"Privatization fails","evidence":"30% of NASA missions are over budget, proving private launch dependence is unstable.","source_excerpt":"In May 2020, SpaceX successfully transported astronauts to the International Space Station from American soil for the first time in nearly a decade.","source_title":"NASA missions","source_url":"https://example.com/nasa","source_type":"news"}]}'
+            )
+        )
+
+    monkeypatch.setattr(evidence_service, "_search_tavily", fake_search_tavily)
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(create=fake_create)
+    )
+    monkeypatch.setattr(evidence_service, "client", fake_client)
+
+    evidence = await evidence_service.get_topic_evidence("NASA privatization", "neg")
+
+    assert evidence is None

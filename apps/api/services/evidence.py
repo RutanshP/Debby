@@ -19,6 +19,7 @@ _TABLE = "topic_evidence_cache"
 _FORMAT_MODEL = "gpt-4o-mini"
 _CACHE_TTL_DAYS = 30
 _QUANTITATIVE_SIGNAL_RE = re.compile(r"\d")
+_NUMERIC_TOKEN_RE = re.compile(r"\d[\d,\.]*%?|\$\d[\d,\.]*|million|billion|trillion", re.IGNORECASE)
 _TAVILY_URL = "https://api.tavily.com/search"
 _TAVILY_MAX_RESULTS = 5
 
@@ -27,14 +28,17 @@ _SYSTEM = (
     "results for one side of a debate topic. Extract a small set of reliable "
     "evidence cards from only those provided results. Return JSON only with "
     "this shape: "
-    '{"cards":[{"tag":"short claim","evidence":"2-4 sentence factual summary","source_title":"title","source_url":"https://...","source_type":"government|ngo|academic|news|industry|other"}]}. '
+    '{"cards":[{"tag":"short claim","evidence":"2-4 sentence factual summary","source_excerpt":"1-3 exact source sentences containing the cited numeric datapoint","source_title":"title","source_url":"https://...","source_type":"government|ngo|academic|news|industry|other"}]}. '
     "Use at most 3 cards. Prefer recent and reputable sources. Every card's "
     "evidence field must include at least one concrete quantitative datapoint "
     "such as a number, percentage, ranking, dollar figure, year, count, or "
     "measured comparison from the source. Do not return purely qualitative or "
-    "analytical summaries without a numeric datapoint. Do not invent studies, "
-    'statistics, institutions, quotes, or URLs. Use only the supplied search '
-    'results. If the evidence is genuinely unclear, return {"cards":[]}.'
+    "analytical summaries without a numeric datapoint. The numeric datapoint "
+    "used in the evidence must also appear in source_excerpt. Prefer hard "
+    "statistics, budgets, counts, percentages, rankings, or measured outcomes "
+    "over descriptive background facts. Do not invent studies, statistics, "
+    'institutions, quotes, or URLs. Use only the supplied search results. If '
+    'the evidence is genuinely unclear, return {"cards":[]}.'
 )
 
 
@@ -71,6 +75,25 @@ def _row_to_topic_evidence(row: dict[str, Any]) -> TopicEvidence:
 
 def _looks_quantitative(text: str) -> bool:
     return bool(_QUANTITATIVE_SIGNAL_RE.search(text or ""))
+
+
+def _extract_numeric_tokens(text: str) -> set[str]:
+    return {match.group(0).lower() for match in _NUMERIC_TOKEN_RE.finditer(text or "")}
+
+
+def _split_sentences(text: str) -> list[str]:
+    chunks = re.split(r"(?<=[.!?])\s+|\n+", text or "")
+    return [chunk.strip() for chunk in chunks if chunk.strip()]
+
+
+def _extract_numeric_sentences(text: str, limit: int = 4) -> list[str]:
+    numeric_sentences: list[str] = []
+    for sentence in _split_sentences(text):
+        if _looks_quantitative(sentence):
+            numeric_sentences.append(sentence)
+        if len(numeric_sentences) >= limit:
+            break
+    return numeric_sentences
 
 
 async def _get_cached(topic: str, side: str) -> TopicEvidence | None:
@@ -128,7 +151,7 @@ async def _upsert(topic: str, side: str, cards: list[dict[str, Any]]) -> TopicEv
 def _build_tavily_query(topic: str, side: str) -> str:
     side_label = "affirmative" if side == "aff" else "negative"
     return (
-        f"{topic} {side_label} debate evidence statistics study report data impact"
+        f"{topic} {side_label} statistics data report study budget cost percentage rate total number"
     )
 
 
@@ -173,11 +196,14 @@ def _compact_tavily_results(results: list[dict[str, Any]]) -> list[dict[str, str
         body = raw_content or content
         if not body:
             continue
+        numeric_sentences = _extract_numeric_sentences(body)
+        if not numeric_sentences:
+            continue
         compacted.append(
             {
                 "title": title,
                 "url": url,
-                "content": body[:4000],
+                "content": " ".join(numeric_sentences)[:4000],
             }
         )
     return compacted
@@ -217,12 +243,17 @@ async def _fetch_from_tavily(topic: str, side: str) -> list[dict[str, Any]]:
             continue
         tag = str(card.get("tag") or "").strip()
         evidence = str(card.get("evidence") or "").strip()
+        source_excerpt = str(card.get("source_excerpt") or "").strip()
         source_title = str(card.get("source_title") or "").strip()
         source_url = str(card.get("source_url") or "").strip()
         source_type = str(card.get("source_type") or "").strip() or None
-        if not tag or not evidence or not source_title or not source_url:
+        if not tag or not evidence or not source_excerpt or not source_title or not source_url:
             continue
         if not _looks_quantitative(evidence):
+            continue
+        evidence_numbers = _extract_numeric_tokens(evidence)
+        source_numbers = _extract_numeric_tokens(source_excerpt)
+        if not evidence_numbers or not source_numbers or evidence_numbers.isdisjoint(source_numbers):
             continue
         normalized.append(
             {
