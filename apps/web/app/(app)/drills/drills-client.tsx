@@ -242,7 +242,7 @@ export function DrillsClient() {
             isDrillPayload(item.assignment),
         )
       : [];
-  const highlightedAssignmentsByType = new Map<DrillType, AssignmentRecipientDetail[]>();
+  const highlightedAssignmentsByType = new Map<DrillType, DrillAssignmentDetail[]>();
   for (const item of classDrillAssignments) {
     const type = item.assignment.payload.drill_type;
     const current = highlightedAssignmentsByType.get(type) ?? [];
