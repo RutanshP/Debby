@@ -184,6 +184,15 @@ function formatAssignmentTimerSummary(timers: number[]): string {
   return uniqueTimers.map((seconds) => `${seconds}s`).join(", ");
 }
 
+type DrillAssignmentDetail = AssignmentRecipientDetail & {
+  assignment: AssignmentRecipientDetail["assignment"] & {
+    payload: {
+      drill_type: DrillType;
+      timer_seconds: number;
+    };
+  };
+};
+
 export function DrillsClient() {
   const searchParams = useSearchParams();
   const assignmentRecipientId = searchParams.get("assignment");
@@ -227,7 +236,7 @@ export function DrillsClient() {
   const classDrillAssignments =
     classDetailQuery.data?.role === "competitor"
       ? classDetailQuery.data.assignments.filter(
-          (item): item is AssignmentRecipientDetail =>
+          (item): item is DrillAssignmentDetail =>
             !("recipients" in item) &&
             item.recipient.status !== "completed" &&
             isDrillPayload(item.assignment),
