@@ -35,14 +35,14 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = user ? "/workspace" : "/login";
+    url.pathname = user ? "/classes" : "/login";
     url.search = "";
     return NextResponse.redirect(url);
   }
 
   if (user && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/workspace";
+    url.pathname = "/classes";
     url.search = "";
     return NextResponse.redirect(url);
   }

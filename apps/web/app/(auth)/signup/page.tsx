@@ -73,7 +73,7 @@ function SignupForm() {
       }
 
       if (data?.session) {
-        router.push("/workspace");
+        router.push("/classes");
       } else {
         setInfo("Check your email to confirm your account.");
       }

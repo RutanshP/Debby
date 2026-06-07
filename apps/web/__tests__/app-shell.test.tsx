@@ -8,7 +8,10 @@ const useClassDetailMock = jest.fn(() => ({ data: null, isLoading: false }));
 
 jest.mock("next/navigation", () => ({
   usePathname: () => pathnameState.value,
-  useSearchParams: () => ({ get: (key: string) => searchParamsState.get(key) }),
+  useSearchParams: () => ({
+    get: (key: string) => searchParamsState.get(key),
+    toString: () => searchParamsState.toString(),
+  }),
   useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
 }));
 
@@ -47,9 +50,25 @@ describe("AppShell", () => {
     searchParamsState.set("class", "class-1");
     useClassesMock.mockReset();
     useClassDetailMock.mockReset();
-    useClassesMock.mockReturnValue({ data: [] });
+    useClassesMock.mockReturnValue({
+      data: [
+        {
+          id: "class-1",
+          name: "Varsity PF",
+          role: "competitor",
+          join_code: "ABC123",
+          open_assignments: 2,
+        },
+      ],
+    });
     useClassDetailMock.mockReturnValue({
       data: {
+        class_room: {
+          id: "class-1",
+          name: "Varsity PF",
+          join_code: "ABC123",
+          created_by: "coach-1",
+        },
         role: "competitor",
         assignments: [
           { recipient: { status: "assigned" } },
@@ -69,5 +88,21 @@ describe("AppShell", () => {
     );
 
     expect(screen.getAllByLabelText("2 assignments due")).toHaveLength(2);
+  });
+
+  it("shows create and join in the class section when there are no classes", () => {
+    useClassesMock.mockReturnValue({ data: [] });
+    useClassDetailMock.mockReturnValue({ data: null, isLoading: false });
+    searchParamsState.forEach((_value, key) => searchParamsState.delete(key));
+    searchParamsState.set("tab", "create");
+
+    render(
+      <AppShell>
+        <div>Child</div>
+      </AppShell>,
+    );
+
+    expect(screen.getAllByRole("link", { name: "Create" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Join" }).length).toBeGreaterThan(0);
   });
 });

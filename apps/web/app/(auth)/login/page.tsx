@@ -51,7 +51,7 @@ function LoginForm() {
         setFormError(error.message);
         return;
       }
-      router.push("/workspace");
+      router.push("/classes");
     } catch {
       setFormError("Something went wrong. Please try again.");
     } finally {
