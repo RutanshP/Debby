@@ -215,6 +215,17 @@ function normalizeComparableTopic(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+type PracticeAssignmentDetail = AssignmentRecipientDetail & {
+  assignment: AssignmentRecipientDetail["assignment"] & {
+    payload: {
+      format: Format;
+      topic: string;
+      side: Side;
+      speech_duration_seconds: number;
+    };
+  };
+};
+
 function StepCard({
   step,
   title,
@@ -377,7 +388,7 @@ export function RoundRunner() {
   const classPracticeAssignments =
     !assignmentRecipientId && classDetailQuery.data?.role === "competitor"
       ? classDetailQuery.data.assignments.filter(
-          (item): item is AssignmentRecipientDetail =>
+          (item): item is PracticeAssignmentDetail =>
             !isCoachAssignmentSummary(item) &&
             item.recipient.status !== "completed" &&
             isPracticePayload(item.assignment),
