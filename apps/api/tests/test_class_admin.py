@@ -232,6 +232,14 @@ def test_competitor_cannot_regenerate_code(client: TestClient) -> None:
     assert resp.status_code == 403
 
 
+def test_competitor_cannot_delete_class(client: TestClient) -> None:
+    global CURRENT_USER
+    class_id = _create_class_and_join_student(client)
+    CURRENT_USER = STUDENT
+    resp = client.delete(f"/api/classes/{class_id}")
+    assert resp.status_code == 403
+
+
 def test_competitor_cannot_delete_assignment(client: TestClient) -> None:
     global CURRENT_USER
     class_id = _create_class_and_join_student(client)
@@ -262,6 +270,36 @@ def test_coach_can_regenerate_code(client: TestClient) -> None:
     new_code = resp.json()["join_code"]
     assert new_code != original_code
     assert len(new_code) == 6
+
+
+def test_coach_can_delete_class(client: TestClient, fake_supabase: _FakeSupabase) -> None:
+    class_id = _create_class_and_join_student(client)
+    assignment_id = _create_drill_assignment(client, class_id)
+
+    recipient_rows = fake_supabase.table("assignment_recipients").rows
+    target_recipient = next(
+        row for row in recipient_rows if row["assignment_id"] == assignment_id
+    )
+    fake_supabase.table("assignment_submissions").rows.append(
+        {
+            "id": str(uuid.uuid4()),
+            "recipient_id": target_recipient["id"],
+            "user_id": STUDENT.id,
+            "drill_id": "drill-1",
+        }
+    )
+
+    resp = client.delete(f"/api/classes/{class_id}")
+    assert resp.status_code == 204, resp.text
+    assert [row for row in fake_supabase.table("classes").rows if row["id"] == class_id] == []
+    assert [row for row in fake_supabase.table("class_members").rows if row["class_id"] == class_id] == []
+    assert [row for row in fake_supabase.table("assignments").rows if row["class_id"] == class_id] == []
+    assert [
+        row for row in fake_supabase.table("assignment_recipients").rows if row["assignment_id"] == assignment_id
+    ] == []
+    assert [
+        row for row in fake_supabase.table("assignment_submissions").rows if row["recipient_id"] == target_recipient["id"]
+    ] == []
 
 
 def test_coach_can_remove_competitor(client: TestClient, fake_supabase: _FakeSupabase) -> None:

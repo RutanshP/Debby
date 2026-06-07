@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import type { ClassDetail, ClassMember } from "@/lib/classroom";
 import {
   archiveClass,
+  deleteClass,
   leaveClass,
   regenerateJoinCode,
   removeMember,
@@ -25,7 +26,7 @@ interface Props {
   classDetail: ClassDetail;
   /** Called after a mutation so the parent can re-fetch class data. */
   onRefresh: () => Promise<void>;
-  /** Called after the user has left or the class was archived (remove from view). */
+  /** Called after the user has left, archived, or deleted the class (remove from view). */
   onClose?: () => void;
 }
 
@@ -57,6 +58,8 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
   // --- leave ---
   const [leaving, setLeaving] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [deletingClass, setDeletingClass] = useState(false);
+  const [deleteClassError, setDeleteClassError] = useState<string | null>(null);
 
   const competitors: ClassMember[] = roster.filter(
     (m) => m.role === "competitor",
@@ -144,6 +147,26 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
       setLeaveError(err instanceof Error ? err.message : "Failed to leave class");
     } finally {
       setLeaving(false);
+    }
+  }
+
+  async function handleDeleteClass() {
+    if (
+      !confirm(
+        "Delete this class permanently? This will remove the class, roster, assignments, and linked classroom data.",
+      )
+    ) {
+      return;
+    }
+    setDeletingClass(true);
+    setDeleteClassError(null);
+    try {
+      await deleteClass(class_room.id);
+      if (onClose) onClose();
+    } catch (err) {
+      setDeleteClassError(err instanceof Error ? err.message : "Failed to delete class");
+    } finally {
+      setDeletingClass(false);
     }
   }
 
@@ -294,6 +317,24 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
             </button>
             {archiveError && (
               <p className="text-xs text-red-600" role="alert">{archiveError}</p>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+            <h4 className="text-sm font-semibold text-red-800">Delete class</h4>
+            <p className="text-sm text-red-700">
+              Permanently delete this class and its classroom data. This cannot be undone.
+            </p>
+            <button
+              type="button"
+              onClick={handleDeleteClass}
+              disabled={deletingClass}
+              className={dangerButtonClass}
+            >
+              {deletingClass ? "Deleting..." : "Delete class"}
+            </button>
+            {deleteClassError && (
+              <p className="text-xs text-red-600" role="alert">{deleteClassError}</p>
             )}
           </section>
         </>

@@ -67,6 +67,12 @@ export async function leaveClass(classId: string): Promise<void> {
   });
 }
 
+export async function deleteClass(classId: string): Promise<void> {
+  await apiFetch<void>(`/api/classes/${classId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function updateAssignment(
   assignmentId: string,
   payload: UpdateAssignmentPayload,

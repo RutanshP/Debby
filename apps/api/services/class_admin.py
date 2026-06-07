@@ -13,6 +13,8 @@ from services.classroom import (
     _ASSIGNMENTS,
     _CLASSES,
     _MEMBERS,
+    _RECIPIENTS,
+    _SUBMISSIONS,
     _get_class,
     _get_member,
     _insert,
@@ -85,6 +87,31 @@ async def regenerate_code(coach_id: str, class_id: str) -> ClassRoom:
         except Exception:
             continue
     raise RuntimeError("Could not generate a unique join code")
+
+
+async def delete_class(coach_id: str, class_id: str) -> None:
+    await _require_coach(class_id, coach_id)
+    class_row = await _get_class(class_id)
+    if class_row is None:
+        raise LookupError("Class not found")
+
+    assignments = await _select(_ASSIGNMENTS, filters={"class_id": class_id})
+    assignment_ids = [row["id"] for row in assignments if row.get("id")]
+    if assignment_ids:
+        recipients = [
+            recipient
+            for assignment_id in assignment_ids
+            for recipient in await _select(_RECIPIENTS, filters={"assignment_id": assignment_id})
+        ]
+        recipient_ids = [row["id"] for row in recipients if row.get("id")]
+        for recipient_id in recipient_ids:
+            await _delete(_SUBMISSIONS, {"recipient_id": recipient_id})
+        for assignment_id in assignment_ids:
+            await _delete(_RECIPIENTS, {"assignment_id": assignment_id})
+            await _delete(_ASSIGNMENTS, {"id": assignment_id})
+
+    await _delete(_MEMBERS, {"class_id": class_id})
+    await _delete(_CLASSES, {"id": class_id})
 
 
 async def remove_member(coach_id: str, class_id: str, user_id: str) -> None:

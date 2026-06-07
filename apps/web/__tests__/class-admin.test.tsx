@@ -185,6 +185,31 @@ describe("ClassSettings — coach view", () => {
       );
     });
   });
+
+  it("calls DELETE /api/classes/:id when deleting the class", async () => {
+    const user = userEvent.setup();
+    window.confirm = jest.fn(() => true);
+    mockFetchNoContent();
+
+    const onClose = jest.fn();
+    render(
+      <ClassSettings
+        classDetail={coachDetail}
+        onRefresh={async () => {}}
+        onClose={onClose}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^delete class$/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining(`/api/classes/${CLASS_ID}`),
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
 });
 
 describe("ClassSettings — student view", () => {

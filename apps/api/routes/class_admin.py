@@ -42,6 +42,17 @@ async def regenerate_code_route(
         raise _translate_error(exc) from exc
 
 
+@router.delete("/classes/{class_id}", status_code=204)
+async def delete_class_route(
+    class_id: str,
+    user: User = Depends(get_current_user),
+) -> None:
+    try:
+        await class_admin_service.delete_class(user.id, class_id)
+    except Exception as exc:
+        raise _translate_error(exc) from exc
+
+
 @router.delete("/classes/{class_id}/members/{user_id}", status_code=204)
 async def remove_member_route(
     class_id: str,
