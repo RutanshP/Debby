@@ -57,6 +57,11 @@ jest.mock("../components/WpmChart", () => ({
   ),
 }));
 
+const useClassDetailMock = jest.fn(() => ({ data: null }));
+jest.mock("../lib/queries/classroom", () => ({
+  useClassDetail: (...args: unknown[]) => useClassDetailMock(...args),
+}));
+
 import { RoundRunner } from "../app/(app)/round-runner";
 
 // --- Helpers -----------------------------------------------------------
@@ -140,6 +145,8 @@ function findFetchCalls(path: string): Array<[string, RequestInit]> {
 beforeEach(() => {
   jest.resetAllMocks();
   global.fetch = jest.fn();
+  useClassDetailMock.mockReset();
+  useClassDetailMock.mockReturnValue({ data: null });
 });
 
 // --- Tests --------------------------------------------------------------
@@ -545,5 +552,56 @@ describe("RoundRunner", () => {
     expect(screen.getByRole("button", { name: /get topic/i })).toBeEnabled();
     expect(screen.queryByText("Aff wins because of clear impact comparison.")).not.toBeInTheDocument();
     expect(screen.queryByText(/round saved in library/i)).not.toBeInTheDocument();
+  });
+
+  test("shows a matching practice assignment banner without locking standalone practice", async () => {
+    useClassDetailMock.mockReturnValue({
+      data: {
+        role: "competitor",
+        assignments: [
+          {
+            recipient: {
+              id: "rec-1",
+              assignment_id: "assign-1",
+              user_id: "user-1",
+              status: "assigned",
+            },
+            assignment: {
+              id: "assign-1",
+              class_id: "class-1",
+              assigned_by: "coach-1",
+              title: "Climate Round",
+              type: "practice_round",
+              payload: {
+                format: "parli",
+                topic: "Resolved: Cities should ban private cars",
+                side: "neg",
+                speech_duration_seconds: 120,
+              },
+            },
+            class_room: {
+              id: "class-1",
+              name: "Debate 101",
+              join_code: "JOIN",
+              created_by: "coach-1",
+            },
+          },
+        ],
+      },
+    });
+    (global.fetch as jest.Mock).mockResolvedValueOnce(tournamentResponse());
+    render(<RoundRunner />);
+
+    fireEvent.change(screen.getByLabelText(/custom topic/i), {
+      target: { value: "Resolved: Cities should ban private cars" },
+    });
+    fireEvent.change(screen.getByLabelText(/custom side/i), {
+      target: { value: "neg" },
+    });
+
+    expect(
+      screen.getByText(/this setup matches 1 class practice assignment/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /use custom topic/i })).toBeEnabled();
   });
 });

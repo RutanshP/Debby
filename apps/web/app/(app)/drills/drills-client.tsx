@@ -316,15 +316,6 @@ export function DrillsClient() {
     };
   }, [assignmentRecipientId]);
 
-  useEffect(() => {
-    if (assignmentRecipientId || !classDrillAssignments.length) return;
-    const firstAssignment = classDrillAssignments[0];
-    const nextType = firstAssignment.assignment.payload.drill_type;
-    const nextTimer = firstAssignment.assignment.payload.timer_seconds;
-    setDrillType((current) => (current === nextType ? current : nextType));
-    setTimerSeconds((current) => (current === nextTimer ? current : nextTimer));
-  }, [assignmentRecipientId, classDrillAssignments]);
-
   function handleDrillTypeChange(nextType: DrillType) {
     if (assignmentLocked) return;
     setDrillType(nextType);

@@ -562,7 +562,7 @@ describe("DrillsClient", () => {
         "1 class assignment due",
       );
     });
-    expect(screen.getByLabelText(/Timer/i)).toHaveValue("120");
-    expect(screen.getByText(/Matches 1 due assignment/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Timer/i)).toHaveValue("60");
+    expect(screen.getByRole("button", { name: /Impact Extension/i })).toHaveTextContent("120s");
   });
 });

@@ -15,12 +15,14 @@ import {
 import type { FlowSheetData } from "../../components/FlowSheet";
 import { WpmChart, type WpmPoint } from "../../components/WpmChart";
 import {
+  isCoachAssignmentSummary,
   isPracticePayload,
   statusLabel,
   withClassContext,
   type AssignmentRecipientDetail,
   type StartAssignmentResponse,
 } from "../../lib/classroom";
+import { useClassDetail } from "../../lib/queries/classroom";
 
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
@@ -209,6 +211,10 @@ function winnerLabel(
   return `${person} (${SIDE_LABEL[winner]})`;
 }
 
+function normalizeComparableTopic(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function StepCard({
   step,
   title,
@@ -292,6 +298,7 @@ export function RoundRunner() {
   const searchParams = useSearchParams();
   const classId = searchParams?.get("class") ?? null;
   const assignmentRecipientId = searchParams?.get("assignment") ?? null;
+  const classDetailQuery = useClassDetail(classId);
   const [step, setStep] = useState<Step>(1);
 
   // Step 1
@@ -367,6 +374,26 @@ export function RoundRunner() {
   const affRebuttalReady = Boolean(affTwoTranscript.trim());
   const customTopicWordCount = countWords(customTopic);
   const customTopicTooLong = customTopicWordCount > TOPIC_WORD_LIMIT;
+  const classPracticeAssignments =
+    !assignmentRecipientId && classDetailQuery.data?.role === "competitor"
+      ? classDetailQuery.data.assignments.filter(
+          (item): item is AssignmentRecipientDetail =>
+            !isCoachAssignmentSummary(item) &&
+            item.recipient.status !== "completed" &&
+            isPracticePayload(item.assignment),
+        )
+      : [];
+  const currentComparableTopic = normalizeComparableTopic(topic?.topic ?? customTopic);
+  const matchingPracticeAssignments = classPracticeAssignments.filter((item) => {
+    const payload = item.assignment.payload;
+    return (
+      payload.format === format &&
+      payload.side === (topic?.side ?? customSide) &&
+      payload.speech_duration_seconds === speechDurationSeconds &&
+      currentComparableTopic.length > 0 &&
+      normalizeComparableTopic(payload.topic) === currentComparableTopic
+    );
+  });
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -1091,6 +1118,23 @@ export function RoundRunner() {
                 ? "Completed"
                 : statusLabel(assignmentDetail.recipient.status)}
             </span>
+          </div>
+        </section>
+      )}
+
+      {!assignmentDetail && classPracticeAssignments.length > 0 && (
+        <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm shadow-sm">
+          <div className="font-semibold text-amber-900">
+            {matchingPracticeAssignments.length > 0
+              ? `This setup matches ${matchingPracticeAssignments.length} class practice assignment${matchingPracticeAssignments.length === 1 ? "" : "s"}.`
+              : `You have ${classPracticeAssignments.length} open class practice assignment${classPracticeAssignments.length === 1 ? "" : "s"}.`}
+          </div>
+          <div className="mt-1 text-amber-800">
+            {matchingPracticeAssignments.length > 0
+              ? matchingPracticeAssignments
+                  .map((item) => item.assignment.title)
+                  .join(" • ")
+              : "You can keep practicing anything here. When you match an assigned topic, side, and timer, Debby will show that clearly."}
           </div>
         </section>
       )}

@@ -6,10 +6,12 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { apiFetch, ApiError } from "@/lib/api";
 import {
+  isCoachAssignmentSummary,
   isCasePayload,
   statusLabel,
   type AssignmentRecipientDetail,
 } from "@/lib/classroom";
+import { useClassDetail } from "@/lib/queries/classroom";
 
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
@@ -152,10 +154,15 @@ function normalizeCaseStructure(value: string): string {
     .join("\n");
 }
 
+function normalizeComparableTopic(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export default function CaseBuilder() {
   const searchParams = useSearchParams();
   const classId = searchParams.get("class");
   const assignmentRecipientId = searchParams.get("assignment");
+  const classDetailQuery = useClassDetail(classId);
   const [mode, setMode] = useState<StudioMode>("create");
   const [format, setFormat] = useState<Format>("parli");
   const [topic, setTopic] = useState("");
@@ -181,6 +188,23 @@ export default function CaseBuilder() {
   const assignmentWordCount = countWords(assignmentCaseText);
   const assignmentTooLong = assignmentWordCount > ANALYSIS_WORD_LIMIT;
   const assignmentLocked = Boolean(assignmentDetail && isCasePayload(assignmentDetail.assignment));
+  const classCaseAssignments =
+    !assignmentRecipientId && classDetailQuery.data?.role === "competitor"
+      ? classDetailQuery.data.assignments.filter(
+          (item): item is AssignmentRecipientDetail =>
+            !isCoachAssignmentSummary(item) &&
+            item.recipient.status !== "completed" &&
+            isCasePayload(item.assignment),
+        )
+      : [];
+  const matchingClassCaseAssignments = classCaseAssignments.filter((item) => {
+    const payload = item.assignment.payload;
+    return (
+      payload.format === format &&
+      payload.side === side &&
+      normalizeComparableTopic(payload.topic) === normalizeComparableTopic(topic)
+    );
+  });
 
   function resetOutput() {
     setError(null);
@@ -486,6 +510,22 @@ export default function CaseBuilder() {
                   ? "Completed"
                   : statusLabel(assignmentDetail.recipient.status)}
               </span>
+            </div>
+          </section>
+        )}
+        {!assignmentDetail && classCaseAssignments.length > 0 && (
+          <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm shadow-sm">
+            <div className="font-semibold text-amber-900">
+              {matchingClassCaseAssignments.length > 0
+                ? `This setup matches ${matchingClassCaseAssignments.length} class case assignment${matchingClassCaseAssignments.length === 1 ? "" : "s"}.`
+                : `You have ${classCaseAssignments.length} open class case assignment${classCaseAssignments.length === 1 ? "" : "s"}.`}
+            </div>
+            <div className="mt-1 text-amber-800">
+              {matchingClassCaseAssignments.length > 0
+                ? matchingClassCaseAssignments
+                    .map((item) => item.assignment.title)
+                    .join(" • ")
+                : "Keep exploring freely here, or switch your topic/side to match the assigned case when you want to complete it."}
             </div>
           </section>
         )}

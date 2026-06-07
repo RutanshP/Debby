@@ -3,8 +3,13 @@ import userEvent from "@testing-library/user-event";
 import CaseBuilder from "@/app/(app)/parli-gpt/case-builder";
 
 const getParamMock = jest.fn<string | null, [string]>();
+const useClassDetailMock = jest.fn(() => ({ data: null }));
 jest.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: (key: string) => getParamMock(key) }),
+}));
+
+jest.mock("@/lib/queries/classroom", () => ({
+  useClassDetail: (...args: unknown[]) => useClassDetailMock(...args),
 }));
 
 jest.mock("@/lib/supabase", () => ({
@@ -29,6 +34,8 @@ beforeEach(() => {
   global.fetch = jest.fn();
   getParamMock.mockReset();
   getParamMock.mockImplementation(() => null);
+  useClassDetailMock.mockReset();
+  useClassDetailMock.mockReturnValue({ data: null });
 });
 
 afterEach(() => {
@@ -212,5 +219,51 @@ describe("CaseBuilder", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/server exploded/i);
+  });
+
+  it("shows a class assignment match banner without locking the page", async () => {
+    const user = userEvent.setup();
+    getParamMock.mockImplementation((key) => (key === "class" ? "class-1" : null));
+    useClassDetailMock.mockReturnValue({
+      data: {
+        role: "competitor",
+        assignments: [
+          {
+            recipient: {
+              id: "rec-1",
+              assignment_id: "assign-1",
+              user_id: "user-1",
+              status: "assigned",
+            },
+            assignment: {
+              id: "assign-1",
+              class_id: "class-1",
+              assigned_by: "coach-1",
+              title: "Ocean Walls Case",
+              type: "case",
+              payload: {
+                format: "parli",
+                topic: "UN funding for seafloor walls",
+                side: "aff",
+              },
+            },
+            class_room: {
+              id: "class-1",
+              name: "Debate 101",
+              join_code: "JOIN",
+              created_by: "coach-1",
+            },
+          },
+        ],
+      },
+    });
+
+    render(<CaseBuilder />);
+
+    await user.type(screen.getByLabelText(/topic/i), "UN funding for seafloor walls");
+    expect(
+      screen.getByText(/this setup matches 1 class case assignment/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /generate/i })).toBeEnabled();
   });
 });
