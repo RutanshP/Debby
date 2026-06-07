@@ -9,6 +9,15 @@ import {
   type CoachAssignmentSummary,
 } from "@/lib/classroom";
 
+const CLASS_ACCENTS = [
+  "bg-teal/10 text-teal-dark hover:bg-teal/20",
+  "bg-sky-100 text-sky-800 hover:bg-sky-200",
+  "bg-amber-100 text-amber-800 hover:bg-amber-200",
+  "bg-rose-100 text-rose-800 hover:bg-rose-200",
+  "bg-violet-100 text-violet-800 hover:bg-violet-200",
+  "bg-emerald-100 text-emerald-800 hover:bg-emerald-200",
+];
+
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -43,6 +52,14 @@ function parseIsoDate(isoString: string | null | undefined): { year: number; mon
 
 interface DayAssignments {
   [key: number]: Array<AssignmentRecipientDetail | CoachAssignmentSummary>;
+}
+
+function classAccent(classId: string): string {
+  const hash = Array.from(classId).reduce(
+    (total, character) => total + character.charCodeAt(0),
+    0,
+  );
+  return CLASS_ACCENTS[hash % CLASS_ACCENTS.length];
 }
 
 export function ClassCalendar({
@@ -154,12 +171,17 @@ export function ClassCalendar({
                     {day}
                   </div>
                   <div className="flex flex-col gap-1">
-                    {(assignmentsByDay[day] || []).map((item) =>
-                      isCoachAssignmentSummary(item) ? (
+                    {(assignmentsByDay[day] || []).map((item) => {
+                      const accent = classAccent(item.assignment.class_id);
+                      const tooltip = isCoachAssignmentSummary(item)
+                        ? item.assignment.title
+                        : `${item.assignment.title} · ${item.class_room.name}`;
+
+                      return isCoachAssignmentSummary(item) ? (
                         <div
                           key={item.assignment.id}
-                          className="truncate rounded-sm bg-teal/10 px-1.5 py-0.5 text-xs font-medium text-teal-dark"
-                          title={item.assignment.title}
+                          className={`truncate rounded-sm px-1.5 py-0.5 text-xs font-medium ${accent}`}
+                          title={tooltip}
                         >
                           {item.assignment.title}
                         </div>
@@ -167,13 +189,13 @@ export function ClassCalendar({
                         <Link
                           key={item.recipient.id}
                           href={assignmentHref(item)}
-                          className="truncate rounded-sm bg-teal/10 px-1.5 py-0.5 text-xs font-medium text-teal-dark transition hover:bg-teal/20"
-                          title={item.assignment.title}
+                          className={`truncate rounded-sm px-1.5 py-0.5 text-xs font-medium transition ${accent}`}
+                          title={tooltip}
                         >
                           {item.assignment.title}
                         </Link>
-                      ),
-                    )}
+                      );
+                    })}
                   </div>
                 </div>
               )}

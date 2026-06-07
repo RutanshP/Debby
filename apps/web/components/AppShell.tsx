@@ -79,6 +79,10 @@ function buildPathWithParams(pathname: string, params: URLSearchParams): string 
   return query ? `${pathname}?${query}` : pathname;
 }
 
+function roleLabel(role: ClassListItem["role"] | "coach" | "competitor"): string {
+  return role === "coach" ? "Coach" : "Competitor";
+}
+
 function ClassDialog({
   mode,
   value,
@@ -367,7 +371,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 aria-expanded={classMenuOpen}
                 aria-haspopup="listbox"
               >
-                <span>{currentClass?.name ?? "Classes"}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">{currentClass?.name ?? "Classes"}</span>
+                  {currentClass && (
+                    <span className="rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-teal-dark">
+                      {roleLabel(currentClass.role)}
+                    </span>
+                  )}
+                </span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 20 20"
@@ -410,12 +421,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                   : "text-slate-700 hover:bg-slate-50"
                               }`}
                             >
-                              <span>{item.name}</span>
-                              {item.role === "competitor" && item.open_assignments > 0 && (
-                                <span className="rounded-full bg-teal px-2 py-0.5 text-[11px] font-semibold text-white">
-                                  {item.open_assignments}
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="truncate">{item.name}</span>
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-600">
+                                  {roleLabel(item.role)}
                                 </span>
-                              )}
+                              </span>
+                              <span className="flex items-center gap-2">
+                                {item.role === "competitor" && item.open_assignments > 0 && (
+                                  <span className="rounded-full bg-teal px-2 py-0.5 text-[11px] font-semibold text-white">
+                                    {item.open_assignments}
+                                  </span>
+                                )}
+                              </span>
                             </button>
                           );
                         })}
@@ -561,7 +579,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="flex w-full items-center justify-between rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-teal-dark"
             aria-expanded={classMenuOpen}
           >
-            <span>{currentClass?.name ?? "Classes"}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate">{currentClass?.name ?? "Classes"}</span>
+              {currentClass && (
+                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-teal-dark">
+                  {roleLabel(currentClass.role)}
+                </span>
+              )}
+            </span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
@@ -592,18 +617,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       key={item.id}
                       type="button"
                       onClick={() => switchClass(item.id)}
-                      className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm ${
-                        item.id === currentClassId
-                          ? "bg-teal/10 font-semibold text-teal-dark"
-                          : "text-slate-700"
-                      }`}
-                    >
-                      <span>{item.name}</span>
-                      {item.role === "competitor" && item.open_assignments > 0 && (
-                        <span className="rounded-full bg-teal px-2 py-0.5 text-[11px] font-semibold text-white">
-                          {item.open_assignments}
+                    className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm ${
+                      item.id === currentClassId
+                        ? "bg-teal/10 font-semibold text-teal-dark"
+                        : "text-slate-700"
+                    }`}
+                  >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{item.name}</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-600">
+                          {roleLabel(item.role)}
                         </span>
-                      )}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        {item.role === "competitor" && item.open_assignments > 0 && (
+                          <span className="rounded-full bg-teal px-2 py-0.5 text-[11px] font-semibold text-white">
+                            {item.open_assignments}
+                          </span>
+                        )}
+                      </span>
                     </button>
                   ))}
                 </>

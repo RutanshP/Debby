@@ -44,7 +44,15 @@ export interface SubmissionDrill {
   id: string;
   user_id: string;
   drill_type: string;
-  prompt: Record<string, unknown> | null;
+  prompt:
+    | {
+        title?: string | null;
+        topic?: string | null;
+        prompt?: string | null;
+        task?: string | null;
+        timer_seconds?: number | null;
+      }
+    | null;
   response: string | null;
   score: Record<string, unknown> | null;
   numeric_score: number | null;
@@ -53,6 +61,7 @@ export interface SubmissionDrill {
   accuracy: number | null;
   completion: number | null;
   timer_seconds: number | null;
+  wpm_series?: WpmPoint[] | null;
   created_at: string | null;
 }
 

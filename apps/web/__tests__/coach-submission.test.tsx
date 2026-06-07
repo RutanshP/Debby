@@ -214,9 +214,6 @@ describe("CoachSubmissionPage", () => {
     render(page);
 
     expect(await screen.findByText("Drill stats")).toBeInTheDocument();
-    expect(screen.getByText("Solid clash on the key issues.")).toBeInTheDocument();
-    expect(screen.getByText("Good structure")).toBeInTheDocument();
-    expect(screen.getByText("Needs more depth")).toBeInTheDocument();
     expect(screen.getByText("My rebuttal was about X.")).toBeInTheDocument();
   });
 

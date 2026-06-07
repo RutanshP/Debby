@@ -162,6 +162,11 @@ export function SubmissionDetailView({
   const round = data.round;
   const drill = data.drill;
   const caseReview = data.case_review;
+  const speedSeries = Array.isArray(drill?.wpm_series) ? drill.wpm_series : [];
+  const originalSpeedPassage =
+    drill?.drill_type === "speed" && typeof drill.prompt?.prompt === "string"
+      ? drill.prompt.prompt
+      : null;
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 px-4 py-10">
@@ -324,47 +329,26 @@ export function SubmissionDetailView({
             )}
           </section>
 
-          {drill.score && typeof drill.score === "object" && (
+          {drill.drill_type === "speed" && speedSeries.length > 0 && (
             <section>
-              <h2 className="mb-3 text-lg font-semibold text-slate-800">Feedback</h2>
+              <h2 className="mb-3 text-lg font-semibold text-slate-800">
+                WPM over time
+              </h2>
               <div className="rounded-lg border border-slate-200 bg-white p-5">
-                {typeof (drill.score as Record<string, unknown>).feedback === "string" && (
-                  <p className="text-sm text-slate-700">
-                    {(drill.score as Record<string, unknown>).feedback as string}
-                  </p>
-                )}
-                {Array.isArray((drill.score as Record<string, unknown>).strengths) &&
-                  ((drill.score as Record<string, unknown>).strengths as string[]).length >
-                    0 && (
-                    <div className="mt-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-teal-dark">
-                        Strengths
-                      </h3>
-                      <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-slate-700">
-                        {((drill.score as Record<string, unknown>).strengths as string[]).map(
-                          (strength, index) => (
-                            <li key={index}>{strength}</li>
-                          ),
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                {Array.isArray((drill.score as Record<string, unknown>).improvements) &&
-                  ((drill.score as Record<string, unknown>).improvements as string[]).length >
-                    0 && (
-                    <div className="mt-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-rose-700">
-                        Areas to improve
-                      </h3>
-                      <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-slate-700">
-                        {((drill.score as Record<string, unknown>).improvements as string[]).map(
-                          (improvement, index) => (
-                            <li key={index}>{improvement}</li>
-                          ),
-                        )}
-                      </ul>
-                    </div>
-                  )}
+                <WpmChart series={speedSeries} />
+              </div>
+            </section>
+          )}
+
+          {drill.drill_type === "speed" && originalSpeedPassage && (
+            <section>
+              <h2 className="mb-3 text-lg font-semibold text-slate-800">
+                Original passage
+              </h2>
+              <div className="rounded-md border border-slate-200 bg-white p-4">
+                <p className="whitespace-pre-wrap text-sm text-slate-700">
+                  {originalSpeedPassage}
+                </p>
               </div>
             </section>
           )}

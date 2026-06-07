@@ -218,4 +218,75 @@ describe("ClassCalendar", () => {
     }).format(now);
     expect(screen.getByText(currentMonth)).toBeInTheDocument();
   });
+
+  it("uses different accent colors for assignments from different classes", () => {
+    const today = new Date();
+    const dueDate = new Date(today.getFullYear(), today.getMonth(), 20);
+
+    const assignment1 = createMockAssignment({
+      recipient: {
+        id: "recipient-color-1",
+        assignment_id: "assignment-color-1",
+        user_id: "user-1",
+        status: "assigned",
+      },
+      assignment: {
+        id: "assignment-color-1",
+        class_id: "class-teal",
+        assigned_by: "coach-1",
+        title: "Class One Assignment",
+        type: "drill",
+        payload: {
+          drill_type: "rebuttal",
+          timer_seconds: 60,
+        },
+        due_at: dueDate.toISOString(),
+      },
+      class_room: {
+        id: "class-teal",
+        name: "Varsity PF",
+        join_code: "ABC123",
+        created_by: "coach-1",
+      },
+    });
+
+    const assignment2 = createMockAssignment({
+      recipient: {
+        id: "recipient-color-2",
+        assignment_id: "assignment-color-2",
+        user_id: "user-2",
+        status: "assigned",
+      },
+      assignment: {
+        id: "assignment-color-2",
+        class_id: "class-rose",
+        assigned_by: "coach-2",
+        title: "Class Two Assignment",
+        type: "drill",
+        payload: {
+          drill_type: "impact",
+          timer_seconds: 60,
+        },
+        due_at: dueDate.toISOString(),
+      },
+      class_room: {
+        id: "class-rose",
+        name: "JV PF",
+        join_code: "DEF456",
+        created_by: "coach-2",
+      },
+    });
+
+    render(<ClassCalendar assignments={[assignment1, assignment2]} />);
+
+    const classOneLink = screen.getByRole("link", { name: /Class One Assignment/i });
+    const classTwoLink = screen.getByRole("link", { name: /Class Two Assignment/i });
+
+    expect(classOneLink.className).not.toEqual(classTwoLink.className);
+    expect(classOneLink).toHaveAttribute(
+      "title",
+      expect.stringContaining("Varsity PF"),
+    );
+    expect(classTwoLink).toHaveAttribute("title", expect.stringContaining("JV PF"));
+  });
 });
