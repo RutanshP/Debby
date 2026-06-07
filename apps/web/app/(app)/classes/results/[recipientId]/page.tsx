@@ -46,14 +46,16 @@ export default async function StudentSubmissionPage({
   const { recipientId } = await params;
   const { class: classId } = await searchParams;
 
-  const backHref = classId ? `/classes?class=${classId}&tab=results` : "/classes";
+  const fallbackBackHref = classId
+    ? `/classes?class=${classId}&tab=results`
+    : "/classes";
 
   const cookieStore = await Promise.resolve(cookies());
   const supabase = getServerSupabase(cookieStore);
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) return <SubmissionNotFound back={backHref} />;
+  if (!session) return <SubmissionNotFound back={fallbackBackHref} />;
 
   let res: Response;
   try {
@@ -62,11 +64,11 @@ export default async function StudentSubmissionPage({
       cache: "no-store",
     });
   } catch {
-    return <SubmissionNotFound back={backHref} />;
+    return <SubmissionNotFound back={fallbackBackHref} />;
   }
 
   if (res.status === 404 || res.status === 401 || res.status === 403) {
-    return <SubmissionNotFound back={backHref} />;
+    return <SubmissionNotFound back={fallbackBackHref} />;
   }
   if (!res.ok) {
     throw new Error(`Failed to load submission: ${res.status}`);
@@ -74,6 +76,10 @@ export default async function StudentSubmissionPage({
 
   const data = (await res.json()) as SubmissionDetailResponse;
   const feedback = await fetchOptionalFeedback(recipientId, session.access_token);
+  const resolvedClassId = classId ?? data.assignment.class_id;
+  const backHref = resolvedClassId
+    ? `/classes?class=${resolvedClassId}&tab=results`
+    : "/classes";
 
   return (
     <SubmissionDetailView
