@@ -80,7 +80,16 @@ export function FeedbackPanel({
   }
 
   if (!isCoach) {
-    if (!feedback?.returned) return null;
+    if (!feedback?.returned) {
+      return (
+        <div
+          className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500"
+          aria-label="Coach feedback"
+        >
+          No feedback yet.
+        </div>
+      );
+    }
     return (
       <div
         className="mt-3 rounded-md border border-teal/30 bg-teal/5 p-3"

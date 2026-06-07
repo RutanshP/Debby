@@ -180,6 +180,10 @@ export function assignmentHref(detail: AssignmentRecipientDetail): string {
   return `/practice?class=${classId}&assignment=${id}`;
 }
 
+export function submissionHref(detail: AssignmentRecipientDetail): string {
+  return `/classes/results/${detail.recipient.id}?class=${detail.class_room.id}`;
+}
+
 export function withClassContext(href: string, classId?: string | null): string {
   if (!classId) return href;
   const [path, hash = ""] = href.split("#", 2);

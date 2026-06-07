@@ -20,6 +20,7 @@ import {
   isPracticePayload,
   resultSummary,
   statusLabel,
+  submissionHref,
   type AssignmentRecipientDetail,
   type AssignmentType,
   type CoachAssignmentSummary,
@@ -31,6 +32,7 @@ import {
   classroomKeys,
   useClassDetail,
   useClasses,
+  useFeedback,
   useQueryClient,
 } from "@/lib/queries/classroom";
 
@@ -129,6 +131,8 @@ function StudentAssignmentCard({
 }) {
   const overdue = isOverdue(item, new Date());
   const displayStatus = overdue ? "overdue" : item.recipient.status;
+  const targetHref =
+    item.recipient.status === "completed" ? submissionHref(item) : assignmentHref(item);
 
   return (
     <article className={className}>
@@ -165,7 +169,7 @@ function StudentAssignmentCard({
             {displayStatus === "overdue" ? "Overdue" : statusLabel(displayStatus)}
           </span>
           <Link
-            href={assignmentHref(item)}
+            href={targetHref}
             className="inline-flex items-center gap-2 text-sm font-semibold text-teal transition hover:text-teal-dark"
           >
             {item.recipient.status === "completed" ? "View results" : "Open assignment"}
@@ -175,6 +179,24 @@ function StudentAssignmentCard({
       </div>
     </article>
   );
+}
+
+function StudentFeedbackStatus({ recipientId }: { recipientId: string }) {
+  const feedbackQuery = useFeedback(recipientId);
+
+  if (feedbackQuery.isLoading) {
+    return <p className="mt-2 text-sm text-slate-500">Checking coach feedback...</p>;
+  }
+
+  if (feedbackQuery.data?.returned) {
+    return (
+      <p className="mt-2 text-sm font-medium text-teal-dark">
+        Coach feedback available
+      </p>
+    );
+  }
+
+  return <p className="mt-2 text-sm text-slate-500">No feedback yet</p>;
 }
 
 export function ClassesClient() {
@@ -962,9 +984,10 @@ export function ClassesClient() {
             </div>
           ) : (
             studentCompletedAssignments.map((item) => (
-              <article
+              <Link
                 key={item.recipient.id}
-                className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                href={submissionHref(item)}
+                className="block rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal/40"
               >
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div>
@@ -979,8 +1002,11 @@ export function ClassesClient() {
                     {statusLabel(item.recipient.status)}
                   </span>
                 </div>
-                <FeedbackPanel recipientId={item.recipient.id} isCoach={false} />
-              </article>
+                <p className="mt-2 text-sm text-slate-500">
+                  Open this assignment to view detailed results and coach feedback.
+                </p>
+                <StudentFeedbackStatus recipientId={item.recipient.id} />
+              </Link>
             ))
           )}
         </section>

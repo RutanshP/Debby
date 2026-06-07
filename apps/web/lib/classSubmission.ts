@@ -1,8 +1,3 @@
-/**
- * Types for the coach submission viewer endpoint.
- * Matches CoachSubmissionResponse in apps/api/models/coach_view.py
- */
-
 export type Side = "aff" | "neg";
 
 export interface WpmPoint {
@@ -10,7 +5,7 @@ export interface WpmPoint {
   wpm: number;
 }
 
-export interface CoachRound {
+export interface SubmissionRound {
   id: string;
   user_id: string;
   topic: string;
@@ -45,7 +40,7 @@ export interface CoachRound {
   created_at: string | null;
 }
 
-export interface CoachDrill {
+export interface SubmissionDrill {
   id: string;
   user_id: string;
   drill_type: string;
@@ -61,7 +56,7 @@ export interface CoachDrill {
   created_at: string | null;
 }
 
-export interface CoachRecipient {
+export interface SubmissionRecipient {
   id: string;
   assignment_id: string;
   user_id: string;
@@ -71,7 +66,7 @@ export interface CoachRecipient {
   created_at?: string | null;
 }
 
-export interface CoachAssignment {
+export interface SubmissionAssignment {
   id: string;
   class_id: string;
   title: string;
@@ -81,7 +76,7 @@ export interface CoachAssignment {
   created_at?: string | null;
 }
 
-export interface CoachSubmission {
+export interface SubmissionRecord {
   id: string;
   recipient_id: string;
   user_id: string;
@@ -91,7 +86,7 @@ export interface CoachSubmission {
   created_at?: string | null;
 }
 
-export interface CoachCaseReview {
+export interface SubmissionCaseReview {
   id: string;
   user_id: string;
   format: string;
@@ -105,12 +100,12 @@ export interface CoachCaseReview {
   created_at: string | null;
 }
 
-export interface CoachSubmissionResponse {
+export interface SubmissionDetailResponse {
   type: "round" | "drill" | "case";
-  round: CoachRound | null;
-  drill: CoachDrill | null;
-  case_review: CoachCaseReview | null;
-  recipient: CoachRecipient;
-  assignment: CoachAssignment;
-  submission: CoachSubmission | null;
+  round: SubmissionRound | null;
+  drill: SubmissionDrill | null;
+  case_review: SubmissionCaseReview | null;
+  recipient: SubmissionRecipient;
+  assignment: SubmissionAssignment;
+  submission: SubmissionRecord | null;
 }

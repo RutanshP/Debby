@@ -1,9 +1,8 @@
-"""Coach submission viewer service.
+"""Assignment submission detail service.
 
-Provides helpers that let a coach read any round or drill without
-being scoped to a specific user_id (the service-role Supabase client
-bypasses RLS), plus a high-level entry point that validates coach
-authorization before returning the full submission payload.
+Provides helpers that let coaches review any student submission and lets
+students open their own completed assignment details through a separate
+student-facing route.
 """
 
 from __future__ import annotations
@@ -13,10 +12,8 @@ from typing import Any
 
 from services.classroom import (
     _ASSIGNMENTS,
-    _MEMBERS,
     _RECIPIENTS,
     _SUBMISSIONS,
-    _get_class,
     _require_coach,
     _select,
 )
@@ -77,46 +74,43 @@ async def get_case_review_any(case_review_id: str) -> dict[str, Any] | None:
     return await asyncio.to_thread(_do)
 
 
-async def get_submission_for_coach(
-    coach_id: str,
-    class_id: str,
-    recipient_id: str,
-) -> dict[str, Any]:
-    """Return the full submission payload for a coach reviewing a student.
-
-    Raises:
-        PermissionError: caller is not a coach of class_id
-        LookupError: recipient_id not found or does not belong to this class
-    """
-    # 1. Verify coach role.
-    await _require_coach(class_id, coach_id)
-
-    # 2. Load the recipient row.
-    recipient_rows = await _select(_RECIPIENTS, filters={"id": recipient_id}, limit=1)
-    if not recipient_rows:
+async def _get_recipient(recipient_id: str) -> dict[str, Any]:
+    rows = await _select(_RECIPIENTS, filters={"id": recipient_id}, limit=1)
+    if not rows:
         raise LookupError("Recipient not found")
-    recipient_row = recipient_rows[0]
+    return rows[0]
 
-    # 3. Verify recipient belongs to an assignment in this class.
-    assignment_rows = await _select(
-        _ASSIGNMENTS,
-        filters={"id": recipient_row["assignment_id"], "class_id": class_id},
-        limit=1,
-    )
-    if not assignment_rows:
-        raise LookupError("Recipient does not belong to this class")
-    assignment_row = assignment_rows[0]
 
-    # 4. Find the submission.
-    submission_rows = await _select(
+async def _get_assignment(
+    assignment_id: str,
+    class_id: str | None = None,
+) -> dict[str, Any]:
+    filters: dict[str, Any] = {"id": assignment_id}
+    if class_id is not None:
+        filters["class_id"] = class_id
+    rows = await _select(_ASSIGNMENTS, filters=filters, limit=1)
+    if not rows:
+        if class_id is not None:
+            raise LookupError("Recipient does not belong to this class")
+        raise LookupError("Assignment not found")
+    return rows[0]
+
+
+async def _get_submission(recipient_id: str) -> dict[str, Any] | None:
+    rows = await _select(
         _SUBMISSIONS,
         filters={"recipient_id": recipient_id},
         order=("created_at", True),
         limit=1,
     )
-    submission_row = submission_rows[0] if submission_rows else None
+    return rows[0] if rows else None
 
-    # 5. Resolve round or drill.
+
+async def _build_submission_payload(
+    recipient_row: dict[str, Any],
+    assignment_row: dict[str, Any],
+    submission_row: dict[str, Any] | None,
+) -> dict[str, Any]:
     round_data: dict[str, Any] | None = None
     drill_data: dict[str, Any] | None = None
     case_review_data: dict[str, Any] | None = None
@@ -133,7 +127,6 @@ async def get_submission_for_coach(
             submission_type = "case"
             case_review_data = await get_case_review_any(submission_row["case_review_id"])
 
-    # Determine type from assignment if no submission yet.
     if submission_type is None:
         assignment_type = assignment_row.get("type")
         if assignment_type == "drill":
@@ -152,3 +145,36 @@ async def get_submission_for_coach(
         "assignment": assignment_row,
         "submission": submission_row,
     }
+
+
+async def get_submission_for_coach(
+    coach_id: str,
+    class_id: str,
+    recipient_id: str,
+) -> dict[str, Any]:
+    """Return the full submission payload for a coach reviewing a student.
+
+    Raises:
+        PermissionError: caller is not a coach of class_id
+        LookupError: recipient_id not found or does not belong to this class
+    """
+    await _require_coach(class_id, coach_id)
+    recipient_row = await _get_recipient(recipient_id)
+    assignment_row = await _get_assignment(recipient_row["assignment_id"], class_id=class_id)
+    submission_row = await _get_submission(recipient_id)
+    return await _build_submission_payload(recipient_row, assignment_row, submission_row)
+
+
+async def get_submission_for_student(
+    student_id: str,
+    recipient_id: str,
+) -> dict[str, Any]:
+    """Return the full submission payload for the owning student."""
+
+    recipient_row = await _get_recipient(recipient_id)
+    if recipient_row.get("user_id") != student_id:
+        raise PermissionError("Recipient does not belong to this user")
+
+    assignment_row = await _get_assignment(recipient_row["assignment_id"])
+    submission_row = await _get_submission(recipient_id)
+    return await _build_submission_payload(recipient_row, assignment_row, submission_row)

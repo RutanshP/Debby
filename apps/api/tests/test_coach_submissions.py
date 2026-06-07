@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from deps.auth import get_current_user as _real_get_current_user
 from routes import classroom as classroom_route
 from routes import coach_submissions as coach_submissions_route
+from routes import student_submissions as student_submissions_route
 from services import classroom as classroom_service
 from services import coach_view as coach_view_service
 from services import rounds as rounds_service
@@ -145,6 +146,7 @@ def app(fake_supabase: _FakeSupabase) -> FastAPI:
     application = FastAPI()
     application.include_router(classroom_route.router, prefix="/api")
     application.include_router(coach_submissions_route.router, prefix="/api")
+    application.include_router(student_submissions_route.router, prefix="/api")
 
     async def _override() -> _FakeUser:
         if CURRENT_USER is None:
@@ -431,3 +433,32 @@ def test_submission_without_completion_returns_no_data(
     body = resp.json()
     assert body["round"] is None
     assert body["drill"] is None
+
+
+def test_student_can_view_own_submission(
+    client: TestClient, fake_supabase: _FakeSupabase
+) -> None:
+    """A student can open their own assignment results via the student route."""
+    global CURRENT_USER
+    _, recipient_id, drill_id = _setup_class_with_drill_submission(client, fake_supabase)
+
+    CURRENT_USER = STUDENT
+    resp = client.get(f"/api/recipients/{recipient_id}/submission")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["type"] == "drill"
+    assert body["drill"] is not None
+    assert body["drill"]["id"] == drill_id
+    assert body["recipient"]["user_id"] == STUDENT.id
+
+
+def test_student_submission_route_rejects_other_users(
+    client: TestClient, fake_supabase: _FakeSupabase
+) -> None:
+    """Only the owning student may use the student submission route."""
+    global CURRENT_USER
+    _, recipient_id, _ = _setup_class_with_drill_submission(client, fake_supabase)
+
+    CURRENT_USER = OTHER
+    resp = client.get(f"/api/recipients/{recipient_id}/submission")
+    assert resp.status_code == 403

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
-import { getServerSupabase } from "@/lib/supabase";
 import type { SubmissionDetailResponse } from "@/lib/classSubmission";
+import type { SubmissionFeedback } from "@/lib/feedback";
+import { getServerSupabase } from "@/lib/supabase";
 import {
   SubmissionDetailView,
   SubmissionNotFound,
@@ -14,7 +15,31 @@ interface PageProps {
   searchParams: Promise<{ class?: string }>;
 }
 
-export default async function CoachSubmissionPage({
+async function fetchOptionalFeedback(
+  recipientId: string,
+  accessToken: string,
+): Promise<SubmissionFeedback | null> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/recipients/${recipientId}/feedback`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      },
+    );
+    if (response.status === 404 || response.status === 401 || response.status === 403) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Failed to load feedback: ${response.status}`);
+    }
+    return (await response.json()) as SubmissionFeedback | null;
+  } catch {
+    return null;
+  }
+}
+
+export default async function StudentSubmissionPage({
   params,
   searchParams,
 }: PageProps) {
@@ -22,10 +47,6 @@ export default async function CoachSubmissionPage({
   const { class: classId } = await searchParams;
 
   const backHref = classId ? `/classes?class=${classId}&tab=results` : "/classes";
-
-  if (!classId) {
-    return <SubmissionNotFound back="/classes" />;
-  }
 
   const cookieStore = await Promise.resolve(cookies());
   const supabase = getServerSupabase(cookieStore);
@@ -36,13 +57,10 @@ export default async function CoachSubmissionPage({
 
   let res: Response;
   try {
-    res = await fetch(
-      `${API_BASE_URL}/api/classes/${classId}/recipients/${recipientId}/submission`,
-      {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        cache: "no-store",
-      },
-    );
+    res = await fetch(`${API_BASE_URL}/api/recipients/${recipientId}/submission`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: "no-store",
+    });
   } catch {
     return <SubmissionNotFound back={backHref} />;
   }
@@ -55,12 +73,14 @@ export default async function CoachSubmissionPage({
   }
 
   const data = (await res.json()) as SubmissionDetailResponse;
+  const feedback = await fetchOptionalFeedback(recipientId, session.access_token);
 
   return (
     <SubmissionDetailView
       data={data}
       backHref={backHref}
-      headingDetail={`Student ${recipientId.slice(0, 8)}`}
+      headingDetail="Your results"
+      coachFeedback={feedback}
     />
   );
 }

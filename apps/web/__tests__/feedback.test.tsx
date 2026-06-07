@@ -139,8 +139,8 @@ describe("FeedbackPanel — student read-only mode", () => {
     jest.resetAllMocks();
   });
 
-  it("renders nothing when feedback is not returned", () => {
-    const { container } = renderWithQueryClient(
+  it("shows a no feedback message when feedback is not returned", () => {
+    renderWithQueryClient(
       <FeedbackPanel
         recipientId={RECIPIENT_ID}
         isCoach={false}
@@ -154,7 +154,7 @@ describe("FeedbackPanel — student read-only mode", () => {
       />,
     );
 
-    expect(container.firstChild).toBeNull();
+    expect(screen.getByText("No feedback yet.")).toBeInTheDocument();
   });
 
   it("shows grade and feedback when returned is true", () => {
