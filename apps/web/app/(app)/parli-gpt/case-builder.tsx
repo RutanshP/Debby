@@ -158,6 +158,16 @@ function normalizeComparableTopic(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+type CaseAssignmentDetail = AssignmentRecipientDetail & {
+  assignment: AssignmentRecipientDetail["assignment"] & {
+    payload: {
+      format: Format;
+      topic: string;
+      side: Side;
+    };
+  };
+};
+
 export default function CaseBuilder() {
   const searchParams = useSearchParams();
   const classId = searchParams.get("class");
@@ -191,7 +201,7 @@ export default function CaseBuilder() {
   const classCaseAssignments =
     !assignmentRecipientId && classDetailQuery.data?.role === "competitor"
       ? classDetailQuery.data.assignments.filter(
-          (item): item is AssignmentRecipientDetail =>
+          (item): item is CaseAssignmentDetail =>
             !isCoachAssignmentSummary(item) &&
             item.recipient.status !== "completed" &&
             isCasePayload(item.assignment),
