@@ -8,6 +8,7 @@ student-facing route.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 from services.classroom import (
@@ -18,6 +19,31 @@ from services.classroom import (
     _select,
 )
 from services.supabase_client import get_supabase
+
+
+def _normalize_drill_submission(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if row is None:
+        return None
+
+    normalized = dict(row)
+    score_data = normalized.get("score")
+    if isinstance(score_data, str):
+        try:
+            score_data = json.loads(score_data)
+        except json.JSONDecodeError:
+            score_data = None
+    if not isinstance(score_data, dict):
+        return normalized
+
+    if normalized.get("numeric_score") is None and score_data.get("score") is not None:
+        normalized["numeric_score"] = score_data.get("score")
+
+    for key in ("duration_seconds", "wpm", "wpm_series", "accuracy", "completion"):
+        if normalized.get(key) is None and score_data.get(key) is not None:
+            normalized[key] = score_data.get(key)
+
+    normalized["score"] = score_data
+    return normalized
 
 
 async def get_round_any(round_id: str) -> dict[str, Any] | None:
@@ -51,7 +77,7 @@ async def get_drill_any(drill_id: str) -> dict[str, Any] | None:
             .execute()
         )
         data = getattr(resp, "data", None) or []
-        return data[0] if data else None
+        return _normalize_drill_submission(data[0] if data else None)
 
     return await asyncio.to_thread(_do)
 

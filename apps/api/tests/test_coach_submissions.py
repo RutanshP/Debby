@@ -462,3 +462,81 @@ def test_student_submission_route_rejects_other_users(
     CURRENT_USER = OTHER
     resp = client.get(f"/api/recipients/{recipient_id}/submission")
     assert resp.status_code == 403
+
+
+def test_speed_submission_promotes_nested_metrics_to_top_level(
+    client: TestClient, fake_supabase: _FakeSupabase
+) -> None:
+    """Legacy drill rows with metrics only inside score still render full speed stats."""
+    global CURRENT_USER
+    CURRENT_USER = COACH
+    created = client.post("/api/classes", json={"name": "Speed Class"})
+    assert created.status_code == 200, created.text
+    class_id = created.json()["id"]
+    join_code = created.json()["join_code"]
+
+    CURRENT_USER = STUDENT
+    joined = client.post("/api/classes/join", json={"join_code": join_code})
+    assert joined.status_code == 200, joined.text
+
+    CURRENT_USER = COACH
+    assignment_resp = client.post(
+        f"/api/classes/{class_id}/assignments",
+        json={
+            "title": "Speed rep",
+            "type": "drill",
+            "payload": {"drill_type": "speed", "timer_seconds": 30},
+            "assign_all": True,
+        },
+    )
+    assert assignment_resp.status_code == 200, assignment_resp.text
+    recipient_id = assignment_resp.json()["recipients"][0]["id"]
+
+    drill_id = str(uuid.uuid4())
+    fake_supabase.table("drills").rows.append(
+        {
+            "id": drill_id,
+            "user_id": STUDENT.id,
+            "drill_type": "speed",
+            "prompt": {
+                "title": "Speed Reading",
+                "topic": "School lunches",
+                "prompt": "Original speed passage",
+                "task": "Read quickly and clearly.",
+                "timer_seconds": 30,
+            },
+            "response": "Student reading response",
+            "score": {
+                "score": 8,
+                "duration_seconds": 30,
+                "wpm": 238,
+                "accuracy": 0.9,
+                "completion": 0.76,
+                "wpm_series": [
+                    {"t": 0, "wpm": 220},
+                    {"t": 2, "wpm": 240},
+                ],
+            },
+            "timer_seconds": 30,
+        }
+    )
+
+    CURRENT_USER = STUDENT
+    complete = client.post(
+        f"/api/assignments/{recipient_id}/complete",
+        json={"drill_id": drill_id},
+    )
+    assert complete.status_code == 200, complete.text
+
+    resp = client.get(f"/api/recipients/{recipient_id}/submission")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["drill"]["numeric_score"] == 8
+    assert body["drill"]["duration_seconds"] == 30
+    assert body["drill"]["wpm"] == 238
+    assert body["drill"]["accuracy"] == 0.9
+    assert body["drill"]["completion"] == 0.76
+    assert body["drill"]["wpm_series"] == [
+        {"t": 0, "wpm": 220},
+        {"t": 2, "wpm": 240},
+    ]

@@ -162,7 +162,39 @@ export function SubmissionDetailView({
   const round = data.round;
   const drill = data.drill;
   const caseReview = data.case_review;
-  const drillWpmSeries = Array.isArray(drill?.wpm_series) ? drill.wpm_series : [];
+  const drillScore =
+    drill?.score && typeof drill.score === "object"
+      ? (drill.score as Record<string, unknown>)
+      : null;
+  const resolvedDrillWpm =
+    typeof drill?.wpm === "number"
+      ? drill.wpm
+      : typeof drillScore?.wpm === "number"
+        ? (drillScore.wpm as number)
+        : null;
+  const resolvedDrillDuration =
+    drill?.duration_seconds !== null && drill?.duration_seconds !== undefined
+      ? drill.duration_seconds
+      : typeof drillScore?.duration_seconds === "number"
+        ? (drillScore.duration_seconds as number)
+        : null;
+  const resolvedDrillAccuracy =
+    drill?.accuracy !== null && drill?.accuracy !== undefined
+      ? drill.accuracy
+      : typeof drillScore?.accuracy === "number"
+        ? (drillScore.accuracy as number)
+        : null;
+  const resolvedDrillCompletion =
+    drill?.completion !== null && drill?.completion !== undefined
+      ? drill.completion
+      : typeof drillScore?.completion === "number"
+        ? (drillScore.completion as number)
+        : null;
+  const drillWpmSeries = Array.isArray(drill?.wpm_series)
+    ? drill.wpm_series
+    : Array.isArray(drillScore?.wpm_series)
+      ? (drillScore.wpm_series as WpmPoint[])
+      : [];
   const originalSpeedPassage =
     drill?.drill_type === "speed" && typeof drill.prompt?.prompt === "string"
       ? drill.prompt.prompt
@@ -314,25 +346,25 @@ export function SubmissionDetailView({
                     : null)
                 }
               />
-              <StatCard label="WPM" value={drill.wpm} />
+              <StatCard label="WPM" value={resolvedDrillWpm} />
               <StatCard
                 label="Duration (s)"
                 value={
-                  drill.duration_seconds !== null && drill.duration_seconds !== undefined
-                    ? Math.round(drill.duration_seconds)
+                  resolvedDrillDuration !== null && resolvedDrillDuration !== undefined
+                    ? Math.round(resolvedDrillDuration)
                     : null
                 }
               />
             </div>
-            {drill.accuracy !== null && drill.accuracy !== undefined && (
+            {resolvedDrillAccuracy !== null && resolvedDrillAccuracy !== undefined && (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <StatCard
                   label="Accuracy %"
-                  value={Math.round((drill.accuracy ?? 0) * 100)}
+                  value={Math.round((resolvedDrillAccuracy ?? 0) * 100)}
                 />
                 <StatCard
                   label="Completion %"
-                  value={Math.round((drill.completion ?? 0) * 100)}
+                  value={Math.round((resolvedDrillCompletion ?? 0) * 100)}
                 />
               </div>
             )}
