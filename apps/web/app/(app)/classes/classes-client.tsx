@@ -7,6 +7,7 @@ import { StreamTab } from "@/components/classroom/StreamTab";
 import { ClassSettings } from "@/components/classroom/ClassSettings";
 import { FeedbackPanel } from "@/components/classroom/FeedbackPanel";
 import { GradebookDashboard } from "@/components/classroom/GradebookDashboard";
+import { ClassProgressDashboard } from "@/components/classroom/ClassProgressDashboard";
 import { apiFetch } from "@/lib/api";
 import { useProfileNames } from "@/lib/profiles";
 import {
@@ -23,7 +24,6 @@ import {
   type AssignmentType,
   type CoachAssignmentSummary,
   type DrillAssignmentType,
-  type ClassListItem,
   type PracticeFormat,
   type PracticeSide,
 } from "@/lib/classroom";
@@ -39,9 +39,8 @@ type ClassTab =
   | "people"
   | "stream"
   | "results"
-  | "settings"
-  | "create"
-  | "join";
+  | "analytics"
+  | "settings";
 type StudentAssignmentFilter = "all" | "active" | "completed" | "overdue";
 
 const fieldClass =
@@ -49,8 +48,6 @@ const fieldClass =
 const labelClass = "flex flex-col gap-1 text-sm font-medium text-slate-700";
 const primaryButtonClass =
   "inline-flex h-10 items-center justify-center rounded-md bg-teal px-4 text-sm font-medium text-white shadow-sm transition hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-60";
-const secondaryButtonClass =
-  "inline-flex h-10 items-center justify-center rounded-md border border-teal px-4 text-sm font-medium text-teal transition hover:bg-teal/5 disabled:cursor-not-allowed disabled:opacity-60";
 
 function dueDateToEndOfDayIso(dateValue: string): string | null {
   if (!dateValue) return null;
@@ -123,28 +120,6 @@ function AssignmentStatCard({
   );
 }
 
-function ClassEntryCard({ item }: { item: ClassListItem }) {
-  return (
-    <Link
-      href={`/classes?class=${item.id}&tab=classwork`}
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal/60 hover:shadow-md"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-slate-900">{item.name}</h3>
-          <p className="mt-1 text-sm capitalize text-slate-600">{item.role}</p>
-        </div>
-        {item.role === "competitor" && item.open_assignments > 0 && (
-          <span className="rounded-full bg-teal/10 px-2.5 py-1 text-xs font-semibold text-teal-dark">
-            {item.open_assignments} open
-          </span>
-        )}
-      </div>
-      <div className="mt-4 text-sm text-slate-500">Joined {formatDate(item.created_at)}</div>
-    </Link>
-  );
-}
-
 function StudentAssignmentCard({
   item,
   className,
@@ -160,8 +135,12 @@ function StudentAssignmentCard({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${typeBadgeClass(item.assignment.type)}`}>
-              {item.assignment.type === "practice_round" ? "Practice" : assignmentTypeLabel(item.assignment.type)}
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${typeBadgeClass(item.assignment.type)}`}
+            >
+              {item.assignment.type === "practice_round"
+                ? "Practice"
+                : assignmentTypeLabel(item.assignment.type)}
             </span>
             <span className="text-xs text-slate-500">
               Posted {formatDate(item.assignment.created_at)}
@@ -171,8 +150,8 @@ function StudentAssignmentCard({
             {item.assignment.title}
           </h3>
           <p className="mt-2 text-sm text-slate-600">{payloadSummary(item)}</p>
-          <div className="mt-3 flex items-center gap-2 text-sm text-slate-600">
-            <span>Due {formatDate(item.assignment.due_at)}</span>
+          <div className="mt-3 text-sm text-slate-600">
+            Due {formatDate(item.assignment.due_at)}
           </div>
           {item.result && (
             <p className="mt-2 text-sm text-slate-600">{resultSummary(item.result)}</p>
@@ -180,7 +159,9 @@ function StudentAssignmentCard({
         </div>
 
         <div className="flex flex-col items-start gap-3 lg:items-end">
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(displayStatus)}`}>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(displayStatus)}`}
+          >
             {displayStatus === "overdue" ? "Overdue" : statusLabel(displayStatus)}
           </span>
           <Link
@@ -188,7 +169,7 @@ function StudentAssignmentCard({
             className="inline-flex items-center gap-2 text-sm font-semibold text-teal transition hover:text-teal-dark"
           >
             {item.recipient.status === "completed" ? "View results" : "Open assignment"}
-            <span aria-hidden="true">→</span>
+            <span aria-hidden="true">{"->"}</span>
           </Link>
         </div>
       </div>
@@ -214,11 +195,6 @@ export function ClassesClient() {
   const [assignmentFilter, setAssignmentFilter] =
     useState<StudentAssignmentFilter>("all");
   const [error, setError] = useState<string | null>(null);
-  const [newClassName, setNewClassName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
-  const [submittingClassAction, setSubmittingClassAction] = useState<
-    "create" | "join" | null
-  >(null);
 
   const [title, setTitle] = useState("");
   const [type, setType] = useState<AssignmentType>("drill");
@@ -237,13 +213,6 @@ export function ClassesClient() {
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
 
-  async function refreshClasses(): Promise<ClassListItem[]> {
-    await queryClient.invalidateQueries({ queryKey: classroomKeys.list() });
-    const rows = await apiFetch<ClassListItem[]>("/api/classes");
-    queryClient.setQueryData(classroomKeys.list(), rows);
-    return rows;
-  }
-
   useEffect(() => {
     if (classesQuery.error || classDetailQuery.error) {
       const queryError = classesQuery.error ?? classDetailQuery.error;
@@ -252,15 +221,11 @@ export function ClassesClient() {
   }, [classDetailQuery.error, classesQuery.error]);
 
   useEffect(() => {
-    if (classes.length === 0) {
-      if (!requestedTab) {
-        router.replace("/classes?tab=create");
-      }
-      return;
+    if (classes.length === 0) return;
+    if (!requestedClassId) {
+      router.replace(`/classes?class=${encodeURIComponent(classes[0].id)}&tab=classwork`);
     }
-    if (requestedClassId || requestedTab === "create" || requestedTab === "join") return;
-    router.replace(`/classes?class=${encodeURIComponent(classes[0].id)}&tab=classwork`);
-  }, [classes, requestedClassId, requestedTab, router]);
+  }, [classes, requestedClassId, router]);
 
   useEffect(() => {
     if (!requestedTab) {
@@ -272,19 +237,26 @@ export function ClassesClient() {
       requestedTab === "people" ||
       requestedTab === "stream" ||
       requestedTab === "results" ||
-      requestedTab === "settings" ||
-      requestedTab === "create" ||
-      requestedTab === "join"
+      requestedTab === "analytics" ||
+      requestedTab === "settings"
     ) {
       setTab(requestedTab);
       return;
     }
     if (requestedTab === "calendar") {
-      router.replace(selectedClassId ? `/calendar?class=${encodeURIComponent(selectedClassId)}` : "/calendar");
+      router.replace(
+        selectedClassId
+          ? `/calendar?class=${encodeURIComponent(selectedClassId)}`
+          : "/calendar",
+      );
       return;
     }
     if (requestedTab === "progress") {
-      router.replace(selectedClassId ? `/progress?class=${encodeURIComponent(selectedClassId)}` : "/progress");
+      router.replace(
+        selectedClassId
+          ? `/classes?class=${encodeURIComponent(selectedClassId)}&tab=analytics`
+          : "/classes",
+      );
       return;
     }
     setTab("classwork");
@@ -296,14 +268,18 @@ export function ClassesClient() {
       .filter(
         (item): item is AssignmentRecipientDetail => !isCoachAssignmentSummary(item),
       )
-      .sort((left, right) => compareDueDate(left.assignment.due_at, right.assignment.due_at));
+      .sort((left, right) =>
+        compareDueDate(left.assignment.due_at, right.assignment.due_at),
+      );
   }, [classDetail]);
 
   const coachAssignments = useMemo(() => {
     if (!classDetail || classDetail.role !== "coach") return [];
     return classDetail.assignments
       .filter(isCoachAssignmentSummary)
-      .sort((left, right) => compareDueDate(left.assignment.due_at, right.assignment.due_at));
+      .sort((left, right) =>
+        compareDueDate(left.assignment.due_at, right.assignment.due_at),
+      );
   }, [classDetail]);
 
   const competitors = useMemo(
@@ -343,27 +319,22 @@ export function ClassesClient() {
     () =>
       [...studentAssignments]
         .filter((item) => item.recipient.status === "completed")
-        .sort((left, right) => compareDueDate(right.recipient.completed_at, left.recipient.completed_at)),
+        .sort((left, right) =>
+          compareDueDate(right.recipient.completed_at, left.recipient.completed_at),
+        ),
     [studentAssignments],
   );
 
   const pageTitle = useMemo(() => {
-    if (tab === "create") return "Create Class";
-    if (tab === "join") return "Join Class";
     if (tab === "stream") return "Stream";
     if (tab === "people") return "People";
     if (tab === "results") return "Feedback";
+    if (tab === "analytics") return "Analytics";
     if (tab === "settings") return "Class Settings";
     return "Assignments";
   }, [tab]);
 
   const pageSubtitle = useMemo(() => {
-    if (tab === "create") {
-      return "Start a new class for assignments, stream, people, and feedback.";
-    }
-    if (tab === "join") {
-      return "Enter a class code to add a class to your Debby sidebar.";
-    }
     if (!classDetail) return "";
     if (tab === "stream") {
       return `Updates, materials, and class activity for ${classDetail.class_room.name}.`;
@@ -375,6 +346,9 @@ export function ClassesClient() {
       return classDetail.role === "coach"
         ? `Review submissions and feedback for ${classDetail.class_room.name}.`
         : `Feedback and results from ${classDetail.class_room.name}.`;
+    }
+    if (tab === "analytics") {
+      return `Performance trends and coaching stats for ${classDetail.class_room.name}.`;
     }
     if (tab === "settings") {
       return `Manage ${classDetail.class_room.name}.`;
@@ -444,55 +418,6 @@ export function ClassesClient() {
     );
   }
 
-  async function handleCreateClass(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!newClassName.trim()) return;
-    setSubmittingClassAction("create");
-    setError(null);
-    try {
-      await apiFetch("/api/classes", {
-        method: "POST",
-        body: JSON.stringify({ name: newClassName.trim() }),
-      });
-      setNewClassName("");
-      const rows = await refreshClasses();
-      const createdClass = rows.find((item) => item.name === newClassName.trim()) ?? rows[0];
-      if (createdClass) {
-        router.push(`/classes?class=${encodeURIComponent(createdClass.id)}&tab=classwork`);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create class");
-    } finally {
-      setSubmittingClassAction(null);
-    }
-  }
-
-  async function handleJoinClass(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!joinCode.trim()) return;
-    setSubmittingClassAction("join");
-    setError(null);
-    try {
-      await apiFetch("/api/classes/join", {
-        method: "POST",
-        body: JSON.stringify({ join_code: joinCode.trim().toUpperCase() }),
-      });
-      const submittedCode = joinCode.trim().toUpperCase();
-      setJoinCode("");
-      const rows = await refreshClasses();
-      const joinedClass = rows.find((item) => item.join_code === submittedCode) ?? rows[0];
-      if (joinedClass) {
-        router.push(`/classes?class=${encodeURIComponent(joinedClass.id)}&tab=classwork`);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to join class");
-    } finally {
-      setSubmittingClassAction(null);
-    }
-  }
-
-  const showClassSetup = tab === "create" || tab === "join";
-
   if (classesQuery.isLoading) {
     return (
       <main className="mx-auto flex max-w-7xl flex-col gap-6 p-6">
@@ -507,171 +432,19 @@ export function ClassesClient() {
     return (
       <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
         <header className="flex flex-col gap-2">
-          <h1 className="text-4xl font-bold text-slate-900">{pageTitle}</h1>
-          <p className="text-slate-600">{pageSubtitle}</p>
+          <h1 className="text-4xl font-bold text-slate-900">Classes</h1>
+          <p className="text-slate-600">
+            Use the class menu in the sidebar to create a class or join one with a
+            code.
+          </p>
         </header>
-        <section className="flex flex-wrap gap-2">
-          <Link
-            href="/classes?tab=create"
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              tab === "create"
-                ? "bg-teal text-white"
-                : "bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-            }`}
-          >
-            Create
-          </Link>
-          <Link
-            href="/classes?tab=join"
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              tab === "join"
-                ? "bg-teal text-white"
-                : "bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-            }`}
-          >
-            Join
-          </Link>
-        </section>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <form
-            onSubmit={handleCreateClass}
-            className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-          >
-            <label className={labelClass}>
-              Create class
-              <input
-                value={newClassName}
-                onChange={(event) => setNewClassName(event.target.value)}
-                className={fieldClass}
-                placeholder="Varsity PF"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={submittingClassAction === "create"}
-              className={primaryButtonClass}
-            >
-              {submittingClassAction === "create" ? "Creating..." : "Create"}
-            </button>
-          </form>
-
-          <form
-            onSubmit={handleJoinClass}
-            className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-          >
-            <label className={labelClass}>
-              Join class
-              <input
-                value={joinCode}
-                onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
-                className={`${fieldClass} uppercase`}
-                placeholder="ABC123"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={submittingClassAction === "join"}
-              className={secondaryButtonClass}
-            >
-              {submittingClassAction === "join" ? "Joining..." : "Join"}
-            </button>
-          </form>
+        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900">No classes yet</h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            Once you create or join a class, assignments, stream, people, and
+            feedback will appear here.
+          </p>
         </div>
-      </main>
-    );
-  }
-
-  if (showClassSetup) {
-    return (
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-4xl font-bold text-slate-900">{pageTitle}</h1>
-          <p className="text-slate-600">{pageSubtitle}</p>
-        </header>
-
-        {error && (
-          <div className="rounded-md bg-red-50 p-3 text-sm text-red-700" role="alert">
-            {error}
-          </div>
-        )}
-
-        <section className="flex flex-wrap gap-2">
-          <Link
-            href="/classes?tab=create"
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              tab === "create"
-                ? "bg-teal text-white"
-                : "bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-            }`}
-          >
-            Create
-          </Link>
-          <Link
-            href="/classes?tab=join"
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              tab === "join"
-                ? "bg-teal text-white"
-                : "bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-            }`}
-          >
-            Join
-          </Link>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-2">
-          <form
-            onSubmit={handleCreateClass}
-            className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-          >
-            <label className={labelClass}>
-              Create class
-              <input
-                value={newClassName}
-                onChange={(event) => setNewClassName(event.target.value)}
-                className={fieldClass}
-                placeholder="Varsity PF"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={submittingClassAction === "create"}
-              className={primaryButtonClass}
-            >
-              {submittingClassAction === "create" ? "Creating..." : "Create"}
-            </button>
-          </form>
-
-          <form
-            onSubmit={handleJoinClass}
-            className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-          >
-            <label className={labelClass}>
-              Join class
-              <input
-                value={joinCode}
-                onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
-                className={`${fieldClass} uppercase`}
-                placeholder="ABC123"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={submittingClassAction === "join"}
-              className={secondaryButtonClass}
-            >
-              {submittingClassAction === "join" ? "Joining..." : "Join"}
-            </button>
-          </form>
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold text-slate-900">Your Classes</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {classes.map((item) => (
-              <ClassEntryCard key={item.id} item={item} />
-            ))}
-          </div>
-        </section>
       </main>
     );
   }
@@ -695,7 +468,11 @@ export function ClassesClient() {
         </div>
         <button
           type="button"
-          onClick={() => router.push(`/classes?class=${encodeURIComponent(classDetail.class_room.id)}&tab=settings`)}
+          onClick={() =>
+            router.push(
+              `/classes?class=${encodeURIComponent(classDetail.class_room.id)}&tab=settings`,
+            )
+          }
           className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:border-teal hover:text-teal-dark"
         >
           Class settings
@@ -734,7 +511,10 @@ export function ClassesClient() {
                 {[
                   { key: "all", label: `All (${studentAssignments.length})` },
                   { key: "active", label: `Active (${studentAssignmentStats.active})` },
-                  { key: "completed", label: `Completed (${studentAssignmentStats.completed})` },
+                  {
+                    key: "completed",
+                    label: `Completed (${studentAssignmentStats.completed})`,
+                  },
                   { key: "overdue", label: `Overdue (${studentAssignmentStats.overdue})` },
                 ].map((item) => (
                   <button
@@ -854,7 +634,9 @@ export function ClassesClient() {
                   Format
                   <select
                     value={practiceFormat}
-                    onChange={(event) => setPracticeFormat(event.target.value as PracticeFormat)}
+                    onChange={(event) =>
+                      setPracticeFormat(event.target.value as PracticeFormat)
+                    }
                     className={fieldClass}
                   >
                     <option value="parli">Parli</option>
@@ -998,8 +780,12 @@ export function ClassesClient() {
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${typeBadgeClass(item.assignment.type)}`}>
-                            {item.assignment.type === "practice_round" ? "Practice" : assignmentTypeLabel(item.assignment.type)}
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${typeBadgeClass(item.assignment.type)}`}
+                          >
+                            {item.assignment.type === "practice_round"
+                              ? "Practice"
+                              : assignmentTypeLabel(item.assignment.type)}
                           </span>
                           <span className="text-xs text-slate-500">
                             Due {formatDate(item.assignment.due_at)}
@@ -1008,7 +794,9 @@ export function ClassesClient() {
                         <h3 className="mt-3 text-xl font-semibold text-slate-900">
                           {item.assignment.title}
                         </h3>
-                        <p className="mt-2 text-sm text-slate-600">{payloadSummary(item)}</p>
+                        <p className="mt-2 text-sm text-slate-600">
+                          {payloadSummary(item)}
+                        </p>
                       </div>
                       <span className="rounded-full bg-teal/10 px-3 py-1 text-sm font-semibold text-teal-dark">
                         {completed}/{item.recipients.length} completed
@@ -1038,7 +826,9 @@ export function ClassesClient() {
                     key={`coach-${member.user_id}`}
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
                   >
-                    <div className="font-medium text-slate-900">{nameFor(member.user_id)}</div>
+                    <div className="font-medium text-slate-900">
+                      {nameFor(member.user_id)}
+                    </div>
                     <div className="mt-1 text-sm text-slate-500">Coach</div>
                   </div>
                 ))}
@@ -1055,7 +845,9 @@ export function ClassesClient() {
                     key={member.user_id}
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
                   >
-                    <div className="font-medium text-slate-900">{nameFor(member.user_id)}</div>
+                    <div className="font-medium text-slate-900">
+                      {nameFor(member.user_id)}
+                    </div>
                     <div className="mt-1 text-sm text-slate-500">Competitor</div>
                   </div>
                 ))}
@@ -1106,7 +898,9 @@ export function ClassesClient() {
                             {statusLabel(recipient.status)}
                           </td>
                           <td className="px-4 py-3 text-slate-700">
-                            {recipient.completed_at ? formatDate(recipient.completed_at) : "-"}
+                            {recipient.completed_at
+                              ? formatDate(recipient.completed_at)
+                              : "-"}
                           </td>
                           <td className="px-4 py-3 text-slate-700">
                             {resultSummary(summary.results[recipient.id])}
@@ -1190,6 +984,18 @@ export function ClassesClient() {
             ))
           )}
         </section>
+      )}
+
+      {tab === "analytics" && classDetail.role === "coach" && (
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <ClassProgressDashboard classId={classDetail.class_room.id} />
+        </section>
+      )}
+
+      {tab === "analytics" && classDetail.role !== "coach" && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+          Analytics is available for coaches only.
+        </div>
       )}
 
       {tab === "settings" && (
