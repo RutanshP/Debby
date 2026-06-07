@@ -151,6 +151,55 @@ const MOCK_SPEED_PAYLOAD = {
   },
 };
 
+const MOCK_CONTENTION_PAYLOAD = {
+  type: "drill" as const,
+  round: null,
+  drill: {
+    id: "drill-contention",
+    user_id: "student-id",
+    drill_type: "contention",
+    prompt: {
+      title: "Contention Storm",
+      topic: "The United States should ban private prisons.",
+      prompt: "Give me as many contentions as you can.",
+      task: "Type as many contention taglines as possible.",
+      timer_seconds: 60,
+    },
+    response: "Prisons exploit labor. Prisons destroy accountability.",
+    score: {
+      score: 8,
+    },
+    numeric_score: 8,
+    duration_seconds: 60,
+    wpm: null,
+    accuracy: null,
+    completion: null,
+    timer_seconds: 60,
+    created_at: "2026-01-15T12:00:00Z",
+  },
+  case_review: null,
+  recipient: {
+    id: "recipient-contention",
+    assignment_id: "assign-contention",
+    user_id: "student-id",
+    status: "completed",
+    completed_at: "2026-01-15T12:05:00Z",
+  },
+  assignment: {
+    id: "assign-contention",
+    class_id: "class-xyz",
+    title: "Contention drill",
+    type: "drill" as const,
+    payload: { drill_type: "contention", timer_seconds: 60 },
+  },
+  submission: {
+    id: "sub-contention",
+    recipient_id: "recipient-contention",
+    user_id: "student-id",
+    drill_id: "drill-contention",
+  },
+};
+
 describe("StudentSubmissionPage", () => {
   beforeEach(() => {
     global.fetch = jest.fn() as unknown as typeof fetch;
@@ -288,5 +337,30 @@ describe("StudentSubmissionPage", () => {
 
     const backLink = await screen.findByRole("link", { name: /Back to results/i });
     expect(backLink).toHaveAttribute("href", "/classes?class=class-xyz&tab=results");
+  });
+
+  it("shows the contention topic in the student drill results view", async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => MOCK_CONTENTION_PAYLOAD,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => null,
+      });
+
+    const page = await StudentSubmissionPage({
+      params: Promise.resolve({ recipientId: "recipient-contention" }),
+      searchParams: Promise.resolve({ class: "class-xyz" }),
+    });
+
+    render(page);
+
+    expect(
+      await screen.findByText("The United States should ban private prisons."),
+    ).toBeInTheDocument();
   });
 });

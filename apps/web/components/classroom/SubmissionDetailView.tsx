@@ -167,6 +167,10 @@ export function SubmissionDetailView({
     drill?.drill_type === "speed" && typeof drill.prompt?.prompt === "string"
       ? drill.prompt.prompt
       : null;
+  const drillTopic =
+    drill && typeof drill.prompt?.topic === "string" && drill.prompt.topic.trim()
+      ? drill.prompt.topic
+      : null;
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 px-4 py-10">
@@ -286,6 +290,11 @@ export function SubmissionDetailView({
           <div className="rounded-md border border-slate-200 bg-white p-4">
             <h2 className="mb-1 text-base font-semibold text-slate-800">Drill type</h2>
             <p className="text-sm capitalize text-slate-700">{drill.drill_type}</p>
+            {drillTopic && (
+              <p className="mt-2 text-sm text-slate-700">
+                <span className="font-medium text-slate-800">Topic:</span> {drillTopic}
+              </p>
+            )}
             {drill.created_at && (
               <p className="mt-1 text-xs text-slate-500">
                 Completed {new Date(drill.created_at).toLocaleString()}

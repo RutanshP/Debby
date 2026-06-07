@@ -157,6 +157,54 @@ const MOCK_DRILL_PAYLOAD = {
   },
 };
 
+const MOCK_CONTENTION_PAYLOAD = {
+  type: "drill" as const,
+  round: null,
+  drill: {
+    id: "drill-contention",
+    user_id: "student-id",
+    drill_type: "contention",
+    prompt: {
+      title: "Contention Storm",
+      topic: "The United States should ban private prisons.",
+      prompt: "Give me as many contentions as you can.",
+      task: "Type as many contention taglines as possible.",
+      timer_seconds: 60,
+    },
+    response: "Prisons exploit labor. Prisons destroy accountability.",
+    score: {
+      score: 8,
+    },
+    numeric_score: 8,
+    duration_seconds: 60,
+    wpm: null,
+    accuracy: null,
+    completion: null,
+    timer_seconds: 60,
+    created_at: "2026-01-15T12:00:00Z",
+  },
+  recipient: {
+    id: "recipient-contention",
+    assignment_id: "assign-contention",
+    user_id: "student-id",
+    status: "completed",
+    completed_at: "2026-01-15T12:05:00Z",
+  },
+  assignment: {
+    id: "assign-contention",
+    class_id: "class-xyz",
+    title: "Contention drill",
+    type: "drill" as const,
+    payload: { drill_type: "contention", timer_seconds: 60 },
+  },
+  submission: {
+    id: "sub-contention",
+    recipient_id: "recipient-contention",
+    user_id: "student-id",
+    drill_id: "drill-contention",
+  },
+};
+
 function mockFetchSuccess(payload: unknown) {
   (global.fetch as jest.Mock).mockResolvedValueOnce({
     ok: true,
@@ -215,6 +263,21 @@ describe("CoachSubmissionPage", () => {
 
     expect(await screen.findByText("Drill stats")).toBeInTheDocument();
     expect(screen.getByText("My rebuttal was about X.")).toBeInTheDocument();
+  });
+
+  it("shows the contention topic in the coach drill results view", async () => {
+    mockFetchSuccess(MOCK_CONTENTION_PAYLOAD);
+
+    const page = await CoachSubmissionPage({
+      params: Promise.resolve({ recipientId: "recipient-contention" }),
+      searchParams: Promise.resolve({ class: "class-xyz" }),
+    });
+
+    render(page);
+
+    expect(
+      await screen.findByText("The United States should ban private prisons."),
+    ).toBeInTheDocument();
   });
 
   it("shows not-found when class param is missing", async () => {
