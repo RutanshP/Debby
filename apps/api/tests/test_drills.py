@@ -12,7 +12,7 @@ import respx
 from fastapi.testclient import TestClient
 
 from main import app
-from models.drill import DrillPrompt
+from models.drill import DrillPrompt, DrillScore
 from routes import drills as drills_route
 from services import drills as drills_service
 
@@ -608,6 +608,46 @@ def test_score_route_uses_stored_drill(authed_user):
     assert scored.json()["score"] == 8
     stored = drills_route._FALLBACK_STORE[created["id"]]
     assert stored["numeric_score"] == 8
+
+
+def test_score_audio_route_persists_wpm_series_for_speech_drills(authed_user):
+    create_payload = {
+        "title": "Rebuttal Speech",
+        "topic": "Schools",
+        "prompt": "Argue against phone bans.",
+        "task": "Respond aloud.",
+        "timer_seconds": 60,
+    }
+    score_payload = {
+        "score": 8,
+        "feedback": "Strong rebuttal.",
+        "strengths": ["clear claim"],
+        "improvements": ["add weighing"],
+    }
+    create_mock = AsyncMock(return_value=_mock_chat_completion(create_payload))
+    score_mock = AsyncMock(return_value=DrillScore(**score_payload))
+
+    with patch.object(drills_service._openai_client.chat.completions, "create", create_mock):
+        created = client.post(
+            "/api/drills",
+            json={"drill_type": "rebuttal"},
+            headers={"authorization": "Bearer fake"},
+        ).json()
+
+    with patch.object(drills_route, "transcribe_audio", AsyncMock(return_value=("hello world again", 6.0))), \
+        patch.object(drills_route, "score_drill", score_mock), \
+        patch.dict("os.environ", {"ASSEMBLYAI_API_KEY": "test-key"}):
+        scored = client.post(
+            f"/api/drills/{created['id']}/score-audio",
+            files={"audio": ("a.wav", b"123", "audio/wav")},
+            headers={"authorization": "Bearer fake"},
+        )
+
+    assert scored.status_code == 200, scored.text
+    stored = drills_route._FALLBACK_STORE[created["id"]]
+    assert stored["wpm"] == drills_service.compute_wpm("hello world again", 6.0)
+    assert isinstance(stored["wpm_series"], list)
+    assert len(stored["wpm_series"]) > 0
 
 
 def test_score_filler_route_scores_detected_filler(authed_user):

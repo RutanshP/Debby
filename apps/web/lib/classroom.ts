@@ -56,6 +56,7 @@ export interface Assignment {
   title: string;
   type: AssignmentType;
   payload: AssignmentPayload;
+  instructions?: string | null;
   due_at?: string | null;
   created_at?: string | null;
 }

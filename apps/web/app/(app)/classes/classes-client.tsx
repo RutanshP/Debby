@@ -77,6 +77,12 @@ function compareDueDate(a?: string | null, b?: string | null): number {
   return aTime - bTime;
 }
 
+function compareCreatedAtDesc(a?: string | null, b?: string | null): number {
+  const aTime = a ? new Date(a).getTime() : Number.NEGATIVE_INFINITY;
+  const bTime = b ? new Date(b).getTime() : Number.NEGATIVE_INFINITY;
+  return bTime - aTime;
+}
+
 function isOverdue(item: AssignmentRecipientDetail, now: Date): boolean {
   if (item.recipient.status === "completed" || !item.assignment.due_at) return false;
   return new Date(item.assignment.due_at).getTime() < now.getTime();
@@ -154,6 +160,11 @@ function StudentAssignmentCard({
             {item.assignment.title}
           </h3>
           <p className="mt-2 text-sm text-slate-600">{payloadSummary(item)}</p>
+          {item.assignment.instructions && (
+            <p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {item.assignment.instructions}
+            </p>
+          )}
           <div className="mt-3 text-sm text-slate-600">
             Due {formatDate(item.assignment.due_at)}
           </div>
@@ -220,6 +231,7 @@ export function ClassesClient() {
 
   const [title, setTitle] = useState("");
   const [type, setType] = useState<AssignmentType>("drill");
+  const [instructions, setInstructions] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [assignAll, setAssignAll] = useState(true);
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
@@ -291,7 +303,7 @@ export function ClassesClient() {
         (item): item is AssignmentRecipientDetail => !isCoachAssignmentSummary(item),
       )
       .sort((left, right) =>
-        compareDueDate(left.assignment.due_at, right.assignment.due_at),
+        compareCreatedAtDesc(left.assignment.created_at, right.assignment.created_at),
       );
   }, [classDetail]);
 
@@ -300,7 +312,7 @@ export function ClassesClient() {
     return classDetail.assignments
       .filter(isCoachAssignmentSummary)
       .sort((left, right) =>
-        compareDueDate(left.assignment.due_at, right.assignment.due_at),
+        compareCreatedAtDesc(left.assignment.created_at, right.assignment.created_at),
       );
   }, [classDetail]);
 
@@ -415,12 +427,14 @@ export function ClassesClient() {
           title: title.trim(),
           type,
           payload,
+          instructions: instructions.trim() || null,
           due_at: dueDateToEndOfDayIso(dueAt),
           assign_all: assignAll,
           recipient_user_ids: assignAll ? null : selectedRecipients,
         }),
       });
       setTitle("");
+      setInstructions("");
       setPracticeTopic("");
       setCaseTopic("");
       setSelectedRecipients([]);
@@ -589,6 +603,15 @@ export function ClassesClient() {
                 className={fieldClass}
                 placeholder="Rebuttal Drill"
                 required
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 lg:col-span-2">
+              Instructions
+              <textarea
+                value={instructions}
+                onChange={(event) => setInstructions(event.target.value)}
+                className="min-h-24 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400"
+                placeholder="Optional instructions for students."
               />
             </label>
             <label className={labelClass}>
@@ -819,6 +842,11 @@ export function ClassesClient() {
                         <p className="mt-2 text-sm text-slate-600">
                           {payloadSummary(item)}
                         </p>
+                        {item.assignment.instructions && (
+                          <p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                            {item.assignment.instructions}
+                          </p>
+                        )}
                       </div>
                       <span className="rounded-full bg-teal/10 px-3 py-1 text-sm font-semibold text-teal-dark">
                         {completed}/{item.recipients.length} completed

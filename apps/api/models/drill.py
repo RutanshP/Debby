@@ -89,6 +89,7 @@ class Drill(BaseModel):
     numeric_score: int | None = None
     duration_seconds: float | None = None
     wpm: int | None = None
+    wpm_series: list[WpmPoint] = Field(default_factory=list)
     accuracy: float | None = None
     completion: float | None = None
     timer_seconds: int | None = None
@@ -103,6 +104,7 @@ class DrillSummary(BaseModel):
     numeric_score: int | None = None
     duration_seconds: float | None = None
     wpm: int | None = None
+    wpm_series: list[WpmPoint] = Field(default_factory=list)
     accuracy: float | None = None
     completion: float | None = None
     timer_seconds: int | None = None

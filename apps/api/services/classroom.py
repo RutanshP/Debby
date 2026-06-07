@@ -104,6 +104,15 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _sort_timestamp_desc(value: Any) -> float:
+    if not value:
+        return float("-inf")
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return float("-inf")
+
+
 def _is_jwt_future_error(exc: Exception) -> bool:
     message = str(exc)
     return "JWT issued at future" in message or "PGRST303" in message
@@ -230,6 +239,8 @@ async def create_assignment(
 ) -> CoachAssignmentSummary:
     await _require_coach(class_id, user_id)
     payload = _validate_payload(request.type, request.payload)
+    if request.instructions and request.instructions.strip():
+        payload["instructions"] = request.instructions.strip()
 
     members = await _select(_MEMBERS, filters={"class_id": class_id})
     competitors = [m for m in members if m.get("role") == "competitor"]
@@ -343,8 +354,8 @@ async def list_user_assignments(*, user_id: str) -> list[AssignmentRecipientDeta
     recipients.sort(
         key=lambda row: (
             row.get("status") == "completed",
-            row.get("created_at") or "",
-        )
+            -_sort_timestamp_desc(row.get("created_at")),
+        ),
     )
     return [await _recipient_detail(row) for row in recipients]
 
@@ -409,6 +420,12 @@ async def get_class_detail(*, user_id: str, class_id: str) -> ClassDetail:
             for row in await _select(_RECIPIENTS, filters={"user_id": user_id})
             if row.get("assignment_id") in {a["id"] for a in assignments}
         ]
+        assignment_rows_by_id = {assignment["id"]: assignment for assignment in assignments}
+        own_recipients.sort(
+            key=lambda row: -_sort_timestamp_desc(
+                assignment_rows_by_id.get(row.get("assignment_id"), {}).get("created_at")
+            )
+        )
         visible_assignments = [await _recipient_detail(row) for row in own_recipients]
     return ClassDetail(
         class_room=ClassRoom.model_validate(class_row),

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from models.drill import DrillType
 from models.round import Format, Side
@@ -86,8 +86,26 @@ class Assignment(BaseModel):
     title: str
     type: AssignmentType
     payload: dict[str, Any]
+    instructions: str | None = None
     due_at: datetime | str | None = None
     created_at: datetime | str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def derive_instructions_from_payload(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        if value.get("instructions"):
+            return value
+        payload = value.get("payload")
+        if not isinstance(payload, dict):
+            return value
+        instructions = payload.get("instructions")
+        if not isinstance(instructions, str) or not instructions.strip():
+            return value
+        next_value = dict(value)
+        next_value["instructions"] = instructions.strip()
+        return next_value
 
 
 class AssignmentRecipient(BaseModel):
@@ -122,6 +140,7 @@ class CreateAssignmentRequest(BaseModel):
     title: str = Field(min_length=1, max_length=180)
     type: AssignmentType
     payload: dict[str, Any]
+    instructions: str | None = Field(default=None, max_length=2000)
     due_at: datetime | None = None
     recipient_user_ids: list[str] | None = None
     assign_all: bool = True

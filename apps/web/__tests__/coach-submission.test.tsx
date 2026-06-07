@@ -130,6 +130,11 @@ const MOCK_DRILL_PAYLOAD = {
     numeric_score: 8,
     duration_seconds: 58,
     wpm: 150,
+    wpm_series: [
+      { t: 2, wpm: 140 },
+      { t: 4, wpm: 155 },
+      { t: 6, wpm: 160 },
+    ],
     accuracy: null,
     completion: null,
     timer_seconds: 60,
@@ -263,6 +268,8 @@ describe("CoachSubmissionPage", () => {
 
     expect(await screen.findByText("Drill stats")).toBeInTheDocument();
     expect(screen.getByText("My rebuttal was about X.")).toBeInTheDocument();
+    expect(screen.getByText("WPM over time")).toBeInTheDocument();
+    expect(screen.getByTestId("wpm-chart")).toBeInTheDocument();
   });
 
   it("shows the contention topic in the coach drill results view", async () => {

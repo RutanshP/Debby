@@ -1115,15 +1115,20 @@ export function RoundRunner() {
       {assignmentDetail && (
         <section className="rounded-lg border border-teal/30 bg-teal/5 p-4 text-sm shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="font-semibold text-teal-dark">
-                {assignmentDetail.assignment.title}
+              <div>
+                <div className="font-semibold text-teal-dark">
+                  {assignmentDetail.assignment.title}
+                </div>
+                <div className="text-slate-600">
+                  {assignmentDetail.class_room.name} / {assignmentPayload?.format} /{" "}
+                  {assignmentPayload?.side} / {assignmentPayload?.speech_duration_seconds}s
+                </div>
+                {assignmentDetail.assignment.instructions && (
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-white/80 px-3 py-2 text-slate-700">
+                    {assignmentDetail.assignment.instructions}
+                  </p>
+                )}
               </div>
-              <div className="text-slate-600">
-                {assignmentDetail.class_room.name} / {assignmentPayload?.format} /{" "}
-                {assignmentPayload?.side} / {assignmentPayload?.speech_duration_seconds}s
-              </div>
-            </div>
             <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-teal-dark">
               {assignmentCompleted
                 ? "Completed"

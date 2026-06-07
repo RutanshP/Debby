@@ -81,11 +81,12 @@ _COMPUTED_SCORE_COLUMNS = {
     "numeric_score",
     "duration_seconds",
     "wpm",
+    "wpm_series",
     "accuracy",
     "completion",
 }
 _SUMMARY_COLUMNS = (
-    "id,drill_type,prompt,score,numeric_score,duration_seconds,wpm,accuracy,"
+    "id,drill_type,prompt,score,numeric_score,duration_seconds,wpm,wpm_series,accuracy,"
     "completion,timer_seconds,created_at"
 )
 from services.fillers import analyze_fillers
@@ -168,11 +169,16 @@ def _merge_score_columns(
         merged["score"] = row.get("numeric_score")
 
     if drill_type == "speed":
-        for key in ("duration_seconds", "wpm", "accuracy", "completion"):
+        for key in ("duration_seconds", "wpm", "wpm_series", "accuracy", "completion"):
             if row.get(key) is not None:
                 merged[key] = row.get(key)
-    elif row.get("duration_seconds") is not None:
-        merged["duration_seconds"] = row.get("duration_seconds")
+    else:
+        if row.get("duration_seconds") is not None:
+            merged["duration_seconds"] = row.get("duration_seconds")
+        if row.get("wpm") is not None:
+            merged["wpm"] = row.get("wpm")
+        if row.get("wpm_series") is not None:
+            merged["wpm_series"] = row.get("wpm_series")
 
     return merged
 
@@ -230,6 +236,7 @@ def _row_to_drill(row: dict[str, Any]) -> Drill:
         numeric_score=row.get("numeric_score"),
         duration_seconds=row.get("duration_seconds"),
         wpm=row.get("wpm"),
+        wpm_series=row.get("wpm_series") or [],
         accuracy=row.get("accuracy"),
         completion=row.get("completion"),
         timer_seconds=row.get("timer_seconds"),
@@ -267,6 +274,7 @@ def _row_to_drill_summary(row: dict[str, Any]) -> DrillSummary | None:
         numeric_score=row.get("numeric_score"),
         duration_seconds=row.get("duration_seconds"),
         wpm=row.get("wpm"),
+        wpm_series=row.get("wpm_series") or [],
         accuracy=row.get("accuracy"),
         completion=row.get("completion"),
         timer_seconds=row.get("timer_seconds"),
@@ -432,6 +440,7 @@ async def score_speed_route(
         user.id,
         {
             "response": transcript,
+            "wpm_series": [point.model_dump() for point in wpm_series],
             "score": {
                 "accuracy": accuracy,
                 "completion": completion,
@@ -571,12 +580,16 @@ async def score_audio_route(
         raise HTTPException(status_code=400, detail="No speech was detected in the recording.")
 
     score = await score_drill(drill.drill_type, drill.prompt, transcript)
+    wpm = compute_wpm(transcript, duration)
+    wpm_series = _compute_speed_wpm_series([], transcript, duration)
     _update_drill(
         drill_id,
         user.id,
         {
             "response": transcript,
             "score": score.model_dump(),
+            "wpm": wpm,
+            "wpm_series": [point.model_dump() for point in wpm_series],
             **_score_column_patch(score, duration_seconds=duration),
         },
     )

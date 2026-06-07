@@ -162,7 +162,7 @@ export function SubmissionDetailView({
   const round = data.round;
   const drill = data.drill;
   const caseReview = data.case_review;
-  const speedSeries = Array.isArray(drill?.wpm_series) ? drill.wpm_series : [];
+  const drillWpmSeries = Array.isArray(drill?.wpm_series) ? drill.wpm_series : [];
   const originalSpeedPassage =
     drill?.drill_type === "speed" && typeof drill.prompt?.prompt === "string"
       ? drill.prompt.prompt
@@ -338,13 +338,13 @@ export function SubmissionDetailView({
             )}
           </section>
 
-          {drill.drill_type === "speed" && speedSeries.length > 0 && (
+          {drillWpmSeries.length > 0 && (
             <section>
               <h2 className="mb-3 text-lg font-semibold text-slate-800">
                 WPM over time
               </h2>
               <div className="rounded-lg border border-slate-200 bg-white p-5">
-                <WpmChart series={speedSeries} />
+                <WpmChart series={drillWpmSeries} />
               </div>
             </section>
           )}

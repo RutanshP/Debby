@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import type { ClassDetail, ClassMember } from "@/lib/classroom";
 import {
   archiveClass,
@@ -11,6 +11,7 @@ import {
   renameClass,
   updateMemberRole,
 } from "@/lib/classAdmin";
+import { useProfileNames } from "@/lib/profiles";
 
 const fieldClass =
   "h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20 disabled:bg-slate-100 disabled:text-slate-400";
@@ -33,6 +34,8 @@ interface Props {
 export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
   const { class_room, role, roster } = classDetail;
   const isCoach = role === "coach";
+  const rosterIds = useMemo(() => roster.map((member) => member.user_id), [roster]);
+  const { nameFor } = useProfileNames(rosterIds);
 
   // --- rename ---
   const [renameValue, setRenameValue] = useState(class_room.name);
@@ -240,9 +243,7 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
                   key={`coach-${member.user_id}`}
                   className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2"
                 >
-                  <span className="text-sm font-mono text-slate-700">
-                    {member.user_id.slice(0, 8)}
-                  </span>
+                  <span className="text-sm text-slate-700">{nameFor(member.user_id)}</span>
                   <span className="text-xs font-semibold uppercase tracking-wide text-teal-dark">
                     Coach
                   </span>
@@ -262,9 +263,7 @@ export function ClassSettings({ classDetail, onRefresh, onClose }: Props) {
                     key={member.user_id}
                     className="flex items-center justify-between rounded-md bg-white px-3 py-2 border border-slate-200"
                   >
-                    <span className="text-sm text-slate-700 font-mono">
-                      {member.user_id.slice(0, 8)}
-                    </span>
+                    <span className="text-sm text-slate-700">{nameFor(member.user_id)}</span>
                     <div className="flex items-center gap-3">
                       <button
                         type="button"

@@ -211,6 +211,77 @@ def test_coach_can_create_assignment_and_student_lists_it(client: TestClient) ->
     assert body[0]["assignment"]["payload"]["drill_type"] == "rebuttal"
 
 
+def test_assignment_instructions_round_trip_to_student(client: TestClient) -> None:
+    global CURRENT_USER
+    class_id = _create_class_and_join_student(client)
+
+    create = client.post(
+        f"/api/classes/{class_id}/assignments",
+        json={
+            "title": "Impact drill",
+            "type": "drill",
+            "payload": {"drill_type": "impact", "timer_seconds": 60},
+            "instructions": "Focus on magnitude first, then weigh it against timeframe.",
+            "assign_all": True,
+        },
+    )
+    assert create.status_code == 200, create.text
+
+    CURRENT_USER = STUDENT
+    resp = client.get("/api/assignments")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body[0]["assignment"]["instructions"] == (
+        "Focus on magnitude first, then weigh it against timeframe."
+    )
+
+
+def test_class_detail_lists_newest_assignments_first(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+) -> None:
+    global CURRENT_USER
+    class_id = _create_class_and_join_student(client)
+
+    first = client.post(
+        f"/api/classes/{class_id}/assignments",
+        json={
+            "title": "Older assignment",
+            "type": "drill",
+            "payload": {"drill_type": "rebuttal", "timer_seconds": 60},
+            "assign_all": True,
+        },
+    )
+    assert first.status_code == 200, first.text
+
+    second = client.post(
+        f"/api/classes/{class_id}/assignments",
+        json={
+            "title": "Newer assignment",
+            "type": "drill",
+            "payload": {"drill_type": "impact", "timer_seconds": 60},
+            "assign_all": True,
+        },
+    )
+    assert second.status_code == 200, second.text
+
+    assignments_table = fake_supabase.table("assignments").rows
+    assignments_table[0]["created_at"] = "2026-01-01T00:00:00+00:00"
+    assignments_table[1]["created_at"] = "2026-01-02T00:00:00+00:00"
+
+    CURRENT_USER = COACH
+    coach_detail = client.get(f"/api/classes/{class_id}")
+    assert coach_detail.status_code == 200, coach_detail.text
+    coach_titles = [row["assignment"]["title"] for row in coach_detail.json()["assignments"]]
+    assert coach_titles[:2] == ["Newer assignment", "Older assignment"]
+
+    CURRENT_USER = STUDENT
+    student_detail = client.get(f"/api/classes/{class_id}")
+    assert student_detail.status_code == 200, student_detail.text
+    student_titles = [row["assignment"]["title"] for row in student_detail.json()["assignments"]]
+    assert student_titles[:2] == ["Newer assignment", "Older assignment"]
+
+
 def test_student_cannot_create_assignment(client: TestClient) -> None:
     global CURRENT_USER
     class_id = _create_class_and_join_student(client)

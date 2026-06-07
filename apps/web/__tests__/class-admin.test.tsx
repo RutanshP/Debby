@@ -9,6 +9,21 @@ jest.mock("@/lib/supabase", () => ({
   }),
 }));
 
+jest.mock("@/lib/profiles", () => ({
+  useProfileNames: (userIds: string[]) => {
+    const names = Object.fromEntries(
+      userIds.map((id) => [
+        id,
+        id === "coach-id" ? "Coach Lee" : id === STUDENT_ID ? "Jordan Kim" : id,
+      ]),
+    );
+    return {
+      names,
+      nameFor: (id: string) => names[id] ?? id.slice(0, 8),
+    };
+  },
+}));
+
 function mockFetchOk(payload: unknown, status = 200) {
   (global.fetch as jest.Mock).mockResolvedValueOnce({
     ok: status < 400,
@@ -79,6 +94,8 @@ describe("ClassSettings — coach view", () => {
     expect(screen.getByTestId("join-code")).toHaveTextContent("ABC123");
     expect(screen.getByRole("button", { name: /regenerate code/i })).toBeInTheDocument();
     expect(screen.getByTestId("leave-class-btn")).toBeInTheDocument();
+    expect(screen.getByText("Coach Lee")).toBeInTheDocument();
+    expect(screen.getByText("Jordan Kim")).toBeInTheDocument();
   });
 
   it("calls PATCH /api/classes/:id when saving rename", async () => {
