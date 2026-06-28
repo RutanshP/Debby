@@ -14,6 +14,7 @@ import {
   assignmentHref,
   assignmentTypeLabel,
   formatDate,
+  isClassTab,
   isCasePayload,
   isCoachAssignmentSummary,
   isDrillPayload,
@@ -23,6 +24,7 @@ import {
   submissionHref,
   type AssignmentRecipientDetail,
   type AssignmentType,
+  type ClassTab,
   type CoachAssignmentSummary,
   type DrillAssignmentType,
   type PracticeFormat,
@@ -36,13 +38,6 @@ import {
   useQueryClient,
 } from "@/lib/queries/classroom";
 
-type ClassTab =
-  | "classwork"
-  | "people"
-  | "stream"
-  | "results"
-  | "analytics"
-  | "settings";
 type StudentAssignmentFilter = "all" | "active" | "completed" | "overdue";
 
 const fieldClass =
@@ -266,14 +261,7 @@ export function ClassesClient() {
       setTab("classwork");
       return;
     }
-    if (
-      requestedTab === "classwork" ||
-      requestedTab === "people" ||
-      requestedTab === "stream" ||
-      requestedTab === "results" ||
-      requestedTab === "analytics" ||
-      requestedTab === "settings"
-    ) {
+    if (isClassTab(requestedTab)) {
       setTab(requestedTab);
       return;
     }

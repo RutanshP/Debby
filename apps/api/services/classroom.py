@@ -62,6 +62,28 @@ async def _select(
     return await asyncio.to_thread(_do)
 
 
+async def _select_in(
+    table: str,
+    *,
+    field: str,
+    values: list[Any],
+    order: tuple[str, bool] | None = None,
+) -> list[dict[str, Any]]:
+    if not values:
+        return []
+
+    client = _client()
+
+    def _do() -> list[dict[str, Any]]:
+        query = client.table(table).select("*").in_(field, values)
+        if order:
+            query = query.order(order[0], desc=order[1])
+        resp = query.execute()
+        return list(getattr(resp, "data", None) or [])
+
+    return await asyncio.to_thread(_do)
+
+
 async def _insert(table: str, payload: dict[str, Any]) -> dict[str, Any]:
     client = _client()
 
@@ -200,24 +222,46 @@ async def join_class(*, user_id: str, join_code: str) -> ClassRoom:
 
 async def list_classes(*, user_id: str) -> list[ClassListItem]:
     memberships = await _select(_MEMBERS, filters={"user_id": user_id})
+    class_ids = [
+        membership["class_id"]
+        for membership in memberships
+        if isinstance(membership.get("class_id"), str)
+    ]
+    class_rows = await _select_in(_CLASSES, field="id", values=class_ids) if class_ids else []
+    class_rows_by_id = {row["id"]: row for row in class_rows}
+    recipients = await _select(_RECIPIENTS, filters={"user_id": user_id})
+    assignment_ids = [
+        recipient["assignment_id"]
+        for recipient in recipients
+        if isinstance(recipient.get("assignment_id"), str)
+    ]
+    assignment_rows = (
+        await _select_in(_ASSIGNMENTS, field="id", values=assignment_ids)
+        if assignment_ids
+        else []
+    )
+    assignment_class_by_id = {
+        row["id"]: row["class_id"]
+        for row in assignment_rows
+        if isinstance(row.get("class_id"), str)
+    }
+    open_counts_by_class: dict[str, int] = {}
+    for recipient in recipients:
+        assignment_id = recipient.get("assignment_id")
+        class_id = assignment_class_by_id.get(assignment_id)
+        if class_id and recipient.get("status") != "completed":
+            open_counts_by_class[class_id] = open_counts_by_class.get(class_id, 0) + 1
+
     items: list[ClassListItem] = []
     for membership in memberships:
-        class_row = await _get_class(membership["class_id"])
+        class_row = class_rows_by_id.get(membership["class_id"])
         if class_row is None:
             continue
-        open_count = 0
-        if membership.get("role") == "competitor":
-            recipients = await _select(_RECIPIENTS, filters={"user_id": user_id})
-            assignment_ids = {
-                row["id"]
-                for row in await _select(_ASSIGNMENTS, filters={"class_id": class_row["id"]})
-            }
-            open_count = sum(
-                1
-                for recipient in recipients
-                if recipient.get("assignment_id") in assignment_ids
-                and recipient.get("status") != "completed"
-            )
+        open_count = (
+            open_counts_by_class.get(class_row["id"], 0)
+            if membership.get("role") == "competitor"
+            else 0
+        )
         items.append(
             ClassListItem(
                 id=class_row["id"],
@@ -321,6 +365,60 @@ async def _result_for_submission(submission: dict[str, Any] | None) -> dict[str,
     return None
 
 
+async def _latest_submissions_for_recipients(
+    recipient_ids: list[str],
+) -> dict[str, dict[str, Any]]:
+    rows = await _select_in(
+        _SUBMISSIONS,
+        field="recipient_id",
+        values=recipient_ids,
+        order=("created_at", True),
+    )
+    latest: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        recipient_id = row.get("recipient_id")
+        if isinstance(recipient_id, str) and recipient_id not in latest:
+            latest[recipient_id] = row
+    return latest
+
+
+async def _results_for_submissions(
+    submissions_by_recipient: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    drill_ids = [row["drill_id"] for row in submissions_by_recipient.values() if row.get("drill_id")]
+    round_ids = [row["round_id"] for row in submissions_by_recipient.values() if row.get("round_id")]
+    case_review_ids = [
+        row["case_review_id"]
+        for row in submissions_by_recipient.values()
+        if row.get("case_review_id")
+    ]
+
+    drill_rows = await _select_in("drills", field="id", values=drill_ids) if drill_ids else []
+    round_rows = await _select_in("rounds", field="id", values=round_ids) if round_ids else []
+    case_review_rows = (
+        await _select_in("case_reviews", field="id", values=case_review_ids)
+        if case_review_ids
+        else []
+    )
+
+    drill_by_id = {row["id"]: row for row in drill_rows}
+    round_by_id = {row["id"]: row for row in round_rows}
+    case_review_by_id = {row["id"]: row for row in case_review_rows}
+
+    results: dict[str, dict[str, Any]] = {}
+    for recipient_id, submission in submissions_by_recipient.items():
+        if submission.get("drill_id") and submission["drill_id"] in drill_by_id:
+            results[recipient_id] = drill_by_id[submission["drill_id"]]
+        elif submission.get("round_id") and submission["round_id"] in round_by_id:
+            results[recipient_id] = round_by_id[submission["round_id"]]
+        elif (
+            submission.get("case_review_id")
+            and submission["case_review_id"] in case_review_by_id
+        ):
+            results[recipient_id] = case_review_by_id[submission["case_review_id"]]
+    return results
+
+
 async def _recipient_detail(recipient_row: dict[str, Any]) -> AssignmentRecipientDetail:
     assignments = await _select(
         _ASSIGNMENTS,
@@ -389,20 +487,32 @@ async def get_class_detail(*, user_id: str, class_id: str) -> ClassDetail:
         filters={"class_id": class_id},
         order=("created_at", True),
     )
+    assignment_ids = [assignment["id"] for assignment in assignments]
+    recipient_rows = (
+        await _select_in(_RECIPIENTS, field="assignment_id", values=assignment_ids)
+        if assignment_ids
+        else []
+    )
+    recipients_by_assignment: dict[str, list[dict[str, Any]]] = {}
+    for row in recipient_rows:
+        assignment_id = row.get("assignment_id")
+        if isinstance(assignment_id, str):
+            recipients_by_assignment.setdefault(assignment_id, []).append(row)
+    latest_submissions_by_recipient = await _latest_submissions_for_recipients(
+        [row["id"] for row in recipient_rows if isinstance(row.get("id"), str)]
+    )
+    results_by_recipient = await _results_for_submissions(latest_submissions_by_recipient)
     if member.get("role") == "coach":
         summaries: list[CoachAssignmentSummary] = []
         for assignment in assignments:
-            recipients = await _select(
-                _RECIPIENTS,
-                filters={"assignment_id": assignment["id"]},
-            )
+            recipients = recipients_by_assignment.get(assignment["id"], [])
             submissions: list[AssignmentSubmission] = []
             results: dict[str, dict[str, Any]] = {}
             for recipient in recipients:
-                submission = await _submission_for_recipient(recipient["id"])
+                submission = latest_submissions_by_recipient.get(recipient["id"])
                 if submission:
                     submissions.append(AssignmentSubmission.model_validate(submission))
-                    result = await _result_for_submission(submission)
+                    result = results_by_recipient.get(recipient["id"])
                     if result is not None:
                         results[recipient["id"]] = result
             summaries.append(
@@ -415,18 +525,29 @@ async def get_class_detail(*, user_id: str, class_id: str) -> ClassDetail:
             )
         visible_assignments: list[CoachAssignmentSummary | AssignmentRecipientDetail] = summaries
     else:
-        own_recipients = [
-            row
-            for row in await _select(_RECIPIENTS, filters={"user_id": user_id})
-            if row.get("assignment_id") in {a["id"] for a in assignments}
-        ]
+        own_recipients = [row for row in recipient_rows if row.get("user_id") == user_id]
         assignment_rows_by_id = {assignment["id"]: assignment for assignment in assignments}
         own_recipients.sort(
             key=lambda row: -_sort_timestamp_desc(
                 assignment_rows_by_id.get(row.get("assignment_id"), {}).get("created_at")
             )
         )
-        visible_assignments = [await _recipient_detail(row) for row in own_recipients]
+        visible_assignments = [
+            AssignmentRecipientDetail(
+                recipient=AssignmentRecipient.model_validate(row),
+                assignment=Assignment.model_validate(assignment_rows_by_id[row["assignment_id"]]),
+                class_room=ClassRoom.model_validate(class_row),
+                submission=(
+                    AssignmentSubmission.model_validate(
+                        latest_submissions_by_recipient[row["id"]]
+                    )
+                    if row["id"] in latest_submissions_by_recipient
+                    else None
+                ),
+                result=results_by_recipient.get(row["id"]),
+            )
+            for row in own_recipients
+        ]
     return ClassDetail(
         class_room=ClassRoom.model_validate(class_row),
         role=member["role"],

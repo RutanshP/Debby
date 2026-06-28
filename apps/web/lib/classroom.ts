@@ -1,6 +1,13 @@
 export type ClassRole = "coach" | "competitor";
 export type AssignmentType = "drill" | "practice_round" | "case";
 export type AssignmentStatus = "assigned" | "in_progress" | "completed";
+export type ClassTab =
+  | "classwork"
+  | "stream"
+  | "people"
+  | "results"
+  | "analytics"
+  | "settings";
 export type DrillAssignmentType =
   | "rebuttal"
   | "speed"
@@ -118,6 +125,21 @@ export interface StartAssignmentResponse {
   round_id?: string | null;
 }
 
+export interface ClassNavItem {
+  tab: ClassTab;
+  label: string;
+  coachOnly?: boolean;
+}
+
+const classNavItems: ClassNavItem[] = [
+  { tab: "classwork", label: "Assignments" },
+  { tab: "stream", label: "Stream" },
+  { tab: "people", label: "People" },
+  { tab: "results", label: "Feedback" },
+  { tab: "analytics", label: "Analytics", coachOnly: true },
+  { tab: "settings", label: "Settings" },
+];
+
 export function isDrillPayload(
   assignment: Assignment,
 ): assignment is Assignment & { payload: DrillAssignmentPayload } {
@@ -146,6 +168,14 @@ export function assignmentTypeLabel(type: AssignmentType): string {
   if (type === "practice_round") return "Practice round";
   if (type === "case") return "Case analysis";
   return "Drill";
+}
+
+export function getClassNavItems(role: ClassRole | null | undefined): ClassNavItem[] {
+  return classNavItems.filter((item) => !item.coachOnly || role === "coach");
+}
+
+export function isClassTab(value: string | null | undefined): value is ClassTab {
+  return classNavItems.some((item) => item.tab === value);
 }
 
 export function statusLabel(status: AssignmentStatus): string {

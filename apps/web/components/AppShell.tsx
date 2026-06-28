@@ -5,9 +5,11 @@ import { FormEvent, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import {
+  getClassNavItems,
   isCoachAssignmentSummary,
   withClassContext,
   type AssignmentRecipientDetail,
+  type ClassTab,
   type ClassListItem,
 } from "@/lib/classroom";
 import {
@@ -24,11 +26,6 @@ type NavItem = {
   preserveClass?: boolean;
 };
 
-type ClassNavItem = {
-  tab: "classwork" | "stream" | "people" | "results" | "analytics";
-  label: string;
-};
-
 type ClassDialogMode = "create" | "join" | null;
 
 const globalNavItems: NavItem[] = [
@@ -38,21 +35,6 @@ const globalNavItems: NavItem[] = [
   { href: "/progress", label: "Progress", preserveClass: true },
   { href: "/library", label: "Library", preserveClass: true },
   { href: "/calendar", label: "Calendar", preserveClass: true },
-];
-
-const competitorClassNavItems: ClassNavItem[] = [
-  { tab: "classwork", label: "Assignments" },
-  { tab: "stream", label: "Stream" },
-  { tab: "people", label: "People" },
-  { tab: "results", label: "Feedback" },
-];
-
-const coachClassNavItems: ClassNavItem[] = [
-  { tab: "classwork", label: "Assignments" },
-  { tab: "stream", label: "Stream" },
-  { tab: "people", label: "People" },
-  { tab: "results", label: "Feedback" },
-  { tab: "analytics", label: "Analytics" },
 ];
 
 const fieldClass =
@@ -179,9 +161,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const classesQuery = useClasses();
   const classes = classesQuery.data ?? [];
   const requestedClassId = searchParams.get("class");
-  const currentClassId = requestedClassId ?? classes[0]?.id ?? null;
-  const classDetailQuery = useClassDetail(currentClassId);
+  const classDetailQuery = useClassDetail(requestedClassId);
   const classDetail = classDetailQuery.data;
+  const currentClassId = requestedClassId ?? null;
   const currentClass =
     classes.find((item) => item.id === currentClassId) ??
     (currentClassId
@@ -205,9 +187,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       : 0;
 
   const activeClassTab = searchParams.get("tab") ?? "classwork";
-  const hasClasses = classes.length > 0 && Boolean(currentClassId);
-  const classNavItems =
-    currentClass?.role === "coach" ? coachClassNavItems : competitorClassNavItems;
+  const hasSelectedClass = Boolean(currentClassId);
+  const classNavItems = getClassNavItems(currentClass?.role);
 
   const decoratedGlobalNav = useMemo(
     () =>
@@ -218,7 +199,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     [currentClassId],
   );
 
-  function classTabHref(tab: ClassNavItem["tab"]): string {
+  function classTabHref(tab: ClassTab): string {
     if (!currentClassId) return "/classes";
     return `/classes?class=${encodeURIComponent(currentClassId)}&tab=${tab}`;
   }
@@ -332,7 +313,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 flex-col border-r border-slate-200 bg-white px-5 py-6 shadow-sm md:flex">
         <div className="flex flex-1 flex-col">
           <Link
-            href={hasClasses && currentClassId ? classTabHref("classwork") : "/classes"}
+            href={hasSelectedClass ? classTabHref("classwork") : "/practice"}
             className="px-2 text-xl font-bold text-teal-dark"
           >
             Debby
@@ -372,7 +353,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 aria-haspopup="listbox"
               >
                 <span className="flex min-w-0 items-center gap-2">
-                  <span className="truncate">{currentClass?.name ?? "Classes"}</span>
+                  <span className="truncate">{currentClass?.name ?? "Personal"}</span>
                   {currentClass && (
                     <span className="rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-teal-dark">
                       {roleLabel(currentClass.role)}
@@ -459,7 +440,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </div>
 
-            {hasClasses && currentClass ? (
+            {hasSelectedClass && currentClass ? (
               <nav className="mt-3 space-y-1" aria-label="Selected class navigation">
                 {classNavItems.map((item) => {
                   const active =
@@ -536,7 +517,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:hidden">
         <div className="flex items-center justify-between gap-3">
           <Link
-            href={hasClasses && currentClassId ? classTabHref("classwork") : "/classes"}
+            href={hasSelectedClass ? classTabHref("classwork") : "/practice"}
             className="font-bold text-teal-dark"
           >
             Debby
@@ -579,8 +560,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="flex w-full items-center justify-between rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-teal-dark"
             aria-expanded={classMenuOpen}
           >
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate">{currentClass?.name ?? "Classes"}</span>
+              <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate">{currentClass?.name ?? "Personal"}</span>
               {currentClass && (
                 <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-teal-dark">
                   {roleLabel(currentClass.role)}
@@ -658,7 +639,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          {hasClasses && currentClass ? (
+          {hasSelectedClass && currentClass ? (
             <nav className="mt-2 flex gap-2 overflow-x-auto" aria-label="Selected class navigation">
               {classNavItems.map((item) => {
                 const active =

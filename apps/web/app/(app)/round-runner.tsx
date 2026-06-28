@@ -395,6 +395,10 @@ export function RoundRunner() {
         )
       : [];
   const currentComparableTopic = normalizeComparableTopic(topic?.topic ?? customTopic);
+  const assignmentBackHref =
+    assignmentDetail && classId
+      ? `/classes?class=${encodeURIComponent(classId)}&tab=results`
+      : "/classes";
   const matchingPracticeAssignments = classPracticeAssignments.filter((item) => {
     const payload = item.assignment.payload;
     return (
@@ -1562,7 +1566,7 @@ export function RoundRunner() {
                   </a>
                 )}
                 {assignmentDetail ? (
-                  <a href="/classes" className={secondaryButtonClass}>
+                  <a href={assignmentBackHref} className={secondaryButtonClass}>
                     Back to Classes
                   </a>
                 ) : (

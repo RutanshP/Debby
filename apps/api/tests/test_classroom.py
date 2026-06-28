@@ -44,6 +44,10 @@ class _FakeQuery:
         self.filters.append((field, value))
         return self
 
+    def in_(self, field: str, values: list[Any]) -> "_FakeQuery":
+        self.filters.append((field, set(values)))
+        return self
+
     def order(self, field: str, desc: bool = False) -> "_FakeQuery":
         self.order_field = field
         self.order_desc = desc
@@ -54,7 +58,13 @@ class _FakeQuery:
         return self
 
     def _matches(self, row: dict) -> bool:
-        return all(row.get(field) == value for field, value in self.filters)
+        for field, value in self.filters:
+            if isinstance(value, set):
+                if row.get(field) not in value:
+                    return False
+            elif row.get(field) != value:
+                return False
+        return True
 
     def execute(self) -> _FakeResponse:
         if self.op == "insert":

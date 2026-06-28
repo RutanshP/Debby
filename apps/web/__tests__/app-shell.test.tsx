@@ -3,10 +3,21 @@ import { AppShell } from "@/components/AppShell";
 
 const pathnameState = { value: "/drills" };
 const searchParamsState = new URLSearchParams("class=class-1");
+const pushMock = jest.fn();
+const refreshMock = jest.fn();
 const useClassesMock = jest.fn(() => ({ data: [] }));
 const useClassDetailMock = jest.fn(() => ({ data: null, isLoading: false }));
 const invalidateQueriesMock = jest.fn();
 const setQueryDataMock = jest.fn();
+
+function resetSearchParams(values: Record<string, string> = {}) {
+  for (const key of Array.from(searchParamsState.keys())) {
+    searchParamsState.delete(key);
+  }
+  for (const [key, value] of Object.entries(values)) {
+    searchParamsState.set(key, value);
+  }
+}
 
 jest.mock("next/navigation", () => ({
   usePathname: () => pathnameState.value,
@@ -14,7 +25,7 @@ jest.mock("next/navigation", () => ({
     get: (key: string) => searchParamsState.get(key),
     toString: () => searchParamsState.toString(),
   }),
-  useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
+  useRouter: () => ({ push: pushMock, refresh: refreshMock }),
 }));
 
 jest.mock("next/link", () => ({
@@ -55,8 +66,7 @@ jest.mock("@/lib/queries/classroom", () => ({
 describe("AppShell", () => {
   beforeEach(() => {
     pathnameState.value = "/drills";
-    searchParamsState.forEach((_value, key) => searchParamsState.delete(key));
-    searchParamsState.set("class", "class-1");
+    resetSearchParams({ class: "class-1" });
     useClassesMock.mockReset();
     useClassDetailMock.mockReset();
     useClassesMock.mockReturnValue({
@@ -89,6 +99,8 @@ describe("AppShell", () => {
     });
     invalidateQueriesMock.mockReset();
     setQueryDataMock.mockReset();
+    pushMock.mockReset();
+    refreshMock.mockReset();
   });
 
   it("shows the number of due assignments in the nav badge", () => {
@@ -127,9 +139,7 @@ describe("AppShell", () => {
       isLoading: false,
     });
     pathnameState.value = "/classes";
-    searchParamsState.forEach((_value, key) => searchParamsState.delete(key));
-    searchParamsState.set("class", "class-1");
-    searchParamsState.set("tab", "analytics");
+    resetSearchParams({ class: "class-1", tab: "analytics" });
 
     render(
       <AppShell>
@@ -144,8 +154,7 @@ describe("AppShell", () => {
   it("shows create and join in the class section when there are no classes", () => {
     useClassesMock.mockReturnValue({ data: [] });
     useClassDetailMock.mockReturnValue({ data: null, isLoading: false });
-    searchParamsState.forEach((_value, key) => searchParamsState.delete(key));
-    searchParamsState.set("tab", "create");
+    resetSearchParams({ tab: "create" });
 
     render(
       <AppShell>
@@ -155,5 +164,21 @@ describe("AppShell", () => {
 
     expect(screen.getAllByRole("button", { name: "Create" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Join" }).length).toBeGreaterThan(0);
+  });
+
+  it("keeps personal navigation unscoped when no class is selected", () => {
+    pathnameState.value = "/practice";
+    resetSearchParams();
+
+    render(
+      <AppShell>
+        <div>Child</div>
+      </AppShell>,
+    );
+
+    expect(screen.getAllByText("Personal").length).toBeGreaterThan(0);
+    for (const link of screen.getAllByRole("link", { name: "Drills" })) {
+      expect(link).toHaveAttribute("href", "/drills");
+    }
   });
 });
