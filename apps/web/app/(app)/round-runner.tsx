@@ -22,7 +22,11 @@ import {
   type AssignmentRecipientDetail,
   type StartAssignmentResponse,
 } from "../../lib/classroom";
-import { useClassDetail } from "../../lib/queries/classroom";
+import {
+  invalidateClassroomCaches,
+  useClassDetail,
+  useQueryClient,
+} from "../../lib/queries/classroom";
 
 type Format = "parli" | "mspdp";
 type Side = "aff" | "neg";
@@ -310,6 +314,7 @@ export function RoundRunner() {
   const classId = searchParams?.get("class") ?? null;
   const assignmentRecipientId = searchParams?.get("assignment") ?? null;
   const classDetailQuery = useClassDetail(classId);
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>(1);
 
   // Step 1
@@ -947,15 +952,36 @@ export function RoundRunner() {
       .then(async (res) => {
         setJudgment(res);
         if (assignmentRecipientId && roundId && !assignmentCompleted) {
-          const detail = await apiFetch<AssignmentRecipientDetail>(
-            `/api/assignments/${assignmentRecipientId}/complete`,
-            {
-              method: "POST",
-              body: JSON.stringify({ round_id: roundId }),
-            },
+          const previousDetail = assignmentDetail;
+          setAssignmentCompleted(true);
+          setAssignmentDetail((current) =>
+            current
+              ? {
+                  ...current,
+                  recipient: {
+                    ...current.recipient,
+                    status: "completed",
+                    completed_at: current.recipient.completed_at ?? new Date().toISOString(),
+                  },
+                }
+              : current,
           );
-          setAssignmentDetail(detail);
-          setAssignmentCompleted(detail.recipient.status === "completed");
+          try {
+            const detail = await apiFetch<AssignmentRecipientDetail>(
+              `/api/assignments/${assignmentRecipientId}/complete`,
+              {
+                method: "POST",
+                body: JSON.stringify({ round_id: roundId }),
+              },
+            );
+            setAssignmentDetail(detail);
+            setAssignmentCompleted(detail.recipient.status === "completed");
+            void invalidateClassroomCaches(queryClient, detail.class_room.id);
+          } catch (error) {
+            setAssignmentDetail(previousDetail);
+            setAssignmentCompleted(previousDetail?.recipient.status === "completed");
+            throw error;
+          }
         }
         return res;
       })
@@ -981,6 +1007,8 @@ export function RoundRunner() {
     roundId,
     assignmentRecipientId,
     assignmentCompleted,
+    assignmentDetail,
+    queryClient,
   ]);
 
   const revealJudgment = useCallback(async () => {

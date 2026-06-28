@@ -4,6 +4,8 @@ import { DrillsClient } from "@/app/(app)/drills/drills-client";
 
 const searchParamsState = new URLSearchParams();
 const useClassDetailMock = jest.fn(() => ({ data: null }));
+const invalidateClassroomCachesMock = jest.fn();
+const useQueryClientMock = jest.fn(() => ({}));
 
 jest.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: (key: string) => searchParamsState.get(key) }),
@@ -12,6 +14,9 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/queries/classroom", () => ({
   useClassDetail: (...args: unknown[]) => useClassDetailMock(...args),
+  invalidateClassroomCaches: (...args: unknown[]) =>
+    invalidateClassroomCachesMock(...args),
+  useQueryClient: () => useQueryClientMock(),
 }));
 
 jest.mock("@/lib/supabase", () => ({
@@ -67,6 +72,10 @@ describe("DrillsClient", () => {
     searchParamsState.forEach((_value, key) => searchParamsState.delete(key));
     useClassDetailMock.mockReset();
     useClassDetailMock.mockReturnValue({ data: null });
+    invalidateClassroomCachesMock.mockReset();
+    invalidateClassroomCachesMock.mockResolvedValue(undefined);
+    useQueryClientMock.mockReset();
+    useQueryClientMock.mockReturnValue({});
   });
 
   afterEach(() => {

@@ -11,7 +11,11 @@ import {
   statusLabel,
   type AssignmentRecipientDetail,
 } from "@/lib/classroom";
-import { useClassDetail } from "@/lib/queries/classroom";
+import {
+  invalidateClassroomCaches,
+  useClassDetail,
+  useQueryClient,
+} from "@/lib/queries/classroom";
 
 export type DrillType = "rebuttal" | "speed" | "impact" | "contention" | "filler";
 type SpeedCategory = "standard" | "postmodernism";
@@ -220,6 +224,7 @@ export function DrillsClient() {
   const submittingRef = useRef(false);
   const typingDeadlineRef = useRef<number | null>(null);
   const classDetailQuery = useClassDetail(classId);
+  const queryClient = useQueryClient();
 
   const isSpeed = drillType === "speed";
   const isContention = drillType === "contention";
@@ -326,27 +331,49 @@ export function DrillsClient() {
     async (drillId: string | number) => {
       if (assignmentRecipientId) {
         if (assignmentCompleted) return;
-        const detail = await apiFetch<AssignmentRecipientDetail>(
-          `/api/assignments/${assignmentRecipientId}/complete`,
-          {
-            method: "POST",
-            body: JSON.stringify({ drill_id: String(drillId) }),
-          },
+        const previousDetail = assignmentDetail;
+        setAssignmentCompleted(true);
+        setAssignmentDetail((current) =>
+          current
+            ? {
+                ...current,
+                recipient: {
+                  ...current.recipient,
+                  status: "completed",
+                  completed_at: current.recipient.completed_at ?? new Date().toISOString(),
+                },
+              }
+            : current,
         );
-        setAssignmentDetail(detail);
-        setAssignmentCompleted(detail.recipient.status === "completed");
-        return;
+        try {
+          const detail = await apiFetch<AssignmentRecipientDetail>(
+            `/api/assignments/${assignmentRecipientId}/complete`,
+            {
+              method: "POST",
+              body: JSON.stringify({ drill_id: String(drillId) }),
+            },
+          );
+          setAssignmentDetail(detail);
+          setAssignmentCompleted(detail.recipient.status === "completed");
+          void invalidateClassroomCaches(queryClient, detail.class_room.id);
+          return;
+        } catch (error) {
+          setAssignmentDetail(previousDetail);
+          setAssignmentCompleted(previousDetail?.recipient.status === "completed");
+          throw error;
+        }
       }
 
-      await apiFetch<AssignmentRecipientDetail | null>(
+      const detail = await apiFetch<AssignmentRecipientDetail | null>(
         "/api/assignments/complete-matching-drill",
         {
           method: "POST",
           body: JSON.stringify({ drill_id: String(drillId) }),
         },
       );
+      void invalidateClassroomCaches(queryClient, detail?.class_room.id ?? classId);
     },
-    [assignmentCompleted, assignmentRecipientId],
+    [assignmentCompleted, assignmentDetail, assignmentRecipientId, classId, queryClient],
   );
 
   async function handleGenerate() {

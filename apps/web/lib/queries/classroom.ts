@@ -3,6 +3,7 @@ import { apiFetch } from "@/lib/api";
 import type { ClassListItem, ClassDetail } from "@/lib/classroom";
 import { getFeedback } from "@/lib/feedback";
 import type { SubmissionFeedback } from "@/lib/feedback";
+import type { QueryClient } from "@tanstack/react-query";
 
 // Query keys
 export const classroomKeys = {
@@ -105,6 +106,19 @@ export function useFeedback(recipientId: string | null, enabled = true) {
     },
     enabled: enabled && !!recipientId,
   });
+}
+
+export async function invalidateClassroomCaches(
+  queryClient: QueryClient,
+  classId?: string | null,
+): Promise<void> {
+  const jobs = [queryClient.invalidateQueries({ queryKey: classroomKeys.list() })];
+  if (classId) {
+    jobs.push(queryClient.invalidateQueries({ queryKey: classroomKeys.detail(classId) }));
+    jobs.push(queryClient.invalidateQueries({ queryKey: classroomKeys.progress(classId) }));
+    jobs.push(queryClient.invalidateQueries({ queryKey: classroomKeys.posts(classId) }));
+  }
+  await Promise.all(jobs);
 }
 
 /**

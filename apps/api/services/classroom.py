@@ -637,8 +637,9 @@ async def complete_assignment(
         submission_payload = {"round_id": round_id}
 
     existing = await _submission_for_recipient(recipient_id)
+    submission_row: dict[str, Any] | None = existing
     if existing is None:
-        await _insert(
+        submission_row = await _insert(
             _SUBMISSIONS,
             {
                 "recipient_id": recipient_id,
@@ -648,12 +649,27 @@ async def complete_assignment(
         )
     elif any(existing.get(key) != value for key, value in submission_payload.items()):
         raise PermissionError("Assignment already has a different submission")
+    completed_at = _now_iso()
     await _update(
         _RECIPIENTS,
         {"id": recipient_id, "user_id": user_id},
-        {"status": "completed", "completed_at": _now_iso()},
+        {"status": "completed", "completed_at": completed_at},
     )
-    return await get_assignment_detail(user_id=user_id, recipient_id=recipient_id)
+    completed_recipient = AssignmentRecipient.model_validate(
+        {
+            **detail.recipient.model_dump(),
+            "status": "completed",
+            "completed_at": completed_at,
+        }
+    )
+    result = await _result_for_submission(submission_row)
+    return AssignmentRecipientDetail(
+        recipient=completed_recipient,
+        assignment=detail.assignment,
+        class_room=detail.class_room,
+        submission=AssignmentSubmission.model_validate(submission_row) if submission_row else None,
+        result=result,
+    )
 
 
 async def complete_matching_drill_assignment(
@@ -672,27 +688,30 @@ async def complete_matching_drill_assignment(
         return None
 
     recipients = await _select(_RECIPIENTS, filters={"user_id": user_id})
-    open_recipients = [
-        row
-        for row in recipients
-        if row.get("status") != "completed"
-    ]
+    open_recipients = [row for row in recipients if row.get("status") != "completed"]
     open_recipients.sort(key=lambda row: row.get("created_at") or "")
+    if not open_recipients:
+        return None
+
+    recipient_ids = [row["id"] for row in open_recipients if isinstance(row.get("id"), str)]
+    latest_submissions = await _latest_submissions_for_recipients(recipient_ids)
+    assignment_ids = [
+        row["assignment_id"]
+        for row in open_recipients
+        if isinstance(row.get("assignment_id"), str)
+    ]
+    assignment_rows = await _select_in(_ASSIGNMENTS, field="id", values=assignment_ids)
+    assignments_by_id = {row["id"]: row for row in assignment_rows}
 
     for recipient_row in open_recipients:
-        existing_submission = await _submission_for_recipient(recipient_row["id"])
+        existing_submission = latest_submissions.get(recipient_row["id"])
         if existing_submission is not None:
             continue
 
-        assignment_rows = await _select(
-            _ASSIGNMENTS,
-            filters={"id": recipient_row["assignment_id"], "type": "drill"},
-            limit=1,
-        )
-        if not assignment_rows:
+        assignment_row = assignments_by_id.get(recipient_row["assignment_id"])
+        if not assignment_row or assignment_row.get("type") != "drill":
             continue
 
-        assignment_row = assignment_rows[0]
         payload = assignment_row.get("payload") or {}
         if not isinstance(payload, dict):
             continue

@@ -58,8 +58,13 @@ jest.mock("../components/WpmChart", () => ({
 }));
 
 const useClassDetailMock = jest.fn(() => ({ data: null }));
+const invalidateClassroomCachesMock = jest.fn();
+const useQueryClientMock = jest.fn(() => ({}));
 jest.mock("../lib/queries/classroom", () => ({
   useClassDetail: (...args: unknown[]) => useClassDetailMock(...args),
+  invalidateClassroomCaches: (...args: unknown[]) =>
+    invalidateClassroomCachesMock(...args),
+  useQueryClient: () => useQueryClientMock(),
 }));
 
 import { RoundRunner } from "../app/(app)/round-runner";
@@ -147,6 +152,10 @@ beforeEach(() => {
   global.fetch = jest.fn();
   useClassDetailMock.mockReset();
   useClassDetailMock.mockReturnValue({ data: null });
+  invalidateClassroomCachesMock.mockReset();
+  invalidateClassroomCachesMock.mockResolvedValue(undefined);
+  useQueryClientMock.mockReset();
+  useQueryClientMock.mockReturnValue({});
 });
 
 // --- Tests --------------------------------------------------------------
