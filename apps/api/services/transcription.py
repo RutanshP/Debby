@@ -17,6 +17,12 @@ ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com/v2"
 _UPLOAD_URL = f"{ASSEMBLYAI_BASE_URL}/upload"
 _TRANSCRIPT_URL = f"{ASSEMBLYAI_BASE_URL}/transcript"
 _STREAMING_TOKEN_URL = "https://streaming.assemblyai.com/v3/token"
+_CUSTOM_SPELLING = [
+    {
+        "from": ["rutansh", "ratansh", "rutans", "rutanshh"],
+        "to": "Rutansh",
+    }
+]
 
 # Polling configuration. Start at 1s; exponential backoff capped at 5s.
 _POLL_INITIAL_DELAY = 1.0
@@ -67,7 +73,11 @@ async def transcribe(
         # 2) Request transcription.
         create_resp = await client.post(
             _TRANSCRIPT_URL,
-            json={"audio_url": upload_url, "speech_models": ["universal-2"]},
+            json={
+                "audio_url": upload_url,
+                "speech_models": ["universal-2"],
+                "custom_spelling": _CUSTOM_SPELLING,
+            },
             headers=headers,
         )
         if create_resp.status_code >= 400:

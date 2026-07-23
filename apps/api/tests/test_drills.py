@@ -473,6 +473,7 @@ async def test_transcribe_audio_uses_current_assemblyai_speech_models():
     assert transcript == "hello world"
     assert duration == 2
     assert b'"speech_models":["universal-2"]' in transcript_route.calls.last.request.content
+    assert b'"to":"Rutansh"' in transcript_route.calls.last.request.content
 
 
 @pytest.mark.asyncio

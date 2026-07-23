@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 from models.insights import SpeechInsights, SpeechInsightsSummary
 from services.ai import MODEL, _truncate_for_flow
 from services.openai_client import client
+from services.profiles import get_profile
 from services.rounds import list_rounds
 from services.supabase_client import get_supabase
 
@@ -26,6 +28,7 @@ _SYSTEM = (
     "Each bullet must be under 18 words. Be concrete, kind, and specific to what "
     "actually appears in the transcripts."
 )
+_HEADLINE_NAME_PATTERN = re.compile(r"^[A-Z][A-Za-z' -]{0,40}\s+shows\b")
 
 
 def _build_corpus(rounds: list[Any]) -> tuple[str, int]:
@@ -94,7 +97,22 @@ def _build_corpus(rounds: list[Any]) -> tuple[str, int]:
     return "\n\n".join(blocks), used
 
 
-async def _generate_summary(rounds: list[Any]) -> tuple[SpeechInsightsSummary, int]:
+def _normalize_summary_name(
+    summary: SpeechInsightsSummary,
+    display_name: str | None,
+) -> SpeechInsightsSummary:
+    if not display_name:
+        return summary
+    headline = summary.headline.strip()
+    if _HEADLINE_NAME_PATTERN.match(headline):
+        headline = _HEADLINE_NAME_PATTERN.sub(f"{display_name} shows", headline, count=1)
+    return summary.model_copy(update={"headline": headline})
+
+
+async def _generate_summary(
+    rounds: list[Any],
+    display_name: str | None = None,
+) -> tuple[SpeechInsightsSummary, int]:
     corpus, used = _build_corpus(rounds)
     if used == 0:
         return (
@@ -117,8 +135,14 @@ async def _generate_summary(rounds: list[Any]) -> tuple[SpeechInsightsSummary, i
             {
                 "role": "user",
                 "content": (
-                    f"Review the following {used} recent practice rounds and "
-                    f"return the JSON described.\n\n{corpus}"
+                    (
+                        f"The student's display name is {display_name}. "
+                        "If you refer to the student by name, use that exact spelling. "
+                        if display_name
+                        else ""
+                    )
+                    + f"Review the following {used} recent practice rounds and "
+                    + f"return the JSON described.\n\n{corpus}"
                 ),
             },
         ],
@@ -129,7 +153,8 @@ async def _generate_summary(rounds: list[Any]) -> tuple[SpeechInsightsSummary, i
     except json.JSONDecodeError as exc:
         raise ValueError(f"insights: malformed JSON from model: {raw!r}") from exc
 
-    return SpeechInsightsSummary.model_validate(data), used
+    summary = SpeechInsightsSummary.model_validate(data)
+    return _normalize_summary_name(summary, display_name), used
 
 
 async def _get_cached(user_id: str) -> SpeechInsights | None:
@@ -190,5 +215,7 @@ async def get_cached_insights(user_id: str) -> SpeechInsights | None:
 
 async def refresh_insights(user_id: str) -> SpeechInsights:
     rounds = await list_rounds(user_id=user_id, limit=_ROUND_LIMIT)
-    summary, used = await _generate_summary(rounds)
+    profile = await get_profile(user_id)
+    display_name = profile.get("display_name") if profile else None
+    summary, used = await _generate_summary(rounds, display_name)
     return await _upsert(user_id, summary, used)

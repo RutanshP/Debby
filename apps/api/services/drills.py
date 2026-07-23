@@ -43,6 +43,12 @@ OPENAI_MODEL = "gpt-4o-mini-2024-07-18"
 DRILL_GENERATION_MODEL = "gpt-5-nano"
 ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com/v2"
 SPEED_PASSAGE_CATEGORY_LIMIT = 20
+_CUSTOM_SPELLING = [
+    {
+        "from": ["rutansh", "ratansh", "rutans", "rutanshh"],
+        "to": "Rutansh",
+    }
+]
 logger = logging.getLogger(__name__)
 
 
@@ -671,7 +677,11 @@ async def transcribe_audio(
         start_resp = await http.post(
             f"{ASSEMBLYAI_BASE_URL}/transcript",
             headers={**headers, "content-type": "application/json"},
-            json={"audio_url": upload_url, "speech_models": ["universal-2"]},
+            json={
+                "audio_url": upload_url,
+                "speech_models": ["universal-2"],
+                "custom_spelling": _CUSTOM_SPELLING,
+            },
         )
         if start_resp.status_code >= 400:
             raise RuntimeError(

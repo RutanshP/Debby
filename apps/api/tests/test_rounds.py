@@ -506,6 +506,54 @@ def test_streaming_token_route_uses_assemblyai_v3_token(
     assert "max_session_duration_seconds=600" in str(request.url)
 
 
+@respx.mock
+def test_transcribe_route_uses_custom_spelling(
+    client: TestClient,
+    fake_supabase: _FakeSupabase,
+    auth_user_a: _FakeUser,
+) -> None:
+    round_id = str(uuid.uuid4())
+    table = fake_supabase.tables.setdefault("rounds", _FakeTable())
+    table.rows.append(
+        {
+            "id": round_id,
+            "user_id": USER_A.id,
+            "format": "parli",
+            "topic": "test",
+            "side": "aff",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
+
+    respx.post("https://api.assemblyai.com/v2/upload").mock(
+        return_value=httpx.Response(200, json={"upload_url": "https://cdn/foo"})
+    )
+    transcript_route = respx.post("https://api.assemblyai.com/v2/transcript").mock(
+        return_value=httpx.Response(200, json={"id": "tid-1", "status": "queued"})
+    )
+    respx.get("https://api.assemblyai.com/v2/transcript/tid-1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "tid-1",
+                "status": "completed",
+                "text": "Rutansh",
+                "audio_duration": 1,
+            },
+        )
+    )
+
+    files = {"audio": ("speech.webm", io.BytesIO(b"abc"), "audio/webm")}
+    resp = client.post(
+        f"/api/rounds/{round_id}/speeches",
+        files=files,
+        data={"speech_type": "aff"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert b'"to":"Rutansh"' in transcript_route.calls.last.request.content
+
+
 def test_merge_wpm_series_preserves_both_recorded_speeches() -> None:
     existing = {"aff": [{"t": 0, "wpm": 120}]}
     merged = rounds_route._merge_wpm_series(

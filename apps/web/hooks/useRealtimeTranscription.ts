@@ -215,6 +215,7 @@ export function useRealtimeTranscription(
           encoding: "pcm_s16le",
           format_turns: "true",
           inactivity_timeout: "10",
+          keyterms_prompt: JSON.stringify(["Rutansh"]),
         });
         const ws = new WebSocket(`${STREAMING_URL}?${params.toString()}`);
         ws.binaryType = "arraybuffer";
