@@ -601,7 +601,7 @@ export default function CaseBuilder() {
                 <option value="parli">Parli</option>
                 <option value="mspdp">MSPDP</option>
                 <option value="public_forum" disabled>
-                  Public Forum (coming soon)
+                  Public Forum
                 </option>
               </select>
               <div className="mt-1 h-4 text-xs" aria-hidden="true" />

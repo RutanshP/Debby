@@ -1201,7 +1201,7 @@ export function RoundRunner() {
               <option value="parli">Parli</option>
               <option value="mspdp">MSPDP</option>
               <option value="public_forum" disabled>
-                Public Forum (coming soon)
+                Public Forum
               </option>
             </select>
           </label>
